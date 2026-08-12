@@ -10,6 +10,21 @@ window.PE.session = (() => {
   const $ = (id) => document.getElementById(id);
   const apiUrl = (path) => new URL(path.replace(/^\//, ""), document.baseURI).toString();
 
+  // Points at the repository's setup section rather than repeating the commands
+  // in the UI, so the instructions have a single home.
+  const REPO_LINK =
+    '<a class="repo-hint" href="https://github.com/dmkskd/clickhouse-patterns#explore-locally"' +
+    ' target="_blank" rel="noopener noreferrer">' +
+    '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">' +
+    '<path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 ' +
+    '0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 ' +
+    '1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 ' +
+    '0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 ' +
+    '2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 ' +
+    '2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 ' +
+    '.21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>' +
+    '<span>Set up locally</span></a>';
+
   function create(ctx) {
     // ctx: getSelected(), getControl(), setControl(c), selectPattern(slug),
     //      renderList(), renderCatalogHome(), canInspect(), syncArchitecture(),
@@ -67,9 +82,22 @@ window.PE.session = (() => {
       const active = snap?.session;
       const busy = snap?.operation?.status === "running";
       const show = home && control.interactive && Boolean(active) && !busy && active.phase !== "failed";
-      shell.classList.toggle("hero-running", show);
-      el.hidden = !show;
-      if (!show) { el.replaceChildren(); return; }
+      // Without a control plane the same slot explains how to get one, so the
+      // hero's right column is never empty on the catalog home.
+      const hint = home && !control.interactive;
+      shell.classList.toggle("hero-running", show || hint);
+      el.hidden = !(show || hint);
+      if (!show) {
+        el.replaceChildren();
+        if (hint) {
+          el.innerHTML =
+            `<span class="hero-session-label">Browse only</span>` +
+            `<span class="hero-session-hint">Running a pattern needs Docker and a ` +
+            `local checkout.</span>` +
+            REPO_LINK;
+        }
+        return;
+      }
       const activePattern = ctx.patterns.find((pattern) => pattern.slug === active.slug);
       const activeGroup = ctx.patternGroups[activePattern?.group];
       const groupPrefix = activeGroup ? `${esc(activeGroup.label)} / ` : "";
@@ -108,9 +136,12 @@ window.PE.session = (() => {
         if (selected) panel.classList.add("pattern-context");
         $("session-eyebrow").textContent = selected ? "Static preview" : "Static catalog";
         $("session-title").textContent = selected ? "Run or adapt this pattern locally" : "Browse architecture patterns";
-        $("session-detail").textContent = selected
-          ? "Open the local explorer to run it and inspect live tables, or clone it into Workspace patterns to customize it."
-          : "Diagrams, trade-offs, references, and SVG export work without a local service.";
+        // Without a control plane the page can only describe patterns, so it names
+        // the command that runs them end to end rather than just saying it exists.
+        const hint = REPO_LINK;
+        $("session-detail").innerHTML = selected
+          ? `Running locally starts this pattern's services, loads its data, validates the result, and allows live table inspection from this page. ${hint}`
+          : `Diagrams, trade-offs, references, and SVG export work without a local service. Running the patterns end to end needs the local explorer. ${hint}`;
         ["start-session", "validate-session", "stop-session", "view-running", "toggle-session-logs"].forEach((id) => setVisible(id, false));
         setVisible("explorer-mode", true);   // "Static catalog" indicator (no local server)
         $("session-links").replaceChildren();
