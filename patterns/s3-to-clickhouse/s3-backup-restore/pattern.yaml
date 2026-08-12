@@ -1,0 +1,56 @@
+manifest_version: 1
+title: "Offline backfill with BACKUP and RESTORE via S3"
+description: |-
+  A one-off, high-volume load assembled from primitives rather than a dedicated bulk-import feature. An offline worker builds the data, object storage carries it, and `BACKUP`/`RESTORE` moves it as native parts.
+
+  A worker (`clickhouse-local`, or any ClickHouse instance) pre-processes the data off the cluster and runs `BACKUP TABLE ... TO S3`; the serving cluster runs `RESTORE TABLE ... FROM S3` on the same location. The rows travel as packaged parts, so the target does not re-parse them.
+
+  The transfer goes through S3 rather than the cluster's filesystem, so `RESTORE` also loads into ClickHouse Cloud, the documented path for migrating a self-managed table into Cloud. It is a template for composing primitives, not the only way to arrange them.
+tradeoffs:
+  benefits:
+    - The parts are built offline by a separate worker, so the cost of parsing and compressing an INSERT stream stays off the serving cluster.
+    - Data moves through S3 with no filesystem access to the cluster, so RESTORE also loads into ClickHouse Cloud, unlike attaching parts from the detached directory.
+    - BACKUP and RESTORE can target specific partitions, and ClickHouse verifies each part's checksum on restore.
+  drawbacks:
+    - RESTORE unpacks parts into the target's own storage, so it is a copy through S3, not a zero-copy attach.
+    - A surge of small parts on restore can trigger too-many-parts pressure; run OPTIMIZE FINAL before backup and consider stopping merges during a large restore.
+    - Both sides need the same table structure, and it is a one-off bulk operation, not a streaming loader.
+graph: |-
+  backup:
+    client:worker(label=clickhouse-local worker) -[1 · BACKUP TO S3]-> minio:backup(label=backups/events-backfill)
+
+  restore:
+    minio:backup -[2 · RESTORE FROM S3]-> mergetree:events(label=demo.events)
+
+  query:
+    mergetree:events -[read]-> client:reader(label=reader)
+category: ingestion
+flow: ingestion
+topology: single
+order: 5
+experimental: true
+tags: [s3, external-preprocessing, backup, restore, one-off, high-volume, backfill, migration]
+driver_node: ch
+profiles: [single, s3]
+
+references:
+  - label: "ClickHouse: Backup and Restore"
+    url: https://clickhouse.com/docs/operations/backup
+  - label: "ClickHouse Cloud: migrate self-managed to Cloud via BACKUP/RESTORE (S3)"
+    url: https://clickhouse.com/docs/cloud/migration/oss-to-cloud-backup-restore
+  - label: "ClickHouse: ALTER TABLE ... REPLACE/ATTACH PARTITION (the filesystem alternative)"
+    url: https://clickhouse.com/docs/sql-reference/statements/alter/partition
+
+schema_sql: schema.sql
+load: load.py          # worker builds + BACKUP TO S3, cluster RESTOREs into the serving table
+
+# The parts were restored from S3 into demo.events without an INSERT stream.
+ready_when:
+  - query: "SELECT count() FROM demo.events"
+    value: 3000
+    node: ch
+    timeout: 60
+
+verify:
+  sql: verify.sql
+  expected: expected.txt

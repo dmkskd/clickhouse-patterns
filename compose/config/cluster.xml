@@ -1,0 +1,35 @@
+<clickhouse>
+    <!-- ClickHouse Keeper connection (shared coordination). -->
+    <zookeeper>
+        <node>
+            <host>keeper</host>
+            <port>9181</port>
+        </node>
+    </zookeeper>
+
+    <!-- One shard, two replicas. Referenced by ON CLUSTER 'patterns'. -->
+    <remote_servers>
+        <patterns>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <host>ch-01</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>ch-02</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </patterns>
+    </remote_servers>
+
+    <!-- Let Replicated engines omit the keeper path / replica name:
+         ReplicatedMergeTree() picks these up from macros. -->
+    <default_replica_path>/clickhouse/tables/{shard}/{database}/{table}</default_replica_path>
+    <default_replica_name>{replica}</default_replica_name>
+
+    <!-- Enables the KeeperMap engine, used by the Kafka Connect sink's
+         exactly-once state store (see kafka-push-exactly-once). -->
+    <keeper_map_path_prefix>/keeper_map</keeper_map_path_prefix>
+</clickhouse>

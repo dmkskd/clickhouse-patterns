@@ -1,0 +1,59 @@
+manifest_version: 1
+title: "Versioned upsert from S3 (deduplicate and correct by version)"
+description: |-
+  A keyed load from S3 that stays correct across re-runs and corrections. Each row carries a version number, and a `ReplacingMergeTree(version)` keeps the highest version per key.
+
+  A newer batch is written with a higher version, so it overrides an older row, and re-loading an old batch cannot undo a newer correction.
+
+  This is the standard ClickHouse upsert that CDC tools like PeerDB and Debezium use; the version can be a batch sequence, a timestamp, or the source log position. It needs a stable key.
+tradeoffs:
+  benefits:
+    - Loads are idempotent and order-independent, because the highest version per key wins and the version travels with the row.
+    - A later batch corrects a row, and re-loading an older batch cannot overwrite the correction.
+    - Deletes fit the same model with an is_deleted flag carried on the highest version, as PeerDB does.
+  drawbacks:
+    - It needs a stable unique key to deduplicate on, so it does not fit append-only or keyless data.
+    - The loader must assign a monotonic version per batch, so it depends on an orchestrator to stamp and order batches.
+    - Deduplication is on read via FINAL until a background merge collapses the parts, so a plain SELECT can show older versions.
+graph: |-
+  load:
+    client:orchestrator(label=orchestrator) -[stage versioned batches]-> minio:batches(label=events/batch-*.parquet) -[INSERT INTO events FROM s3()]-> mergetree:events(engine=ReplacingMergeTree(version),label=demo.events)
+
+  query:
+    mergetree:events -[FINAL · highest version per key]-> client:reader(label=reader)
+category: ingestion
+flow: ingestion
+topology: single
+order: 2
+tags: [s3, s3-function, replacingmergetree, versioned, upsert, idempotent]
+driver_node: ch
+profiles: [single, s3]
+
+references:
+  - label: "ClickHouse: ReplacingMergeTree"
+    url: https://clickhouse.com/docs/engines/table-engines/mergetree-family/replacingmergetree
+  - label: "ClickHouse: CDC deduplication strategies (version, FINAL vs argMax)"
+    url: https://clickhouse.com/docs/integrations/clickpipes/postgres/deduplication
+  - label: "PeerDB: Postgres to ClickHouse data modeling (_peerdb_version, ReplacingMergeTree)"
+    url: https://docs.peerdb.io/bestpractices/clickhouse_datamodeling
+  - label: "ClickHouse: s3 table function"
+    url: https://clickhouse.com/docs/sql-reference/table-functions/s3
+
+schema_sql: schema.sql
+load: load.py          # load batch 1, a corrective batch 2, then re-load batch 1
+
+# FINAL keeps the highest version per id: 1000 distinct events, of which ids 0..99
+# carry the batch-2 correction ('refund'), surviving the re-load of the older batch.
+ready_when:
+  - query: "SELECT count() FROM demo.events FINAL"
+    value: 1000
+    node: ch
+    timeout: 60
+  - query: "SELECT countIf(kind = 'refund') FROM demo.events FINAL"
+    value: 100
+    node: ch
+    timeout: 60
+
+verify:
+  sql: verify.sql
+  expected: expected.txt

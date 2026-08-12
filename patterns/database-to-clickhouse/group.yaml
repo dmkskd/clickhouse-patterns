@@ -1,0 +1,46 @@
+title: Databases → ClickHouse
+label: Databases
+description: Get Postgres or MySQL data into a ClickHouse query
+icon: database
+order: 2
+intro: |-
+  These patterns connect ClickHouse to data that lives in Postgres or MySQL. One
+  of them queries the source directly, while the others hold a copy in
+  ClickHouse, kept in sync by a pipeline that either refreshes it on a schedule
+  or replicates changes as they happen. Which one to use depends on freshness,
+  source size, and whether the change history itself is needed.
+
+  They are ordered by how much machinery stands between the source and the
+  query.
+
+  **Postgres table engine** queries the source in place. There is no local copy
+  to fall behind, so reads are always current and no changed row ever has to be
+  reconciled. The trade-off is that every query runs against the OLTP database.
+
+  **Refreshable MV pull** reruns the whole `SELECT` on a schedule and atomically
+  replaces a local MergeTree. No earlier version of a row survives to be
+  reconciled, so reads need no `FINAL`. The trade-off is that the work scales
+  with table size rather than with how much actually changed.
+
+  **The CDC patterns** read the source's replication log and apply each change
+  as it happens, so the cost is proportional to change volume. The complexity
+  lies in seeding an initial snapshot before streaming takes over, and in
+  deciding how ClickHouse should represent a row that was updated or deleted.
+  The trade-off is a pipeline to run and keep correct.
+
+  In production this job is usually handed to an existing tool rather than
+  built, and the choice comes down to who operates it.
+
+  - **Managed by ClickHouse.** [ClickPipes](https://clickhouse.com/docs/integrations/clickpipes/postgres) is ClickHouse Cloud's Postgres and MySQL CDC, built on [PeerDB](https://docs.peerdb.io).
+  - **Self-hosted.** [Debezium](https://debezium.io) with Kafka is the self-hosted equivalent, and the broker lets other consumers read the same stream.
+  - **Managed by a third party.** [Airbyte](https://airbyte.com), [Fivetran](https://www.fivetran.com), and [Estuary](https://estuary.dev) are configured with a source and a destination, then copy the rows and keep them in sync. They connect many sources beyond Postgres and MySQL, so one tool can feed ClickHouse from several systems.
+  - **Built into ClickHouse.** [MaterializedPostgreSQL](https://clickhouse.com/docs/engines/database-engines/materialized-postgresql) needs no external component, but has been experimental since 2021 and is absent from Cloud. Its MySQL counterpart was removed.
+
+  The patterns here run locally and show the mechanism at work, which is what
+  makes the trade-offs above visible; a managed service hides the same mechanism
+  behind an interface, and understanding it is what determines the right service
+  configuration.
+
+related:
+  - group: aggregation-rollups
+    note: To pre-aggregate the landed rows for dashboards

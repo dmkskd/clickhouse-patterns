@@ -1,0 +1,118 @@
+manifest_version: 1
+title: "CDC · Postgres WAL → PeerDB → ClickHouse"
+description: |-
+  Self-hosted PeerDB, the open-source engine behind managed Postgres ClickPipes, replicating two Postgres tables into three ClickHouse targets. One is created by PeerDB, one is owned by the schema, and one is transformed by a materialized view.
+
+  Snapshot and change batches are staged as Avro objects in MinIO. PeerDB then issues `INSERT ... SELECT FROM s3()` statements, and ClickHouse pulls the named objects when they run. Ongoing changes land first in `_peerdb_raw_two_table_mirror` and are decoded into the targets from there.
+
+  **Two Postgres instances run in this pattern, with unrelated responsibilities.** `postgres` is the replication source holding the user data. `peerdb-catalog` stores PeerDB's own metadata and Temporal's workflow history, and never holds a replicated row.
+
+  Beyond ClickHouse and the source database, the stack adds nine services, because replication runs as Temporal workflows. Nothing at this three-row scale exercises what that provides.
+graph: |-
+  snapshot:
+    postgres:source_tables(label=public.orders + public.orders_existing,note=**Source Postgres** · service `postgres`\nThe replicated user data.\n- not the peerdb-catalog\n- read through a logical replication slot)
+      -[initial copy]-> peerdb:snapshot_worker(mirror=two_table_mirror)
+      -[writes Avro]-> minio:snapshot_files(label=snapshot Avro,note=**Transient stage**\nDeleted once ClickHouse has read the objects.)
+      -[SNAPSHOT · INSERT INTO orders FROM s3()]-> mergetree:orders(label=test.orders · PeerDB-owned schema)
+
+  snapshot:
+    minio:snapshot_files
+      -[SNAPSHOT · INSERT INTO orders_existing FROM s3()]-> mergetree:orders_existing(label=test.orders_existing · user-owned schema)
+
+  changes:
+    postgres:source_tables
+      -[logical WAL]-> peerdb:cdc_worker(mirror=two_table_mirror,checkpoint=metadata_last_sync_state)
+      -[writes Avro]-> minio:cdc_batch(label=CDC batch Avro,note=**Transient stage**\nDeleted once ClickHouse has read the objects.)
+      -[INSERT INTO _peerdb_raw … FROM s3()]-> mergetree:_peerdb_raw_two_table_mirror@peerdb-internal(label=mirror-wide CDC staging,table=test._peerdb_raw_two_table_mirror,note=**How this table fills**\nPeerDB writes raw CDC Avro here first.\n- Owned by the two_table_mirror job\n- Routed by _peerdb_destination_table_name)
+
+  changes:
+    mergetree:_peerdb_raw_two_table_mirror@peerdb-internal
+      -[PeerDB SQL · destination = orders]-> mergetree:orders
+
+  changes:
+    mergetree:_peerdb_raw_two_table_mirror@peerdb-internal
+      -[PeerDB SQL · destination = orders_existing]-> mergetree:orders_existing
+
+  transformation:
+    mergetree:orders
+      -> mv:orders_transform_mv(reads=orders only)
+      -> mergetree:orders_transformed@mv-transformed(source=orders MV)
+profiles: [single, postgres, s3, peerdb]
+category: cdc
+flow: ingestion
+topology: single
+order: 4
+tags: [cdc, postgres, peerdb, clickpipes]
+driver_node: ch
+
+references:
+  - label: PeerDB self-hosted quickstart
+    url: https://docs.peerdb.io/quickstart/quickstart
+  - label: PeerDB ClickHouse data modeling
+    url: https://docs.peerdb.io/bestpractices/clickhouse_datamodeling
+  - label: ClickHouse open-source Postgres and ClickHouse stack
+    url: https://clickhouse.com/blog/postgres-clickhouse-oss
+  - label: ClickPipes for Postgres and self-hosted PeerDB
+    url: https://clickhouse.com/blog/clickpipes-postgres-failover-replication
+  - label: "Why PeerDB runs on Temporal: retries, idempotency, long-running state"
+    url: https://blog.peerdb.io/using-temporal-to-scale-data-synchronization-at-peerdb
+  - label: "PeerDB components and replication workflows"
+    url: https://deepwiki.com/PeerDB-io/peerdb
+  - label: PeerDB CDC Postgres to ClickHouse reference
+    url: https://docs.peerdb.io/mirror/cdc-pg-clickhouse
+
+tradeoffs:
+  benefits:
+    - "The initial load is split into row ranges along an ordered column such as an id or a timestamp, and the ranges are copied in parallel, so a failure only repeats the ranges that had not finished."
+    - "Once streaming, each batch is a recorded step, so a worker that dies picks up at the next unfinished batch instead of replaying from the last saved position in the WAL."
+    - "A step that fails retries on its own, with its own backoff, rather than stalling the pipeline until someone restarts it. This and the two points above all follow from running replication as Temporal workflows, whose durable execution model records each completed step."
+    - "Reading the WAL and writing to ClickHouse are separate steps joined by a staging table, so a slow ClickHouse merge does not back up into the Postgres replication slot."
+    - "Workers hold no state, so capacity is added by running more of them."
+  drawbacks:
+    - "Nine services beyond ClickHouse and the source database, where the Altinity sink needs one."
+    - "PeerDB needs a store of its own. A second Postgres holds its mirror configuration and Temporal's workflow history, so there is another database to run, secure, and back up, entirely separate from the one being replicated."
+    - "Current-state reads need ReplacingMergeTree FINAL semantics and a tombstone filter."
+    - "A schema-owned target must keep PeerDB's metadata columns, and a transformation needs an explicit snapshot backfill."
+
+# schema.sql provides orders_existing; PeerDB creates orders. load.py installs
+# the transformation after the initial snapshot creates its source table.
+schema_sql: schema.sql
+load: load.py
+
+ready_when:
+  - query: "SELECT engine FROM system.tables WHERE database = 'test' AND name = '_peerdb_raw_two_table_mirror'"
+    value: MergeTree
+    node: ch
+    timeout: 180
+  - query: "SELECT count() FROM test._peerdb_raw_two_table_mirror"
+    value: 6
+    node: ch
+    timeout: 180
+  - query: "SELECT engine FROM system.tables WHERE database = 'test' AND name = 'orders'"
+    value: ReplacingMergeTree
+    node: ch
+    timeout: 180
+  - query: "SELECT type FROM system.columns WHERE database = 'test' AND table = 'orders_existing' AND name = 'amount'"
+    value: Int64
+    node: ch
+    timeout: 180
+  - query: "SELECT type FROM system.columns WHERE database = 'test' AND table = 'orders_transformed' AND name = 'amount'"
+    value: "Decimal(12, 2)"
+    node: ch
+    timeout: 180
+  - query: "SELECT count() FROM test.orders FINAL WHERE id = 3 AND _peerdb_is_deleted = 0"
+    value: 0
+    node: ch
+    timeout: 180
+  - query: "SELECT count() FROM test.orders_transformed FINAL WHERE id = 3 AND _peerdb_is_deleted = 0"
+    value: 0
+    node: ch
+    timeout: 180
+  - query: "SELECT count() FROM test.orders_existing FINAL WHERE id = 3 AND _peerdb_is_deleted = 0"
+    value: 0
+    node: ch
+    timeout: 180
+
+verify:
+  sql: verify.sql
+  expected: expected.txt

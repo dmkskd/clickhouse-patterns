@@ -1,0 +1,80 @@
+manifest_version: 1
+title: "Materialized view rollups (fan-out from raw)"
+description: |-
+  Precomputes the rollup as data arrives. One incremental materialized view per resolution reads the raw rows on each insert and stores a partial result (a state) in an `AggregatingMergeTree`, which queries combine on read.
+
+  Applied to trades, each candle is assembled from partials spread across several inserts, and ClickHouse still combines them into the right answer.
+tradeoffs:
+  benefits:
+    - Queries read a small precomputed table instead of rescanning the raw stream.
+    - Each resolution is its own view on the raw data, so one can be added or rebuilt without touching the others.
+    - The answer is correct no matter how the inserts were split, because the partial results from every part are combined on read.
+  drawbacks:
+    - Each insert into the raw table is sent to every materialized view attached to it, so N resolutions each process the same inserted block.
+    - Each column holds an aggregate's intermediate state, not a finished number, so a plain SELECT returns unreadable bytes; the value comes back only through the matching -Merge function.
+    - More storage and setup than query time, with one precomputed table plus one view per resolution.
+graph: |-
+  ingest:
+    client:loader -[INSERT · 3 batches]-> mergetree:trades(label=demo.trades)
+
+  rollup-1m:
+    mergetree:trades -[MV · argMin/max/min/sumState · per insert block]-> mv:mv_1m -> mergetree:candles_1m(engine=AggregatingMergeTree,label=1m states)
+
+  rollup-5m:
+    mergetree:trades -[MV · toStartOfFiveMinutes · ...State from raw]-> mv:mv_5m -> mergetree:candles_5m(engine=AggregatingMergeTree,label=5m states)
+
+  query:
+    {mergetree:candles_1m, mergetree:candles_5m} -[argMinMerge/maxMerge/... on read]-> client:rollup(label=rollup query)
+category: aggregation
+flow: transform
+topology: single
+order: 2
+tags: [aggregation, rollup, materialized-view, aggregatingmergetree, fan-out]
+driver_node: ch
+profiles: [single]
+
+references:
+  - label: "Benjamin Wootton: Real-time OHLC candlestick charts with ClickHouse (fan-out: every grain reads raw)"
+    url: https://benjaminwootton.com/insights/ohlc-candlestick-charts-clickhouse
+  - label: "ClickHouse: AggregatingMergeTree table engine (-State/-Merge)"
+    url: https://clickhouse.com/docs/engines/table-engines/mergetree-family/aggregatingmergetree
+  - label: "ClickHouse: Build a rollup with materialized views"
+    url: https://clickhouse.com/docs/knowledgebase/materialized-view-rollup-timeseries
+
+schema_sql: schema.sql
+load: load.py          # insert raw trades in three separate parts; MVs fire per part
+
+# 1. all nine trades landed.
+# 2. every one-minute bucket exists.
+# 3. the states merged back to exactly the query-time ground truth -- proving the
+#    per-part partial states recombined into the correct candle (zero mismatches).
+ready_when:
+  - query: "SELECT count() FROM demo.trades"
+    value: 9
+    node: ch
+    timeout: 30
+  - query: "SELECT uniqExact(bucket) FROM demo.candles_1m"
+    value: 3
+    node: ch
+    timeout: 30
+  - query: >-
+      SELECT count() FROM (
+        SELECT symbol, bucket,
+               argMinMerge(open) o, max(high) h, min(low) l,
+               argMaxMerge(close) c, sum(volume) v
+        FROM demo.candles_1m GROUP BY symbol, bucket
+      ) r
+      INNER JOIN (
+        SELECT symbol, toStartOfMinute(ts) AS bucket,
+               argMin(price, ts) o, max(price) h, min(price) l,
+               argMax(price, ts) c, sum(volume) v
+        FROM demo.trades GROUP BY symbol, bucket
+      ) g USING (symbol, bucket)
+      WHERE (r.o, r.h, r.l, r.c, r.v) != (g.o, g.h, g.l, g.c, g.v)
+    value: 0
+    node: ch
+    timeout: 30
+
+verify:
+  sql: verify.sql
+  expected: expected.txt

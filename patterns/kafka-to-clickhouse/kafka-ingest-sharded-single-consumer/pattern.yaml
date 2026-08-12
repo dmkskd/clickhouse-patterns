@@ -1,0 +1,58 @@
+manifest_version: 1
+title: "One consumer routes rows to shards"
+description: |-
+  A single `Kafka`-engine consumer on shard 1 (`demo.events_queue`) reads every partition, because the Kafka engine cannot deterministically assign partitions to specific shards.
+
+  Its materialized view inserts into the `demo.events_all` `Distributed` table, which hashes each row to the owning shard's local `demo.events` `MergeTree`.
+
+  Each event is read and stored once, but shard 1 is the sole ingestion point and rows bound for shard 2 take a network hop.
+tradeoffs:
+  benefits:
+    - Each Kafka message is read and decoded once, and each event is stored once.
+    - The Distributed table applies the normal sharding key to every inserted row.
+  drawbacks:
+    - Shard 1 is the single ingestion point; if it is unavailable, ingestion pauses.
+    - Rows assigned to another shard require an inter-shard network hop.
+    - The Kafka table and materialized view exist only on shard 1, creating asymmetric DDL.
+graph: |-
+  ingestion:
+    topic:events(partitions=4)
+      -[group w3]-> kafka-table:events_queue@ch-s1
+      -> mv:events_mv@ch-s1
+      -> distributed:events_all
+      -[cityHash64(id)]-> mergetree:events@shards
+
+  query:
+    client -> distributed:events_all -> mergetree:events@shards
+profiles: [shards, kafka]
+category: kafka
+flow: ingestion
+topology: sharded
+order: 4
+tags: [kafka, pull, kafka-engine, workaround, distributed-fanout]
+references:
+  - label: "ClickHouse Kafka table engine"
+    url: "https://clickhouse.com/docs/engines/table-engines/integrations/kafka"
+  - label: "GitHub RFC: sticky partition-to-shard assignment"
+    url: "https://github.com/ClickHouse/ClickHouse/issues/107832"
+driver_node: ch-s1
+superseded_by: kafka-ingest-sharded-partition-affinity
+superseded_since: "26.8"
+
+# One schema creates shared storage ON CLUSTER, then creates the Kafka source
+# and MV locally on the driver. The coordinator-only asymmetry is intentional.
+schema_sql: schema.sql
+
+load: load.py
+
+# Convergence: all 8000 land cluster-wide, spread across the two shards
+# (Distributed inserts settle asynchronously - hence the poll).
+ready_when:
+  - query: "SELECT count() FROM demo.events_all"
+    value: 8000
+    node: ch-s1
+    timeout: 90
+
+verify:
+  sql: verify.sql
+  expected: expected.txt

@@ -1,0 +1,232 @@
+<!doctype html>
+<!-- Browser shell for the ClickHouse Pattern Explorer. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClickHouse Pattern Explorer</title>
+  <script>
+    // Restore the saved theme before first paint so the page never flashes the wrong skin.
+    (function () {
+      try {
+        var saved = JSON.parse(localStorage.getItem("pe-theme") || "null") || {};
+        document.documentElement.dataset.theme = saved.theme || "soft";
+        document.documentElement.dataset.scheme = saved.scheme || "light";
+        if (localStorage.getItem("pe-sidebar") === "hidden") {
+          document.documentElement.dataset.sidebar = "hidden";
+        }
+      } catch (error) { /* private mode: defaults apply */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="pattern-sidebar">
+      <button id="show-catalog-home" class="sidebar-header" type="button" aria-label="Open the Pattern Explorer home">
+        <div class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div><strong>ClickHouse</strong><span>Pattern Explorer</span></div>
+      </button>
+      <label class="pattern-search">
+        <span>Find a pattern</span>
+        <input id="pattern-search" type="search" placeholder="Kafka, CDC, sharded…" autocomplete="off">
+      </label>
+      <div class="group-controls" aria-label="Pattern group controls">
+        <button id="toggle-groups" type="button"><span aria-hidden="true">⊞</span><span class="group-toggle-label">Expand all</span></button>
+      </div>
+      <nav id="pattern-list" class="pattern-list" aria-label="Patterns"></nav>
+    </aside>
+
+    <main class="pattern-main">
+      <header class="catalog-hero">
+        <div class="catalog-hero-art" id="catalog-hero-art" aria-hidden="true"></div>
+        <div class="catalog-hero-copy">
+          <div class="catalog-hero-text">
+            <div class="kicker">Pattern catalog</div>
+            <div class="catalog-hero-title-row">
+              <span class="catalog-hero-logo" aria-hidden="true">
+                <svg viewBox="0 0 34 26" fill="currentColor"><rect width="4" height="26"/><rect x="7" width="4" height="26"/><rect x="14" width="4" height="26"/><rect x="21" width="4" height="26"/><rect x="28" y="9" width="4" height="8"/></svg>
+              </span>
+              <h1 id="catalog-home-title">Explore ClickHouse architectures</h1>
+              <span class="status-chip">Preview</span>
+            </div>
+            <p>Compare runnable patterns, understand their trade-offs, and adapt them for your own systems. <button type="button" id="why-open" class="why-link" aria-controls="why-more" aria-expanded="false">Read more</button></p>
+            <p class="hero-disclaimer">This catalog is a work in progress and the patterns are still under review.</p>
+            <div id="why-more" class="catalog-hero-more" hidden>
+              <p>In most ClickHouse systems, querying is rarely the main challenge. The effort goes into how data arrives, how it is modelled and kept current, and how it is delivered, replayed, and spread across a cluster. This collection gathers runnable patterns for those problems, so their trade-offs can be compared on working examples.</p>
+              <p>This project is for building, testing, and documenting new ClickHouse patterns. Choosing or communicating an architecture is easier with a visual representation of the design, a working prototype, and a simple way to iterate on it.</p>
+              <button type="button" id="why-less" class="why-link" aria-controls="why-more">Read less</button>
+            </div>
+          </div>
+        </div>
+        <div id="hero-session" class="hero-session" aria-live="polite" hidden></div>
+      </header>
+
+      <section id="catalog-home" class="catalog-home" aria-labelledby="catalog-home-title">
+        <div class="catalog-browser">
+          <div class="catalog-browser-heading">
+            <div><h2>Browse the catalog</h2></div>
+            <label class="catalog-search">
+              <span class="visually-hidden">Search patterns</span>
+              <input id="catalog-search" type="search" placeholder="Search Kafka, CDC, replication…" autocomplete="off">
+            </label>
+          </div>
+          <div class="catalog-filters" aria-label="Catalog filters">
+            <div id="catalog-group-filters" class="filter-group" role="group" aria-label="Pattern group"></div>
+            <div id="catalog-topology-filters" class="filter-group topology-filters" role="group" aria-label="ClickHouse topology"></div>
+          </div>
+          <div id="catalog-results-summary" class="catalog-results-summary" aria-live="polite"></div>
+          <div id="catalog-grid" class="catalog-grid"></div>
+        </div>
+      </section>
+
+      <div id="pattern-detail" class="pattern-detail" hidden>
+        <header class="pattern-header">
+          <div>
+            <nav id="pattern-breadcrumb" class="pattern-breadcrumb" aria-label="Breadcrumb"></nav>
+            <div id="pattern-experimental" class="pattern-experimental" hidden></div>
+            <div class="pattern-title-row">
+              <h1 id="pattern-title"></h1>
+              <div class="pattern-actions">
+                <button id="clone-pattern" class="export-button" type="button">Clone</button>
+              </div>
+            </div>
+            <div id="pattern-requires" class="pattern-requires" hidden></div>
+            <div id="pattern-superseded" class="pattern-superseded" hidden></div>
+            <div id="pattern-description" class="pattern-description"></div>
+            <nav id="pattern-references" class="pattern-references" aria-label="Pattern sources" hidden></nav>
+          </div>
+        </header>
+
+        <section id="session-panel" class="session-panel" aria-live="polite" hidden>
+          <div class="session-summary">
+            <span id="session-indicator" class="session-indicator"></span>
+            <div>
+              <span id="session-eyebrow" class="session-eyebrow">Catalog mode</span>
+              <strong id="session-title">Choose a pattern to explore its architecture</strong>
+              <span id="session-detail">Start the interactive explorer to run patterns from this page.</span>
+            </div>
+          </div>
+          <div id="session-links" class="session-links"></div>
+          <div class="session-actions">
+            <button id="toggle-session-logs" type="button" aria-controls="session-progress" aria-expanded="false" hidden>Show logs</button>
+            <button id="view-running" type="button" hidden>View running</button>
+            <button id="validate-session" type="button" hidden>Validate</button>
+            <button id="stop-session" class="danger" type="button" hidden>Stop session</button>
+            <button id="start-session" class="primary" type="button" hidden>Launch pattern</button>
+            <span id="explorer-mode" class="explorer-mode static" title="Browsing a generated catalog; running patterns needs the local server">
+              <i aria-hidden="true"></i><span id="explorer-mode-label">Static catalog</span>
+            </span>
+          </div>
+          <div id="session-progress" class="session-progress" hidden>
+            <div class="progress-heading"><span>Startup &amp; validation log</span><span id="operation-state"></span><button id="close-session-logs" class="progress-close" type="button" aria-label="Close log">×</button></div>
+            <ol id="progress-events"></ol>
+          </div>
+        </section>
+
+        <section class="architecture-panel" aria-labelledby="architecture-title">
+          <div class="section-heading">
+            <div><span>Architecture</span><h2 id="architecture-title">Resource flow</h2></div>
+            <div class="architecture-heading-tools">
+              <!-- The legend sits left of the view switch: it is hidden in the
+                   physical view, and in a right-aligned row only items to its
+                   left would move. -->
+              <div id="flow-legend" class="flow-legend"></div>
+              <div id="architecture-view" class="architecture-view" role="group" aria-label="Diagram view" hidden>
+                <button id="view-logical" type="button" class="active" aria-pressed="true" title="Logical view: data flow between the pattern's ClickHouse resources">
+                  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="3.2" cy="11" r="1.9"/><circle cx="8" cy="4.6" r="1.9"/><circle cx="12.8" cy="11" r="1.9"/><path d="M4.6 9.4 6.6 6.6M9.4 6.6l2 2.8"/></svg>
+                  <span class="visually-hidden">Logical view</span>
+                </button>
+                <button id="view-physical" type="button" aria-pressed="false" title="Physical view: containers, ports, and startup order behind the running pattern">
+                  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2.2" y="2.6" width="11.6" height="4.4" rx="1.2"/><rect x="2.2" y="9" width="11.6" height="4.4" rx="1.2"/><path d="M4.6 4.8h.01M4.6 11.2h.01"/></svg>
+                  <span class="visually-hidden">Physical view</span>
+                </button>
+              </div>
+              <div class="zoom-control" role="group" aria-label="Diagram zoom">
+                <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+                <button id="zoom-reset" class="zoom-level" type="button" aria-label="Reset diagram zoom" title="Fit diagram">100%</button>
+                <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+              </div>
+              <button id="download-svg" class="export-button icon-button" type="button" title="Download SVG" aria-label="Download SVG">
+                <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v7"/><path d="M5 6.5 8 9.5l3-3"/><path d="M3 11.5v1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1"/></svg>
+              </button>
+            </div>
+          </div>
+          <div id="architecture-canvas" class="architecture-canvas expandable" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Architecture diagram. Click to expand; use the mouse wheel to zoom."></div>
+          <div id="definition-strip" class="definition-strip" hidden>
+            <div class="definition-head">
+              <div id="definition-tabs" class="definition-tabs" role="tablist"></div>
+            </div>
+            <div id="definition-body" class="definition-body"></div>
+          </div>
+        </section>
+
+        <section id="tradeoffs" class="tradeoffs" aria-labelledby="tradeoffs-title" hidden>
+          <div class="section-heading"><div><span>Decision guide</span><h2 id="tradeoffs-title">Trade-offs</h2></div></div>
+          <div class="tradeoffs-grid">
+            <article class="tradeoff-card benefits"><h3>Benefits</h3><ul id="benefits"></ul></article>
+            <article class="tradeoff-card drawbacks"><h3>Drawbacks</h3><ul id="drawbacks"></ul></article>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <dialog id="diagram-modal" class="diagram-modal" aria-labelledby="diagram-modal-title">
+    <header class="diagram-modal-header">
+      <div><span>Architecture</span><h2 id="diagram-modal-title">Resource flow</h2></div>
+      <div id="modal-flow-legend" class="flow-legend" aria-label="Flow legend"></div>
+      <div class="diagram-modal-actions">
+        <div id="modal-architecture-view" class="architecture-view" role="group" aria-label="Diagram view" hidden>
+          <button id="modal-view-logical" type="button" class="active" aria-pressed="true" title="Logical view: data flow between the pattern's ClickHouse resources">
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="3.2" cy="11" r="1.9"/><circle cx="8" cy="4.6" r="1.9"/><circle cx="12.8" cy="11" r="1.9"/><path d="M4.6 9.4 6.6 6.6M9.4 6.6l2 2.8"/></svg>
+            <span class="visually-hidden">Logical view</span>
+          </button>
+          <button id="modal-view-physical" type="button" aria-pressed="false" title="Physical view: containers, ports, and startup order behind the running pattern">
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2.2" y="2.6" width="11.6" height="4.4" rx="1.2"/><rect x="2.2" y="9" width="11.6" height="4.4" rx="1.2"/><path d="M4.6 4.8h.01M4.6 11.2h.01"/></svg>
+            <span class="visually-hidden">Physical view</span>
+          </button>
+        </div>
+        <div class="zoom-control" role="group" aria-label="Expanded diagram zoom">
+          <button id="modal-zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+          <button id="modal-zoom-reset" class="zoom-level" type="button" aria-label="Reset diagram zoom" title="Fit diagram">100%</button>
+          <button id="modal-zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+        </div>
+        <button id="download-svg-modal" class="export-button icon-button" type="button" title="Download SVG" aria-label="Download SVG">
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v7"/><path d="M5 6.5 8 9.5l3-3"/><path d="M3 11.5v1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1"/></svg>
+        </button>
+        <button id="diagram-modal-close" class="diagram-modal-close" type="button" aria-label="Close expanded diagram">×</button>
+      </div>
+    </header>
+    <div id="diagram-modal-canvas" class="architecture-canvas diagram-modal-canvas" tabindex="0" aria-label="Expanded architecture diagram. Use the mouse wheel to zoom."></div>
+  </dialog>
+  <dialog id="resource-inspector" class="resource-inspector" aria-labelledby="resource-inspector-title" aria-live="polite">
+    <header class="resource-inspector-header">
+      <div>
+        <span>Live ClickHouse resource</span>
+        <h2 id="resource-inspector-title">Table details</h2>
+        <p id="resource-inspector-subtitle"></p>
+      </div>
+      <button id="resource-inspector-close" type="button" aria-label="Close resource details">×</button>
+    </header>
+    <div id="resource-inspector-body" class="resource-inspector-body"></div>
+  </dialog>
+  <dialog id="clone-modal" class="clone-modal" aria-labelledby="clone-modal-title">
+    <header class="clone-modal-header">
+      <h2 id="clone-modal-title">Clone this pattern</h2>
+      <button id="clone-modal-close" class="diagram-modal-close" type="button" aria-label="Close">×</button>
+    </header>
+    <div class="clone-modal-body">
+      <p>Cloning copies a pattern into <code>workspace-patterns/</code> under a chosen name, so its schema, load, and checks can be adapted to a specific system without touching the curated original.</p>
+      <p>From the repository:</p>
+      <pre>just clone &lt;pattern&gt; &lt;new-name&gt;</pre>
+      <p>The copy appears in the Workspace group here, runs the same way with <code>just test &lt;new-name&gt;</code>, and can be removed with <code>just delete &lt;new-name&gt;</code>.</p>
+    </div>
+  </dialog>
+  <script src="catalog.js"></script>
+  <script src="util.js"></script>
+  <script src="diagram.js"></script>
+  <script src="topology.js"></script>
+  <script src="session.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

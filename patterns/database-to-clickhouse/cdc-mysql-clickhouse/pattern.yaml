@@ -1,0 +1,120 @@
+manifest_version: 1
+title: "CDC · MySQL binlog → Altinity lightweight sink → ClickHouse"
+description: |-
+  Compares three ways to land the same MySQL CDC stream in ClickHouse: allowing the Altinity sink to create the target, transforming that target through a materialized view, or writing into an existing ClickHouse table with deliberate types and a generated column.
+
+  All three receive matching `INSERT`, `UPDATE`, and `DELETE` operations and preserve versioned current-state semantics.
+
+  Beyond ClickHouse and the source database, the pipeline is a single service. Embedded Debezium reads the binlog and writes over JDBC, keeping its offsets and schema history in ClickHouse tables, so the deployment requires no broker, orchestrator, catalog database, or object storage.
+
+  The connector performs no in-flight transformation. Removing the broker removes the place a Kafka Connect single-message transform would run, so all shaping happens in ClickHouse, either in the target DDL or in a materialized view.
+
+  This repository pins Altinity sink `2.9.1-lt` to ClickHouse `25.3` because its startup JDBC metadata reads fail against ClickHouse `26.6`.
+graph: |-
+  snapshot:
+    mysql:source_tables(label=2 MySQL sources,tables=test.orders + test.orders_existing)
+      -[initial snapshot · Debezium]-> connector:altinity_sink(label=Altinity lightweight sink,system=Altinity CDC,state=offsets + schema history)
+
+  snapshot:
+    connector:altinity_sink
+      -[snapshot · create target]-> mergetree:orders(label=test.orders,owner=connector-created)
+
+  snapshot:
+    connector:altinity_sink
+      -[snapshot · existing target]-> mergetree:orders_existing(label=test.orders_existing,owner=pattern schema)
+
+  changes:
+    mysql:source_tables
+      -[row-based MySQL binlog]-> connector:altinity_sink
+
+  changes:
+    connector:altinity_sink
+      -[versions + tombstones]-> mergetree:orders
+
+  changes:
+    connector:altinity_sink
+      -[versions + tombstones]-> mergetree:orders_existing
+
+  transformation:
+    mergetree:orders
+      -> mv:orders_transform_mv(reads=orders only)
+      -> mergetree:orders_transformed@mv-transformed(source=orders MV)
+profiles: [cdc-ch, mysql, cdc-mysql]
+category: cdc
+flow: ingestion
+topology: single
+order: 3
+tags: [cdc, mysql]
+driver_node: ch-cdc
+
+requires:
+  clickhouse_max: "25.3"
+  note: "Ceiling is the Altinity sink's bundled clickhouse-jdbc, not a ClickHouse limit; its JDBC startup broke on ClickHouse 26.6."
+
+references:
+  - label: Altinity ClickHouse Sink Connector
+    url: https://github.com/Altinity/clickhouse-sink-connector
+  - label: Altinity 2.9.1 supported ClickHouse versions (24.8+)
+    url: https://github.com/Altinity/clickhouse-sink-connector/blob/999b63d712212502583b4efe41a84d760c161e6a/doc/feature_matrix.md#L3-L9
+  - label: Altinity 2.9.1 lightweight JDBC dependency (0.6.5)
+    url: https://github.com/Altinity/clickhouse-sink-connector/blob/999b63d712212502583b4efe41a84d760c161e6a/sink-connector-lightweight/pom.xml#L474-L480
+  - label: Sink connector architecture (lightweight vs Kafka deployment)
+    url: https://github.com/Altinity/clickhouse-sink-connector/blob/develop/doc/architecture.md
+  - label: Lightweight connector configuration reference
+    url: https://github.com/Altinity/clickhouse-sink-connector/blob/develop/sink-connector-lightweight/docker/config.yml
+  - label: "Single-process snapshot limits: slowdown and OOM on large initial loads"
+    url: https://github.com/Altinity/clickhouse-sink-connector/issues/307
+  - label: "Recovery is a restart: lightweight connector stops replicating"
+    url: https://github.com/Altinity/clickhouse-sink-connector/issues/380
+
+tradeoffs:
+  benefits:
+    - The lightweight connector embeds Debezium, so MySQL CDC reaches ClickHouse without operating Kafka, an orchestrator, a catalog database, or object storage.
+    - The pipeline is one service beyond ClickHouse and the source, and all of its state lives in ClickHouse tables, so there is no second stateful system to back up or reconcile.
+    - Cost tracks change volume rather than table size, so a large table with few edits stays cheap where a scheduled full re-read would not.
+    - Auto-create supports a connector-owned target while the same stream can land in a deliberately pre-created ClickHouse schema.
+    - ReplacingMergeTree versions and delete markers preserve current-state semantics for inserts, updates, and deletes.
+  drawbacks:
+    - Correctness now costs something on every read - a ReplacingMergeTree, a version column, a tombstone, and FINAL - none of which a scheduled full replace needs.
+    - The initial snapshot is a single embedded Debezium process, so large tables load serially and a failure restarts the snapshot rather than resuming it.
+    - Binlog reading and ClickHouse writing share one pipeline, so a slow destination applies back pressure to the source.
+    - Recovery is a process restart from the last flushed offset; there is no workflow history, no retry policy per step, and no second instance to fail over to.
+    - Connector offsets and schema history are operational state that must remain durable and consistent with the ClickHouse targets.
+    - Existing schemas must remain compatible with Debezium values while connector DDL and schema evolution are disabled.
+    - This verified connector release is pinned to ClickHouse 25.3 in the pattern because its bundled JDBC startup path failed against the tested 26.6 release.
+
+# ch-cdc initialization provides orders_existing before the connector starts;
+# the connector still creates orders. load.py installs the transformation after
+# the initial snapshot because its source table must exist first.
+schema_sql: null
+load: load.py
+
+ready_when:
+  - query: "SELECT engine FROM system.tables WHERE database = 'test' AND name = 'orders'"
+    value: ReplacingMergeTree
+    node: ch-cdc
+    timeout: 60
+  - query: "SELECT type FROM system.columns WHERE database = 'test' AND table = 'orders_existing' AND name = 'amount'"
+    value: "Nullable(Int64)"
+    node: ch-cdc
+    timeout: 60
+  - query: "SELECT type FROM system.columns WHERE database = 'test' AND table = 'orders_transformed' AND name = 'amount'"
+    value: "Nullable(Decimal(12, 2))"
+    node: ch-cdc
+    timeout: 60
+  - query: "SELECT count() FROM test.orders FINAL WHERE id = 3 AND is_deleted = 0"
+    value: 0
+    node: ch-cdc
+    timeout: 60
+  - query: "SELECT count() FROM test.orders_transformed FINAL WHERE id = 3 AND is_deleted = 0"
+    value: 0
+    node: ch-cdc
+    timeout: 60
+  - query: "SELECT count() FROM test.orders_existing FINAL WHERE id = 3 AND is_deleted = 0"
+    value: 0
+    node: ch-cdc
+    timeout: 60
+
+verify:
+  sql: verify.sql
+  expected: expected.txt

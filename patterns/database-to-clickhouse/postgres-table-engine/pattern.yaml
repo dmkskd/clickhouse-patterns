@@ -1,0 +1,80 @@
+manifest_version: 1
+title: "Postgres table engine (query in place, no copy)"
+description: |-
+  Reads Postgres tables directly from ClickHouse without replicating them. The source is declared once and resolved on each query, so the only thing to operate is ClickHouse itself.
+
+  Three access paths are compared. The Postgres Table Engine is one ClickHouse table declared locally, bound to one Postgres table, with the column types chosen at declaration time. The Postgres Database Engine maps an entire schema in a single statement and requires no per-table DDL: its tables and types are discovered when queried, so a table added in Postgres becomes queryable without any change in ClickHouse. The postgresql() table function carries the connection inline and creates no object at all.
+
+  Each path issues a fresh query to Postgres on every read.
+
+  Because ClickHouse holds no copy, a row that the application updates or deletes in Postgres is simply read in its current state on the next query, with nothing to reconcile. The CDC patterns in this group reproduce that same behaviour only by adding a `ReplacingMergeTree`, a version column, a tombstone, and `FINAL` on every read.
+
+  The corresponding limitation is that every query places load on the operational database, and ClickHouse's storage engine contributes nothing to it.
+graph: |-
+  query:
+    postgres:orders(label=public.orders,note=**Live OLTP source**\nThe application writes here directly; ClickHouse only reads it.\n- every read sees the current state\n- nothing to reconcile on a change)
+      -[rows returned per SELECT]-> remote-table:orders_table_engine@table-engine(label=test.orders_table_engine,note=**Postgres Table Engine**\nA declaration bound to one table. Stores nothing locally and is resolved on every read.)
+      -> client:analyst(label=ClickHouse client)
+
+  query:
+    postgres:orders
+      -[rows returned per SELECT]-> remote-table:pg_schema@database-engine(label=pg_schema.orders,note=**Postgres Database Engine**\n- tables discovered at query time\n- new Postgres tables need no ClickHouse DDL)
+      -> client:analyst
+
+  query:
+    postgres:orders
+      -[rows returned per SELECT]-> remote-table:postgresql_fn@table-function(label=postgresql(...),note=**Postgres table function**\nThe connection lives in the query text.\n- creates no object\n- suits one-off reads and INSERT ... SELECT)
+      -> client:analyst
+category: federation
+flow: query
+topology: single
+order: 1
+tags: [postgres, federation, table-engine, no-copy]
+profiles: [single, postgres]
+driver_node: ch
+
+references:
+  - label: "ClickHouse: PostgreSQL table engine"
+    url: https://clickhouse.com/docs/engines/table-engines/integrations/postgresql
+  - label: "ClickHouse: PostgreSQL database engine"
+    url: https://clickhouse.com/docs/engines/database-engines/postgresql
+  - label: "ClickHouse: postgresql table function"
+    url: https://clickhouse.com/docs/sql-reference/table-functions/postgresql
+  - label: "ClickHouse: MySQL table engine (the same shape, MySQL source)"
+    url: https://clickhouse.com/docs/engines/table-engines/integrations/mysql
+
+tradeoffs:
+  benefits:
+    - One DDL statement, or none at all with the table function, replaces an entire replication stack; there is no connector to run and no pipeline state to back up.
+    - Reads are always current, so there is no staleness window, no snapshot to bootstrap, and no reconciliation after a source correction.
+    - Deletes and updates need no ReplacingMergeTree, no version column, and no FINAL, because ClickHouse stores no history to collapse.
+    - The database engine exposes the whole Postgres schema, so a new source table becomes queryable with no ClickHouse DDL at all.
+  drawbacks:
+    - Every query is a fresh round trip to the OLTP database, so a dashboard or a scheduled report puts analytical load directly on production Postgres.
+    - Rows arrive row-oriented over the wire and are not stored, so ClickHouse's compression, primary index, skip indexes, and projections do nothing here.
+    - Only the filters and projections ClickHouse can translate reach Postgres; anything else means transferring the rows and filtering afterwards.
+    - Joining a Postgres table to a large local ClickHouse table re-reads the remote side per query, which is where this stops scaling.
+    - Postgres credentials live in the DDL or the query, so access control and secret rotation become a ClickHouse concern.
+
+schema_sql: schema.sql
+load: load.py
+
+# The mutations in load.py need no convergence wait: with no local copy, the
+# next read is already correct. These checks assert exactly that property.
+ready_when:
+  - query: "SELECT count() FROM test.orders_table_engine"
+    value: 3
+    node: ch
+    timeout: 30
+  - query: "SELECT amount FROM test.orders_table_engine WHERE id = 2"
+    value: 250
+    node: ch
+    timeout: 30
+  - query: "SELECT count() FROM pg_schema.orders WHERE id = 3"
+    value: 0
+    node: ch
+    timeout: 30
+
+verify:
+  sql: verify.sql
+  expected: expected.txt

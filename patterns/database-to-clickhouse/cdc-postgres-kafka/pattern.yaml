@@ -1,0 +1,88 @@
+manifest_version: 1
+title: "CDC · Postgres WAL → Debezium → Kafka → ClickHouse"
+description: |-
+  Debezium reads the Postgres WAL and publishes each change to a Kafka topic. The official ClickHouse Sink consumes that topic and writes to a MergeTree. Both connectors run on one Kafka Connect worker with the broker between them.
+
+  The broker changes who the change stream is for. ClickHouse becomes one consumer rather than the only destination, so a search index, a cache invalidator, an audit store, or another team's service can read the same topic at its own pace, without adding load to Postgres or a second replication slot.
+
+  A broker also restores in-flight transformation. `ExtractNewRecordState` flattens Debezium's before/after envelope, rewrites deletes, and carries the LSN through as `__lsn`, all before the record is published. A second transform adds the Kafka coordinates on the sink side, so each row records the topic, partition, offset, and timestamp it arrived on. The single-process CDC patterns in this group cannot do this, because collapsing the pipeline into one process removes the stage where a transform would run.
+
+  This pattern runs the official **ClickHouse Kafka Connect Sink**. Anything that can consume the topic could take its place, including the **Altinity sink** in its Kafka mode and the **Kafka table engine**, where ClickHouse consumes the topic itself.
+
+  The cost is two services to operate instead of one, plus topic retention and consumer offsets to manage.
+graph: |-
+  changes:
+    postgres:orders(label=public.orders,note=**Live OLTP source**\nOne replication slot serves every consumer downstream.)
+      -[logical WAL · pgoutput]-> connector:debezium(label=Debezium Postgres source,system=Kafka Connect,note=**Envelope flattening**\nThe ExtractNewRecordState transform rewrites each event before it reaches the topic.\n- keeps the after image\n- rewrites deletes as __deleted\n- carries the LSN as __lsn)
+      -[flat JSON records]-> topic:orders(label=pg.public.orders,partitions=1)
+
+  ingestion:
+    topic:orders
+      -[consumer group · HTTP insert batches]-> connector:clickhouse_sink(label=ClickHouse Sink,system=Kafka Connect,plugin=ClickHouseSinkConnector)
+      -[versioned inserts]-> mergetree:orders(label=test.orders,engine=ReplacingMergeTree)
+
+  fan-out:
+    topic:orders
+      -[independent consumer groups]-> client:other_consumers(label=other consumers,note=**Independent consumers**\nEach consumer group reads the same stream at its own pace.\n- search indexes · caches · audit stores\n- Postgres still serves a single replication slot)
+
+  query:
+    mergetree:orders
+      -[FINAL · filter __deleted]-> client:readers(label=query clients)
+profiles: [single, postgres, kafka, connect]
+category: cdc
+flow: ingestion
+topology: single
+order: 5
+tags: [cdc, postgres, kafka, debezium, kafka-connect]
+driver_node: ch
+
+references:
+  - label: "Debezium connector for PostgreSQL"
+    url: https://debezium.io/documentation/reference/stable/connectors/postgresql.html
+  - label: "Debezium: New Record State Extraction (the unwrap SMT)"
+    url: https://debezium.io/documentation/reference/stable/transformations/event-flattening.html
+  - label: "ClickHouse Kafka Connect Sink"
+    url: https://clickhouse.com/docs/integrations/kafka/clickhouse-kafka-connect-sink
+  - label: "ClickHouse: Kafka table engine (the pull alternative to this sink)"
+    url: https://clickhouse.com/docs/engines/table-engines/integrations/kafka
+  - label: "Altinity sink in Kafka mode (an alternative to both connectors here)"
+    url: https://github.com/Altinity/clickhouse-sink-connector/blob/develop/doc/quickstart_kafka.md
+
+tradeoffs:
+  benefits:
+    - Every consumer reads the same change stream from the topic, so ClickHouse is one destination among several rather than the only one.
+    - Adding a consumer costs a consumer group, not another replication slot or another read against Postgres.
+    - The SMT chain runs between source and sink, so records can be flattened, filtered, renamed, or routed before any consumer sees them.
+    - Topic retention decouples producer from consumer, so a ClickHouse outage is absorbed by the broker instead of stalling the WAL reader.
+    - Both halves are replaceable on their own; the sink can be swapped for the Kafka table engine, or the source pointed at MySQL, without touching the other.
+  drawbacks:
+    - Two services to run beyond ClickHouse and the source, where a direct connector needs one.
+    - Retention, partition count, and consumer offsets become operational concerns, and a topic that ages out before a consumer catches up loses data.
+    - The record shape on the topic is a contract shared by every consumer, so an SMT or schema change has to account for all of them.
+    - Ordering holds only within a partition, so keying and partition count decide whether a row's changes stay in order.
+    - Current-state reads still need ReplacingMergeTree FINAL semantics and a filter on the rewritten delete marker.
+
+schema_sql: schema.sql
+load: load.py
+
+ready_when:
+  - query: "SELECT count() FROM test.orders FINAL WHERE __deleted = 'false'"
+    value: 3
+    node: ch
+    timeout: 180
+  - query: "SELECT count() FROM test.orders FINAL WHERE id = 4 AND __deleted = 'false'"
+    value: 1
+    node: ch
+    timeout: 180
+  - query: "SELECT amount FROM test.orders FINAL WHERE id = 2"
+    value: 250
+    node: ch
+    timeout: 180
+  - query: "SELECT count() FROM test.orders FINAL WHERE id = 3 AND __deleted = 'false'"
+    value: 0
+    node: ch
+    timeout: 180
+
+verify:
+  sql: verify.sql
+  expected: expected.txt

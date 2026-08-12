@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "clickhouse-patterns": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "--no-project",
+        "--with",
+        "mcp-clickhouse",
+        "--python",
+        "3.12",
+        "mcp-clickhouse"
+      ],
+      "env": {
+        "CLICKHOUSE_ALLOW_WRITE_ACCESS": "false",
+        "CLICKHOUSE_HOST": "localhost",
+        "CLICKHOUSE_PASSWORD": "",
+        "CLICKHOUSE_PORT": "8123",
+        "CLICKHOUSE_SECURE": "false",
+        "CLICKHOUSE_USER": "default",
+        "CLICKHOUSE_VERIFY": "false"
+      }
+    }
+  }
+}

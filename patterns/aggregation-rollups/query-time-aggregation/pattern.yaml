@@ -1,0 +1,53 @@
+manifest_version: 1
+title: "Query-time aggregation (rollups computed on read)"
+description: |-
+  Computes the rollup at read time, straight from the raw rows with a plain `GROUP BY` and nothing stored ahead of time.
+
+  Applied to trades, the same raw table answers both a per-minute and a per-5-minute candle (open, high, low, close, volume) on demand, so writes stay cheap and any bucket or metric is available. The cost is that every query rescans the raw rows it covers.
+
+  First of three patterns for turning raw rows into rollups.
+tradeoffs:
+  benefits:
+    - No write-time work and no extra tables; the raw table is the only thing to keep.
+    - Any time bucket or metric is available on read without deciding on it up front.
+    - Always exact and consistent, with nothing to backfill or keep in sync.
+  drawbacks:
+    - Every query rescans the raw rows it covers, so cost grows with the volume retained and the frequency of the queries.
+    - There is no precomputed table to make dashboards fast, so latency tracks raw volume.
+    - Opening and closing prices over wide ranges can be CPU and memory heavy under load.
+graph: |-
+  ingest:
+    client:loader -[INSERT · 3 batches]-> mergetree:trades(label=demo.trades)
+
+  query-1m:
+    mergetree:trades -[toStartOfMinute · argMin/argMax/min/max/sum]-> client:rollup_1m(label=1m rollup)
+
+  query-5m:
+    mergetree:trades -[toStartOfFiveMinutes · same aggregates on read]-> client:rollup_5m(label=5m rollup)
+category: aggregation
+flow: transform
+topology: single
+order: 1
+tags: [aggregation, rollup, query-time]
+driver_node: ch
+profiles: [single]
+
+references:
+  - label: "roq-trading: OHLC candles computed at query time from raw ticks in ClickHouse"
+    url: https://roq-trading.com/docs/tutorials/data/clickhouse/index.html
+  - label: "ClickHouse: Build a rollup with materialized views (contrast with pre-aggregation)"
+    url: https://clickhouse.com/docs/knowledgebase/materialized-view-rollup-timeseries
+
+schema_sql: schema.sql
+load: load.py          # insert raw trades in three separate parts
+
+# All nine trades landed; the candles themselves are checked by verify.sql.
+ready_when:
+  - query: "SELECT count() FROM demo.trades"
+    value: 9
+    node: ch
+    timeout: 30
+
+verify:
+  sql: verify.sql
+  expected: expected.txt

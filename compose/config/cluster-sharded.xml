@@ -1,0 +1,31 @@
+<clickhouse>
+    <!-- Keeper is used for the ON CLUSTER DDL queue only. The MergeTree data
+         on these two shards is intentionally not replicated. -->
+    <zookeeper>
+        <node>
+            <host>keeper</host>
+            <port>9181</port>
+        </node>
+    </zookeeper>
+
+    <!-- Two shards, one replica each. Referenced by Distributed(sharded, ...)
+         and by ON CLUSTER 'sharded'. -->
+    <remote_servers>
+        <sharded>
+            <shard>
+                <internal_replication>false</internal_replication>
+                <replica>
+                    <host>ch-s1</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+            <shard>
+                <internal_replication>false</internal_replication>
+                <replica>
+                    <host>ch-s2</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </sharded>
+    </remote_servers>
+</clickhouse>

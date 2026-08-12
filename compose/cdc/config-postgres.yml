@@ -1,0 +1,69 @@
+# Altinity ClickHouse Sink Connector - Lightweight (embedded Debezium), Postgres source.
+# Adapted from the upstream example; state (offsets + schema history) is stored
+# in ClickHouse itself (no Kafka), in the altinity_sink_connector database.
+name: "cdc-postgres"
+topic.prefix: "chp-postgres"
+connector.class: "io.debezium.connector.postgresql.PostgresConnector"
+
+# --- source: Postgres ---
+database.hostname: "postgres"
+database.port: "5432"
+database.user: "postgres"
+database.password: "postgres"
+database.server.name: "postgres"
+database.dbname: "test"
+schema.include.list: "public"
+table.include.list: "public.orders,public.orders_existing"
+plugin.name: "pgoutput"
+slot.name: "chp_slot"
+publication.autocreate.mode: "all_tables"
+database.ssl.mode: "disabled"
+snapshot.mode: "initial"
+
+# --- target: ClickHouse ---
+clickhouse.server.url: "ch-cdc"
+clickhouse.server.user: "cdc"
+clickhouse.server.password: "cdc"
+clickhouse.server.port: "8123"
+auto.create.tables: "true"
+clickhouse.datetime.timezone: "UTC"
+clickhouse.jdbc.params: "socket_timeout=30000,connection_timeout=30000"
+
+# --- state store: ClickHouse (offsets) ---
+offset.storage: "io.debezium.storage.jdbc.offset.JdbcOffsetBackingStore"
+offset.storage.jdbc.table.name: "altinity_sink_connector.replica_source_info"
+offset.storage.jdbc.url: "jdbc:clickhouse://ch-cdc:8123/altinity_sink_connector"
+offset.storage.jdbc.user: "cdc"
+offset.storage.jdbc.password: "cdc"
+offset.storage.jdbc.table.ddl: "CREATE TABLE if not exists %s
+(
+    `id` String,
+    `offset_key` String,
+    `offset_val` String,
+    `record_insert_ts` DateTime,
+    `record_insert_seq` UInt64,
+    `_version` UInt64 MATERIALIZED toUnixTimestamp64Nano(now64(9))
+)
+ENGINE = ReplacingMergeTree(_version)
+ORDER BY id
+SETTINGS index_granularity = 8192"
+offset.storage.jdbc.table.delete: "select * from %s"
+offset.storage.jdbc.table.select: "SELECT id, offset_key, offset_val FROM %s FINAL ORDER BY record_insert_ts, record_insert_seq"
+
+# --- state store: ClickHouse (schema history) ---
+schema.history.internal: "io.debezium.storage.jdbc.history.JdbcSchemaHistory"
+schema.history.internal.jdbc.url: "jdbc:clickhouse://ch-cdc:8123/altinity_sink_connector"
+schema.history.internal.jdbc.user: "cdc"
+schema.history.internal.jdbc.password: "cdc"
+schema.history.internal.jdbc.table.name: "altinity_sink_connector.replicate_schema_history"
+schema.history.internal.jdbc.table.ddl: "CREATE TABLE if not exists %s
+(`id` VARCHAR(36) NOT NULL, `history_data` VARCHAR(65000), `history_data_seq` INTEGER, `record_insert_ts` TIMESTAMP NOT NULL, `record_insert_seq` INTEGER NOT NULL) ENGINE=ReplacingMergeTree(record_insert_seq) order by id"
+
+# Keep DDL ownership separate: auto-create a missing target from CDC records,
+# but do not rewrite the deliberately provided orders_existing schema.
+enable.snapshot.ddl: "false"
+schema.evolution: "false"
+disable.ddl: "true"
+persist.raw.bytes: "false"
+offset.flush.interval.ms: 5000
+errors.max.retries: 20

@@ -1,0 +1,77 @@
+manifest_version: 1
+title: "Refreshable MV producing state transitions with hysteresis (firing/resolved)"
+description: |-
+  Extends timed p90 alerting with persisted state and separate trigger and recovery thresholds. It publishes a level status stream on every evaluation and emits `FIRING` or `RESOLVED` edge events only when a service changes state.
+tradeoffs:
+  benefits:
+    - ClickHouse evaluates the rolling p90 and persists the prior status, so no external stream processor is needed for hysteresis.
+    - Separate status and alerts topics expose both the current level and only the FIRING or RESOLVED transitions.
+    - The firing and recovery thresholds are ordinary SQL and can be reviewed with the stored state history.
+  drawbacks:
+    - The five-second refresh schedule is a lower bound on detection and recovery latency.
+    - APPEND retains one status row per service per evaluation and publishes the level repeatedly even when it does not change.
+    - Stateful hysteresis makes status_history operational state; retention and replay semantics need deliberate handling.
+graph: |-
+  input:
+    topic:latency(partitions=1)
+      -> kafka-table:latency_in
+      -> mv:mv_store
+      -> mergetree:latency_raw(ttl=1h)
+
+  evaluation:
+    mergetree:latency_raw
+      -[every 5s · p90 + hysteresis]-> refreshable-mv:mv_status(mode=APPEND,state=reads prior status)
+      -> mergetree:status_history(role=evaluator state)
+
+  output:
+    mergetree:status_history
+      -[each evaluation]-> mv:mv_emit_status
+      -> kafka-table:status_out
+      -> topic:status(stream=current level)
+
+  transitions:
+    mergetree:status_history
+      -[only transitions]-> mv:mv_emit_alerts
+      -> kafka-table:alerts_out
+      -> topic:alerts(stream=FIRING + RESOLVED)
+profiles: [single, kafka]
+category: kafka
+flow: output
+topology: single
+order: 3
+tags: [kafka, kafka-engine, refreshable-mv, alerts, transitions]
+driver_node: ch
+
+references:
+  - label: ClickHouse refreshable materialized views and APPEND
+    url: https://clickhouse.com/docs/materialized-view/refreshable-materialized-view
+  - label: ClickHouse Kafka table engine
+    url: https://clickhouse.com/docs/engines/table-engines/integrations/kafka
+
+schema_sql: schema.sql
+load: load.py
+
+# Convergence:
+#  - edge topic "alerts": checkout produced one FIRING then one RESOLVED; health neither
+#  - level topic "status": checkout carried both 'firing' and 'ok' over its life
+ready_when:
+  - query: "SELECT count() FROM demo.alerts_events WHERE service = 'checkout' AND type = 'FIRING'"
+    value: 1
+    node: ch
+    timeout: 60
+  - query: "SELECT count() FROM demo.alerts_events WHERE service = 'checkout' AND type = 'RESOLVED'"
+    value: 1
+    node: ch
+    timeout: 60
+  - query: "SELECT count() FROM demo.alerts_events WHERE service = 'health'"
+    value: 0
+    node: ch
+    timeout: 60
+  - query: "SELECT count(DISTINCT status) FROM demo.status_events WHERE service = 'checkout'"
+    value: 2
+    node: ch
+    timeout: 60
+
+verify:
+  sql: verify.sql
+  expected: expected.txt

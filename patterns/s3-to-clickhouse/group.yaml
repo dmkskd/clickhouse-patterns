@@ -1,0 +1,26 @@
+title: S3 → ClickHouse
+description: From a one-line s3() load to incremental, idempotent, and bulk ingestion
+icon: s3
+order: 5
+intro: |-
+  ClickHouse can read data stored in S3 through several interfaces, of which
+  these are some of the most common:
+
+  - **Query the objects directly.** The [`s3()` table function](https://clickhouse.com/docs/sql-reference/table-functions/s3) parses a file at query time, in Parquet, Avro, JSONEachRow, or any other supported input format. The `S3` table engine does the same, as a named table created once instead of repeating the path in every query.
+  - **Query them through an open table format.** [Iceberg](https://clickhouse.com/docs/engines/table-engines/integrations/iceberg) and [Delta Lake](https://clickhouse.com/docs/engines/table-engines/integrations/deltalake) keep their own metadata alongside the data files, so ClickHouse sees a table with schema and snapshots rather than a set of objects.
+  - **Convert them into a native ClickHouse table.** An `INSERT ... SELECT` writes the contents into a MergeTree, so later queries read local parts instead of S3. The `S3Queue` engine automates this, importing each file as it appears.
+
+  The following patterns focus on the conversion into ClickHouse's native format and the
+  S3 access it builds on, ordered by how much state the import has to hold
+  between runs. A one-off import holds none, while one that runs repeatedly has
+  to record which objects it has already processed. That
+  record is held either by ClickHouse, as S3Queue's Keeper state, or by the
+  orchestrator that stages each batch and issues the `INSERT`.
+
+  The imported rows land in a plain `MergeTree` when they only accumulate, or in
+  a `ReplacingMergeTree` keyed on a version column when later files correct
+  earlier ones. Whole-table transfers skip row parsing entirely, moving MergeTree
+  parts with `BACKUP`/`RESTORE`.
+related:
+  - group: database-to-clickhouse
+    note: For change-data-capture that stages to S3 (PeerDB)

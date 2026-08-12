@@ -1,0 +1,55 @@
+manifest_version: 1
+title: "S3Queue in unordered mode (processed-file set)"
+description: |-
+  ClickHouse watches an S3 prefix and ingests new files itself with the `S3Queue` engine, no external trigger.
+
+  In unordered mode it keeps the full set of processed files in Keeper, so it ingests every new file regardless of name, including one that arrives out of lexical order.
+
+  This handles writers with key-order jitter, at the cost of a tracked-file set that grows and must be bounded. The managed ClickPipes equivalent uses S3 event notifications.
+tradeoffs:
+  benefits:
+    - It ingests files regardless of arrival order, so a writer with key-order jitter loses nothing.
+    - ClickHouse owns the loop and the exactly-once bookkeeping, so no orchestrator is needed.
+    - New files are picked up as they land, so ingestion is continuous.
+  drawbacks:
+    - The processed-file set grows and must be bounded by s3queue_tracked_files_limit and a TTL, where ordered mode kept only a tiny watermark.
+    - It requires Keeper, and control is inside ClickHouse, so an external orchestrator cannot decide what or when to load.
+    - A file that was already ingested and then edited is not re-read; only new keys are processed.
+graph: |-
+  ingest:
+    client:producer(label=file producer) -[drop files any order]-> minio:queue(label=queue/*.parquet) -[S3Queue unordered · processed set in Keeper]-> s3queue:events_queue(label=demo.events_queue) -> mv:events_mv -> mergetree:events(label=demo.events)
+
+  query:
+    mergetree:events -[read]-> client:reader(label=reader)
+category: ingestion
+flow: ingestion
+topology: single
+order: 4
+tags: [s3, s3queue, unordered, incremental, exactly-once, keeper]
+driver_node: ch-s3q
+profiles: [s3queue, s3]
+
+references:
+  - label: "ClickHouse: S3Queue table engine (ordered vs unordered)"
+    url: https://clickhouse.com/docs/engines/table-engines/integrations/s3queue
+  - label: "ClickHouse Cloud: S3 ClickPipes, continuous ingestion in any order (notifications)"
+    url: https://clickhouse.com/docs/integrations/clickpipes/object-storage/amazon-s3/overview#continuous-ingestion-any-order
+
+schema_sql: schema.sql
+load: load.py          # drop three files into the watched prefix; ClickHouse ingests them
+
+# S3Queue processes each file exactly once regardless of order. Wait until all
+# three files (3000 rows, 3 distinct source files) are ingested by the view.
+ready_when:
+  - query: "SELECT count() FROM demo.events"
+    value: 3000
+    node: ch-s3q
+    timeout: 120
+  - query: "SELECT uniqExact(source_file) FROM demo.events"
+    value: 3
+    node: ch-s3q
+    timeout: 120
+
+verify:
+  sql: verify.sql
+  expected: expected.txt

@@ -1,0 +1,27 @@
+[project]
+name = "clickhouse-pattern-explorer"
+version = "0.1.0"
+description = "Explore, document, and run reusable ClickHouse architecture patterns"
+requires-python = ">=3.11"
+dependencies = [
+    "python-on-whales>=0.72",   # drive `docker compose` (profiles + up --wait) from Python
+    "clickhouse-connect>=0.8",  # official ClickHouse client (HTTP)
+    "tenacity>=9.0",            # poll-until / convergence waiting
+    "pydantic>=2.7",            # validate pattern.yaml manifests
+    "pyyaml>=6.0",
+    "confluent-kafka>=2.5",     # Kafka producer for load steps
+    "pymysql>=1.1",             # MySQL DML for CDC load steps
+    "psycopg[binary]>=3.2",     # Postgres DML for CDC load steps
+    "rich>=13.0",               # grouped/colorized `just list` and `just show`
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-v"
+
+[tool.uv]
+package = false

@@ -1,0 +1,483 @@
+# ClickHouse Patterns - composable infra, selected via profiles.
+#
+# Each service is tagged with the profile(s) it belongs to. A pattern declares
+# the profiles it needs in its pattern.yaml; the harness sets COMPOSE_PROFILES
+# and runs `docker compose up --wait`. You can also drive it by hand:
+#
+#   docker compose -f compose/stack.yml --profile single up
+#   docker compose -f compose/stack.yml --profile cluster --profile s3 --profile kafka up
+#
+# Profiles:
+#   single   - one standalone ClickHouse node               (ch)
+#   cluster  - Keeper + 2-node ReplicatedMergeTree cluster  (keeper, ch-01, ch-02)
+#   shards   - Keeper + 2 independent data shards           (keeper, ch-s1, ch-s2)
+#   s3        - MinIO + bucket bootstrap                     (minio, minio-init)
+#   kafka    - single-node Kafka in KRaft mode              (kafka)
+#   peerdb   - self-hosted PeerDB control plane and workers
+
+# Image versions are pinned for reproducibility. To upgrade, bump the tag here
+# (and ch-cdc below), then re-run the affected patterns.
+x-ch-node: &ch-node
+  image: clickhouse/clickhouse-server:26.7
+  ulimits:
+    nofile: { soft: 262144, hard: 262144 }
+  healthcheck:
+    test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+    interval: 3s
+    timeout: 3s
+    retries: 20
+    start_period: 5s
+
+x-peerdb-catalog-env: &peerdb-catalog-env
+  PEERDB_CATALOG_HOST: peerdb-catalog
+  PEERDB_CATALOG_PORT: "5432"
+  PEERDB_CATALOG_USER: postgres
+  PEERDB_CATALOG_PASSWORD: postgres
+  PEERDB_CATALOG_DATABASE: peerdb
+
+x-peerdb-worker-env: &peerdb-worker-env
+  TEMPORAL_HOST_PORT: peerdb-temporal:7233
+  PEERDB_TEMPORAL_NAMESPACE: default
+  PEERDB_DEPLOYMENT_UID: clickhouse-patterns
+  PEERDB_CLICKHOUSE_AWS_CREDENTIALS_AWS_ACCESS_KEY_ID: clickhouse
+  PEERDB_CLICKHOUSE_AWS_CREDENTIALS_AWS_SECRET_ACCESS_KEY: clickhouse_secret
+  PEERDB_CLICKHOUSE_AWS_CREDENTIALS_AWS_REGION: us-east-1
+  PEERDB_CLICKHOUSE_AWS_CREDENTIALS_AWS_ENDPOINT_URL_S3: http://minio:9000
+  PEERDB_CLICKHOUSE_AWS_S3_BUCKET_NAME: clickhouse
+  AWS_ACCESS_KEY_ID: clickhouse
+  AWS_SECRET_ACCESS_KEY: clickhouse_secret
+  AWS_REGION: us-east-1
+  AWS_ENDPOINT: http://minio:9000
+
+services:
+  # ── single ────────────────────────────────────────────────────────────────
+  ch:
+    <<: *ch-node
+    profiles: [single]
+    ports:
+      - "8123:8123"   # HTTP
+      - "9000:9000"   # native
+    volumes:
+      - ./config/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./config/users.xml:/etc/clickhouse-server/users.d/default-user.xml:ro
+
+  # ── cluster: Keeper + two replicas of one shard ────────────────────────────
+  keeper:
+    image: clickhouse/clickhouse-keeper:26.7
+    # Replicated patterns use Keeper for data replication. Sharded patterns
+    # use it only for the distributed DDL queue behind ON CLUSTER. The
+    # shards-v2 pattern also stores Kafka offsets and partition locks here.
+    profiles: [cluster, shards, shards-v2, s3queue]
+    volumes:
+      - ./config/keeper.xml:/etc/clickhouse-keeper/keeper_config.xml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-keeper-client -h localhost -p 9181 -q 'ls /' || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  ch-01:
+    <<: *ch-node
+    profiles: [cluster]
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - ./config/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./config/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./config/macros-01.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ./config/users.xml:/etc/clickhouse-server/users.d/default-user.xml:ro
+    depends_on:
+      keeper: { condition: service_healthy }
+
+  ch-02:
+    <<: *ch-node
+    profiles: [cluster]
+    ports:
+      - "8124:8123"
+      - "9001:9000"
+    volumes:
+      - ./config/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./config/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./config/macros-02.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ./config/users.xml:/etc/clickhouse-server/users.d/default-user.xml:ro
+    depends_on:
+      keeper: { condition: service_healthy }
+
+  # -- shards: two data shards, one replica each; Keeper coordinates DDL
+  ch-s1:
+    <<: *ch-node
+    profiles: [shards]
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - ./config/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./config/cluster-sharded.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./config/macros-s1.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ./config/users.xml:/etc/clickhouse-server/users.d/default-user.xml:ro
+    depends_on:
+      keeper: { condition: service_healthy }
+
+  ch-s2:
+    <<: *ch-node
+    profiles: [shards]
+    ports:
+      - "8124:8123"
+      - "9001:9000"
+    volumes:
+      - ./config/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./config/cluster-sharded.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./config/macros-s2.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ./config/users.xml:/etc/clickhouse-server/users.d/default-user.xml:ro
+    depends_on:
+      keeper: { condition: service_healthy }
+
+  # -- shards-v2: two data shards on ClickHouse head, for the experimental
+  # StorageKafka2 partition-to-shard affinity pattern. Kept separate from the
+  # stable `shards` nodes (pinned 26.7) because the feature merged after 26.7
+  # and only exists in nightly master builds. Same topology and macros; the
+  # only differences are the image and the cluster config's hostnames.
+  ch-s1v2:
+    <<: *ch-node
+    image: clickhouse/clickhouse-server:head
+    profiles: [shards-v2]
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - ./config/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./config/cluster-sharded-v2.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./config/macros-s1v2.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ./config/users.xml:/etc/clickhouse-server/users.d/default-user.xml:ro
+    depends_on:
+      keeper: { condition: service_healthy }
+
+  ch-s2v2:
+    <<: *ch-node
+    image: clickhouse/clickhouse-server:head
+    profiles: [shards-v2]
+    ports:
+      - "8124:8123"
+      - "9001:9000"
+    volumes:
+      - ./config/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./config/cluster-sharded-v2.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./config/macros-s2v2.xml:/etc/clickhouse-server/config.d/macros.xml:ro
+      - ./config/users.xml:/etc/clickhouse-server/users.d/default-user.xml:ro
+    depends_on:
+      keeper: { condition: service_healthy }
+
+  # -- s3queue: a single ClickHouse node pointed at Keeper, for the S3Queue
+  # engine (which stores its processed-file state in Keeper). Paired with the
+  # `s3` profile's MinIO as the bucket it watches.
+  ch-s3q:
+    <<: *ch-node
+    profiles: [s3queue]
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - ./config/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./config/zookeeper-single.xml:/etc/clickhouse-server/config.d/zookeeper.xml:ro
+      - ./config/users.xml:/etc/clickhouse-server/users.d/default-user.xml:ro
+    depends_on:
+      keeper: { condition: service_healthy }
+
+  # ── cdc-ch: ClickHouse pinned for CDC ──────────────────────────────────────
+  # Altinity sink 2.9.1-lt bundles clickhouse-jdbc 0.6.5. On 2026-07-25 the
+  # cdc-mysql-clickhouse test failed during JDBC startup metadata reads against
+  # ClickHouse 26.6.1.1193, while the same test passed on 25.3. See the pattern
+  # README's Compatibility section; this service stays separate so other
+  # patterns can use 26.7.
+  ch-cdc:
+    <<: *ch-node
+    image: clickhouse/clickhouse-server:25.3
+    profiles: [cdc-ch]
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - ./config/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./config/users.xml:/etc/clickhouse-server/users.d/default-user.xml:ro
+      - ./config/users-cdc.xml:/etc/clickhouse-server/users.d/cdc-user.xml:ro
+      - ./config/cdc-init.sql:/docker-entrypoint-initdb.d/cdc-init.sql:ro
+
+  # ── mysql: CDC source (binlog enabled) ─────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    profiles: [mysql]
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: test
+    command:
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --binlog-row-image=FULL
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+    volumes:
+      - ./cdc/mysql-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot --silent || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  cdc-mysql:
+    image: altinity/clickhouse-sink-connector:2.9.1-lt
+    profiles: [cdc-mysql]
+    depends_on:
+      mysql: { condition: service_healthy }
+      ch-cdc: { condition: service_healthy }
+    volumes:
+      - ./cdc/config-mysql.yml:/config.yml:ro
+    entrypoint:
+      - sh
+      - -c
+      - "java -Xms256m -Xmx1g -jar /app.jar /config.yml com.altinity.clickhouse.debezium.embedded.ClickHouseDebeziumEmbeddedApplication"
+
+  # ── postgres: CDC source (logical replication) ─────────────────────────────
+  postgres:
+    image: postgres:16
+    profiles: [postgres]
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: test
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=4
+      - -c
+      - max_replication_slots=4
+    volumes:
+      - ./cdc/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d test || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  cdc-postgres:
+    image: altinity/clickhouse-sink-connector:2.9.1-lt
+    profiles: [cdc-postgres]
+    depends_on:
+      postgres: { condition: service_healthy }
+      ch-cdc: { condition: service_healthy }
+    volumes:
+      - ./cdc/config-postgres.yml:/config.yml:ro
+    entrypoint:
+      - sh
+      - -c
+      - "java -Xms256m -Xmx1g -jar /app.jar /config.yml com.altinity.clickhouse.debezium.embedded.ClickHouseDebeziumEmbeddedApplication"
+
+  # -- peerdb: self-hosted Postgres CDC (the engine behind ClickPipes) --------
+  # PeerDB uses its own catalog plus Temporal for durable workflow state. The
+  # snapshot and CDC workers stage ClickHouse batches through the s3 profile's
+  # MinIO service; the pattern creates source/target peers through port 9900.
+  peerdb-catalog:
+    image: postgres:18-alpine@sha256:1b1689b20d16a014a3d195653381cf2caa75a41a92d93b255a9d6ea29fd353aa
+    profiles: [peerdb]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: peerdb
+    volumes:
+      - peerdb-catalog-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "peerdb"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  peerdb-temporal:
+    image: temporalio/auto-setup:1.29@sha256:f14912b699cf73015ad5c4fc18d522d4b014db90e794039214dfb7c022c2644f
+    profiles: [peerdb]
+    depends_on:
+      peerdb-catalog: { condition: service_healthy }
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: postgres
+      POSTGRES_PWD: postgres
+      POSTGRES_SEEDS: peerdb-catalog
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+    volumes:
+      - ./peerdb/temporal-dynamicconfig.yaml:/etc/temporal/config/dynamicconfig/development-sql.yaml:ro
+
+  peerdb-temporal-admin:
+    image: temporalio/admin-tools:1.25.2-tctl-1.18.1-cli-1.1.1@sha256:da0c7a7982b571857173ab8f058e7f139b3054800abb4dcb100445d29a563ee8
+    profiles: [peerdb]
+    depends_on:
+      peerdb-temporal: { condition: service_started }
+    environment:
+      TEMPORAL_ADDRESS: peerdb-temporal:7233
+      TEMPORAL_CLI_ADDRESS: peerdb-temporal:7233
+    volumes:
+      - ./peerdb/temporal-admin.sh:/opt/peerdb/temporal-admin.sh:ro
+    entrypoint: ["/bin/sh", "/opt/peerdb/temporal-admin.sh"]
+    healthcheck:
+      test: ["CMD", "tctl", "workflow", "list"]
+      interval: 2s
+      timeout: 5s
+      retries: 45
+
+  peerdb-flow-api:
+    image: ghcr.io/peerdb-io/flow-api:stable-v0.37.0
+    profiles: [peerdb]
+    environment:
+      <<: [*peerdb-catalog-env, *peerdb-worker-env]
+      PEERDB_ALLOWED_TARGETS: ""
+    depends_on:
+      peerdb-temporal-admin: { condition: service_healthy }
+
+  peerdb-snapshot-worker:
+    image: ghcr.io/peerdb-io/flow-snapshot-worker:stable-v0.37.0
+    profiles: [peerdb]
+    environment:
+      <<: [*peerdb-catalog-env, *peerdb-worker-env]
+    depends_on:
+      peerdb-temporal-admin: { condition: service_healthy }
+
+  peerdb-flow-worker:
+    image: ghcr.io/peerdb-io/flow-worker:stable-v0.37.0
+    profiles: [peerdb]
+    environment:
+      <<: [*peerdb-catalog-env, *peerdb-worker-env]
+    depends_on:
+      peerdb-temporal-admin: { condition: service_healthy }
+
+  peerdb-server:
+    image: ghcr.io/peerdb-io/peerdb-server:stable-v0.37.0
+    profiles: [peerdb]
+    stop_signal: SIGINT
+    ports:
+      - "9900:9900"
+    environment:
+      <<: *peerdb-catalog-env
+      PEERDB_PASSWORD: peerdb
+      PEERDB_FLOW_SERVER_ADDRESS: grpc://peerdb-flow-api:8112
+      RUST_LOG: info
+    depends_on:
+      peerdb-catalog: { condition: service_healthy }
+      peerdb-flow-api: { condition: service_started }
+
+  # ── s3: MinIO ──────────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    profiles: [s3]
+    ports:
+      - "9010:9000"   # S3 API (9000/9001 are taken by CH native ports)
+      - "9011:9001"   # console
+    environment:
+      MINIO_ROOT_USER: clickhouse
+      MINIO_ROOT_PASSWORD: clickhouse_secret
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    profiles: [s3]
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 clickhouse clickhouse_secret &&
+      mc mb --ignore-existing local/clickhouse &&
+      mc mb --ignore-existing local/backups &&
+      touch /tmp/ready;
+      tail -f /dev/null;
+      "
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  # ── kafka: single node, KRaft (no ZooKeeper) ───────────────────────────────
+  kafka:
+    image: apache/kafka:4.3.1
+    profiles: [kafka]
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: "0"
+      KAFKA_PROCESS_ROLES: "controller,broker"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "0@kafka:9093"
+      KAFKA_LISTENERS: "PLAINTEXT://:9094,CONTROLLER://:9093,EXTERNAL://:9092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9094,EXTERNAL://localhost:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      # Single broker: internal topics can't satisfy the default RF of 3, which
+      # otherwise stalls consumer-group coordination ("Can't get assignment").
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9094 --list || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # ── connect: Kafka Connect worker + ClickHouse Sink and Debezium plugins ───
+  # PUSH ingestion: an external connector reads the topic and writes to CH over
+  # HTTP (contrast with the Kafka *engine* patterns, where CH pulls). Plugins are
+  # installed from Confluent Hub at start; the healthcheck gates on both loading.
+  # The Debezium Postgres source is here so one worker can host both ends of a
+  # broker-based CDC pipeline (cdc-postgres-kafka).
+  connect:
+    image: confluentinc/cp-kafka-connect:7.6.1
+    profiles: [connect]
+    depends_on:
+      kafka: { condition: service_healthy }
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: "kafka:9094"
+      CONNECT_GROUP_ID: "chp-connect"
+      CONNECT_CONFIG_STORAGE_TOPIC: "_connect_configs"
+      CONNECT_OFFSET_STORAGE_TOPIC: "_connect_offsets"
+      CONNECT_STATUS_STORAGE_TOPIC: "_connect_status"
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
+      CONNECT_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_REST_ADVERTISED_HOST_NAME: "connect"
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
+    command:
+      - bash
+      - -c
+      - |
+        confluent-hub install --no-prompt clickhouse/clickhouse-kafka-connect:v1.3.9
+        confluent-hub install --no-prompt debezium/debezium-connector-postgresql:2.5.4
+        /etc/confluent/docker/run
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8083/connector-plugins | grep -q ClickHouseSinkConnector && curl -sf http://localhost:8083/connector-plugins | grep -q PostgresConnector || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+
+volumes:
+  peerdb-catalog-data:

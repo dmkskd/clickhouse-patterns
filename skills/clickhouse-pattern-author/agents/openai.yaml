@@ -1,0 +1,4 @@
+interface:
+  display_name: "ClickHouse Pattern Author"
+  short_description: "Document and extend ClickHouse patterns"
+  default_prompt: "Use $clickhouse-pattern-author to document this architecture as a reusable workspace pattern."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "ClickHouse Pattern Lab"
+  short_description: "Inspect and iterate live ClickHouse patterns"
+  default_prompt: "Use $clickhouse-pattern-lab to inspect and validate the currently running pattern."

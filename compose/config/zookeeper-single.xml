@@ -1,0 +1,11 @@
+<clickhouse>
+    <!-- A single ClickHouse node pointed at Keeper, so engines that need
+         coordination (here S3Queue, which stores processed-file state in Keeper)
+         work without a full cluster. -->
+    <zookeeper>
+        <node>
+            <host>keeper</host>
+            <port>9181</port>
+        </node>
+    </zookeeper>
+</clickhouse>

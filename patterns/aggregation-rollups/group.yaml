@@ -1,0 +1,24 @@
+title: Rollups
+description: Turn raw rows into pre-aggregated summaries
+icon: transform
+order: 1
+intro: |-
+  A rollup is a pre-aggregated summary of raw rows, grouped into buckets such as
+  a minute or an hour, so a query reads a few hundred rows rather than scanning
+  millions. ClickHouse can compute one at several points, including:
+
+  - **On read.** A plain `GROUP BY` over the raw table, with nothing stored in advance.
+  - **At insert time.** One materialized view per resolution, maintained as rows arrive.
+  - **Cascaded.** A coarser resolution built from the finer one already computed, rather than from raw.
+  - **On a schedule.** A refreshable materialized view that reruns a full query and replaces its output.
+
+  The following patterns are ordered by how much of the work moves off the read
+  path. The first three build OHLC candles from the same stream of market
+  trades, so their results can be compared directly. The fourth revalues a
+  trading book at the latest price, an answer that changes when no row has been
+  inserted and that an insert-triggered view therefore has no way to produce.
+related:
+  - group: kafka-to-clickhouse
+    note: To stream the raw events into ClickHouse first
+  - group: database-to-clickhouse
+    note: To land rows from a source database

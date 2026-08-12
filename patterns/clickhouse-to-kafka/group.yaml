@@ -1,0 +1,26 @@
+title: ClickHouse → Kafka
+description: Produce rows and derived state to Kafka with the Kafka engine
+icon: kafka-out
+order: 4
+intro: |-
+  ClickHouse can publish to Kafka as well as read from it, turning query results
+  and computed data such as aggregates or alerts into a stream that other
+  systems consume.
+
+  The Kafka table engine works in both directions. A `SELECT` from such a table
+  consumes its topic, and an `INSERT` into one produces to that topic,
+  serialized with the table's `kafka_format`. Anything able to write rows can
+  therefore produce, whether that is a statement issued by a client or a
+  materialized view whose target is a Kafka table. Delivery is at-least-once and
+  ordering is not guaranteed across producers, so a consumer has to tolerate a
+  message it has already seen.
+
+  The following patterns are ordered by how much of the decision to publish
+  lives in ClickHouse.
+
+  - **Produce aggregates.** An aggregate that an incoming stream keeps up to date, with the write triggered by ingestion.
+  - **Produce on a timer.** A refreshable materialized view drives both the read and the write, with no external process involved.
+  - **Produce state transitions.** State added to that timer, so a message is published only when a service's status changes, which is the model alerting systems use.
+related:
+  - group: kafka-to-clickhouse
+    note: For the reverse direction, streaming into ClickHouse

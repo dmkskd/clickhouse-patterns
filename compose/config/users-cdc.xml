@@ -1,0 +1,17 @@
+<clickhouse>
+    <!-- Dedicated user for the CDC connector: the Debezium JDBC offset store
+         rejects an empty password, so this user has one. The harness itself
+         still connects as default (no password). -->
+    <users>
+        <cdc>
+            <password>cdc</password>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <access_management>1</access_management>
+            <named_collection_control>1</named_collection_control>
+        </cdc>
+    </users>
+</clickhouse>

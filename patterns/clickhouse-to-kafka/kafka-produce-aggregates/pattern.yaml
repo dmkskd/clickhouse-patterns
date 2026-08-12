@@ -1,0 +1,57 @@
+manifest_version: 1
+title: "Produce to Kafka from ClickHouse (Kafka engine write path)"
+description: |-
+  Consumes events from Kafka, accumulates block-safe totals in a `SummingMergeTree`, and inserts an aggregate snapshot into an output `Kafka`-engine table. A second consumer reads the produced messages back, so the complete ClickHouse-to-Kafka write path is testable.
+tradeoffs:
+  benefits:
+    - ClickHouse consumes and incrementally aggregates the input stream before publishing a compact snapshot back to Kafka.
+    - SummingMergeTree safely combines per-block partial counts while preserving a simple GROUP BY query surface.
+    - INSERT INTO the Kafka-engine table makes the ClickHouse-to-Kafka write direction explicit and independently testable.
+  drawbacks:
+    - Emitting a snapshot is an explicit operation; this pattern does not continuously publish every change to the aggregate table.
+    - Consumers must define whether successive aggregate snapshots replace or accumulate prior values.
+    - Kafka-engine input remains at-least-once, so a retry can over-count unless the upstream data or aggregation design is idempotent.
+graph: |-
+  input:
+    topic:events(partitions=1)
+      -> kafka-table:events_in
+      -[count each block]-> mv:mv_agg
+      -> mergetree:agg(engine=SummingMergeTree,contents=partial counts)
+
+  output:
+    mergetree:agg
+      -[INSERT snapshot]-> kafka-table:agg_out(mode=producer)
+      -> topic:aggregates(rows=one total per kind)
+
+  test:
+    topic:aggregates
+      -[read back]-> kafka-table:agg_back
+      -> mv:mv_store
+      -> mergetree:agg_store(role=verification copy)
+profiles: [single, kafka]
+category: kafka
+flow: output
+topology: single
+order: 1
+tags: [kafka, kafka-engine, aggregates]
+driver_node: ch
+
+references:
+  - label: ClickHouse Kafka table engine including INSERT production
+    url: https://clickhouse.com/docs/engines/table-engines/integrations/kafka
+  - label: ClickHouse SummingMergeTree
+    url: https://clickhouse.com/docs/engines/table-engines/mergetree-family/summingmergetree
+
+schema_sql: schema.sql
+load: load.py          # produce input, wait for aggregation, emit totals to Kafka
+
+# Convergence: the emitted totals were consumed back from the output topic.
+ready_when:
+  - query: "SELECT sum(c) FROM demo.agg_store"
+    value: 8000
+    node: ch
+    timeout: 60
+
+verify:
+  sql: verify.sql
+  expected: expected.txt

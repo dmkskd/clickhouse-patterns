@@ -1,0 +1,6 @@
+<clickhouse>
+    <macros>
+        <shard>1</shard>
+        <replica>ch-s1v2</replica>
+    </macros>
+</clickhouse>

@@ -1,0 +1,7 @@
+CURRENT (full replace)	1	ALICE	100	standard
+CURRENT (full replace)	2	BOB	250	high
+CURRENT (full replace)	4	DAVE	400	high
+LATEST (from history)	1	ALICE	100	standard
+LATEST (from history)	2	BOB	250	high
+LATEST (from history)	4	DAVE	400	high
+HISTORY (deleted in Postgres)	3	CAROL	300	high

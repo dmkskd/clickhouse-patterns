@@ -1,0 +1,108 @@
+manifest_version: 1
+title: "Refreshable MV pull from Postgres (scheduled full replace)"
+description: |-
+  A refreshable materialized view reruns a full `SELECT` against Postgres on a fixed schedule and atomically replaces a local MergeTree with the result.
+
+  Because `APPEND` is not used, each refresh replaces the table in full. A row deleted in Postgres is simply absent from the next result, so the target never holds two versions of a row to reconcile. Readers query a plain MergeTree without `FINAL`, trailing the source by at most one interval.
+
+  The approach suits any table small enough to re-read in full, such as dimensions, configuration, and lookups. Cost scales with table size rather than change volume, so a large or fast-changing source belongs on CDC instead.
+
+  A second view keeps the history. An OLTP source overwrites rows in place, and a full replace discards the previous result on each refresh, so an earlier value cannot be recovered from either side. Reproducing last week's report or auditing a figure that moved overnight both require that record.
+
+  `REFRESH EVERY 5 SECOND APPEND` appends each refresh instead of replacing it, stamped with the time it was observed. Current state is the newest snapshot, and earlier snapshots stay queryable.
+graph: |-
+  refresh:
+    postgres:orders(label=public.orders,note=**Live OLTP source**\nThe application writes here directly; ClickHouse only reads, once per refresh.\n- must stay small enough to re-read whole\n- changes appear at the next refresh)
+      -[full SELECT · once per refresh]-> remote-table:pg_orders@table-engine(label=test.pg_orders,note=**Postgres Table Engine**\nA declaration, not a copy.\n- read once per refresh, by the view alone)
+      -[REFRESH EVERY 5 SECOND]-> refreshable-mv:orders(label=test.orders,engine=MergeTree,note=**Atomic full replace**\n- reruns the whole SELECT\n- swaps the finished result in\n- a deleted row is absent from the next result)
+
+  history:
+    remote-table:pg_orders@table-engine
+      -[REFRESH EVERY 5 SECOND APPEND]-> refreshable-mv:orders_history(label=test.orders_history,engine=MergeTree,note=**Periodic snapshot**\nEach refresh is appended rather than replacing.\n- one snapshot_at per refresh\n- nothing is ever discarded\n- grows as rows x refreshes)
+
+  history:
+    refreshable-mv:orders_history
+      -[newest snapshot only]-> mv:orders_latest(label=test.orders_latest,note=**Current state from history**\nSelects the whole newest snapshot.\n- a deleted row is absent from it\n- per-key argMax would keep it)
+
+  query:
+    {refreshable-mv:orders, mv:orders_latest}
+      -[plain SELECT · no FINAL]-> client:readers(label=analytics readers,note=**Plain reads**\nA plain MergeTree read.\n- stale by up to one interval)
+category: ingestion
+flow: ingestion
+topology: single
+order: 2
+tags: [postgres, refreshable-mv, scheduled-pull, dimension-table]
+profiles: [single, postgres]
+driver_node: ch
+
+references:
+  - label: "ClickHouse: Refreshable materialized views"
+    url: https://clickhouse.com/docs/materialized-view/refreshable-materialized-view
+  - label: "ClickHouse: CREATE VIEW (REFRESH clause, APPEND, DEPENDS ON)"
+    url: https://clickhouse.com/docs/sql-reference/statements/create/view#refreshable-materialized-view
+  - label: "ClickHouse: PostgreSQL table engine"
+    url: https://clickhouse.com/docs/engines/table-engines/integrations/postgresql
+  - label: "ClickHouse: system.view_refreshes"
+    url: https://clickhouse.com/docs/operations/system-tables/view_refreshes
+
+tradeoffs:
+  benefits:
+    - A full replace leaves no earlier version of a row to reconcile, so the target is a plain MergeTree read without FINAL, without a version column, and without a tombstone predicate.
+    - The rows are stored locally, so compression, the primary index, skip indexes, and projections all apply, and joins against local tables no longer touch Postgres.
+    - Exactly one reader hits Postgres per interval regardless of how many analysts query the copy, which is the read-load problem the pass-through pattern has.
+    - The entire mechanism is one DDL statement; the schedule and its run history live in ClickHouse (`system.view_refreshes`), so there is no connector process or pipeline state to operate.
+    - A failed refresh leaves the previous result in place and the next scheduled run retries, so a transient Postgres outage degrades to staleness rather than to a broken table.
+  drawbacks:
+    - The copy is stale by up to the refresh interval, so this cannot serve a use case that needs to see a write seconds after it commits.
+    - Every refresh re-reads every row, so cost grows with table size rather than with change volume; this is the wrong shape for a large or fast-churning table.
+    - Each refresh is a full scan on the Postgres side too, which is a periodic load spike on the OLTP database rather than the continuous trickle a WAL reader produces.
+    - Only the current state is captured; intermediate values between two refreshes are never observed, so this cannot feed an audit trail or a change-history table.
+    - Refreshes are wall-clock scheduled and independent per view, so several large views on the same interval can pile onto the same minute unless staggered with `OFFSET` or chained with `DEPENDS ON`.
+    - The APPEND variant rewrites the whole table on every tick whether or not anything changed, so its storage grows as rows times refreshes and needs both a coarse interval and a TTL.
+
+schema_sql: schema.sql
+load: load.py
+
+# schema.sql's CREATE triggers an immediate first refresh; load.py then mutates
+# Postgres and returns. These checks wait out the next scheduled refresh and
+# assert the full replace applied all three changes: the insert, the update,
+# and - with no tombstone anywhere - the delete.
+ready_when:
+  - query: "SELECT count() FROM test.orders"
+    value: 3
+    node: ch
+    timeout: 60
+  - query: "SELECT count() FROM test.orders WHERE id = 4"
+    value: 1
+    node: ch
+    timeout: 60
+  - query: "SELECT toInt32(amount) FROM test.orders WHERE id = 2"
+    value: 250
+    node: ch
+    timeout: 60
+  - query: "SELECT count() FROM test.orders WHERE id = 3"
+    value: 0
+    node: ch
+    timeout: 60
+  # The append-only variant: the newest snapshot has dropped the deleted row,
+  # while the history still holds it from an earlier snapshot.
+  - query: "SELECT count() FROM test.orders_latest"
+    value: 3
+    node: ch
+    timeout: 60
+  - query: "SELECT count() FROM test.orders_latest WHERE id = 3"
+    value: 0
+    node: ch
+    timeout: 60
+  - query: "SELECT count() > 0 FROM test.orders_history WHERE id = 3"
+    value: 1
+    node: ch
+    timeout: 60
+  - query: "SELECT uniqExact(snapshot_at) > 1 FROM test.orders_history"
+    value: 1
+    node: ch
+    timeout: 60
+
+verify:
+  sql: verify.sql
+  expected: expected.txt

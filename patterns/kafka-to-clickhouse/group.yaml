@@ -1,0 +1,43 @@
+title: Kafka → ClickHouse
+description: Pull with the Kafka engine, or push with a connector; delivery semantics and partitioning decide the design
+icon: kafka-in
+order: 3
+intro: |-
+  Ingesting a Kafka topic into ClickHouse involves three decisions:
+
+  - **Delivery semantics.** At-least-once by default; exactly-once needs extra machinery.
+  - **Partition mapping.** How topic partitions map onto consumers and shards.
+  - **Offset ownership.** Which component holds the committed offsets, and so what is re-read after a restart.
+
+  ClickHouse supports the read from either side, and that choice largely
+  determines the other two. It can consume the topic itself with the Kafka table
+  engine, usually called pull, or an external Kafka Connect sink can read the
+  topic and push records in over HTTP. ClickHouse's
+  [Kafka integrations guide](https://clickhouse.com/docs/integrations/connectors/data-ingestion/kafka/index)
+  covers both.
+
+  **Pulling with the Kafka table engine** keeps everything inside ClickHouse, so
+  there is no extra service to run, but consumption is tied to the engine's
+  consumer groups and offset handling. Across shards the classic engine cannot
+  pin a partition to a specific shard. The sharded patterns here work through
+  the three established ways around that: read every partition and filter down
+  to the ones a shard owns, store everything everywhere and deduplicate on read,
+  or route the whole topic through a single consumer. A recent experimental
+  addition, StorageKafka2 with the `kafka_partition_shard_num` and
+  `kafka_shard_count` settings, gives each shard a fixed slice of the partitions
+  natively, and one pattern demonstrates it.
+
+  **Pushing with a Kafka Connect sink** puts the consumer outside ClickHouse. It
+  is one more component to operate, but the connector owns delivery, including a
+  KeeperMap-backed exactly-once mode that holds across replays.
+
+  Where the consumers run and where rows land is then decided by the target
+  layout, which may be a single node, a replicated table that Keeper keeps in
+  sync across two nodes, or several shards that have to agree on which partition
+  each of them owns. The following patterns pair pull and push with each layout,
+  so the consumer and table arrangement can be seen in every combination.
+related:
+  - group: aggregation-rollups
+    note: To roll the ingested events into summaries
+  - group: clickhouse-to-kafka
+    note: To publish results back out to Kafka
