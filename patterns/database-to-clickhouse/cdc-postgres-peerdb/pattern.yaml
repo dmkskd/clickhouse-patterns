@@ -5,6 +5,8 @@ description: |-
 
   Snapshot and change batches are staged as Avro objects in MinIO. PeerDB then issues `INSERT ... SELECT FROM s3()` statements, and ClickHouse pulls the named objects when they run. Ongoing changes land first in `_peerdb_raw_two_table_mirror` and are decoded into the targets from there.
 
+  PeerDB performs no in-flight transformation. It has no per-message transform hook on the CDC path, so all shaping happens in ClickHouse, either in the target DDL or in a materialized view.
+
   **Two Postgres instances run in this pattern, with unrelated responsibilities.** `postgres` is the replication source holding the user data. `peerdb-catalog` stores PeerDB's own metadata and Temporal's workflow history, and never holds a replicated row.
 
   Beyond ClickHouse and the source database, the stack adds nine services, because replication runs as Temporal workflows. Nothing at this three-row scale exercises what that provides.
@@ -71,6 +73,7 @@ tradeoffs:
   drawbacks:
     - "Nine services beyond ClickHouse and the source database, where the Altinity sink needs one."
     - "PeerDB needs a store of its own. A second Postgres holds its mirror configuration and Temporal's workflow history, so there is another database to run, secure, and back up, entirely separate from the one being replicated."
+    - "No in-flight transformation, because PeerDB has no per-message transform hook on the CDC path, so records land as produced and all shaping happens in ClickHouse."
     - "Current-state reads need ReplacingMergeTree FINAL semantics and a tombstone filter."
     - "A schema-owned target must keep PeerDB's metadata columns, and a transformation needs an explicit snapshot backfill."
 

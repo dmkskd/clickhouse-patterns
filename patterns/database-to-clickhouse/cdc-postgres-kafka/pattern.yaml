@@ -1,11 +1,15 @@
 manifest_version: 1
 title: "CDC · Postgres WAL → Debezium → Kafka → ClickHouse"
 description: |-
-  Debezium reads the Postgres WAL and publishes each change to a Kafka topic. The official ClickHouse Sink consumes that topic and writes to a MergeTree. Both connectors run on one Kafka Connect worker with the broker between them.
+  A **Kafka topic** holds the change stream so that several systems can consume it independently. **Debezium** reads the Postgres WAL and publishes each change to that topic. The official **ClickHouse Sink** consumes that topic and writes to a MergeTree. Both connectors run on one Kafka Connect worker with the broker between them.
 
-  The broker changes who the change stream is for. ClickHouse becomes one consumer rather than the only destination, so a search index, a cache invalidator, an audit store, or another team's service can read the same topic at its own pace, without adding load to Postgres or a second replication slot.
+  ClickHouse is one consumer of that topic. A search index, a cache invalidator, or another team's service can consume the same records, each at its own pace. Postgres still serves a single replication slot.
 
-  A broker also restores in-flight transformation. `ExtractNewRecordState` flattens Debezium's before/after envelope, rewrites deletes, and carries the LSN through as `__lsn`, all before the record is published. A second transform adds the Kafka coordinates on the sink side, so each row records the topic, partition, offset, and timestamp it arrived on. The single-process CDC patterns in this group cannot do this, because collapsing the pipeline into one process removes the stage where a transform would run.
+  Each connector runs its own chain of **single-message transforms**, and any SMT can be added to either chain, whether one of Kafka Connect's built-ins for filtering, renaming, masking, and routing, or a custom one. On the **source side** an added transform applies to every consumer; on the **sink side** it applies only to the ClickHouse copy.
+
+  Before publishing, `ExtractNewRecordState` flattens Debezium's before/after envelope, rewrites deletes, and carries the LSN through as `__lsn`. On the sink side, a second transform adds the Kafka coordinates, so each row records the topic, partition, offset, and timestamp it arrived on.
+
+  Whether to transform in the connectors or after the rows land in ClickHouse is a design choice in its own right.
 
   This pattern runs the official **ClickHouse Kafka Connect Sink**. Anything that can consume the topic could take its place, including the **Altinity sink** in its Kafka mode and the **Kafka table engine**, where ClickHouse consumes the topic itself.
 
