@@ -13,7 +13,9 @@ Connect three sources of truth:
 - Use `just status --json` for the active session.
 - Use the `pattern_dir` returned by `just status --json` for intended behavior.
   It points to `patterns/<slug>/` for library patterns and
-  `workspace-patterns/<slug>/` for company, team, and locally derived patterns.
+  a configured workspace root for company, team, and locally derived patterns.
+  The writable root can be a separate private Git checkout selected with
+  `CLICKHOUSE_PATTERN_WORKSPACE_DIR`.
   The old `cloned-patterns/` root remains readable for migration compatibility.
 - Use the read-only ClickHouse MCP for observed runtime state.
 

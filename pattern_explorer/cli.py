@@ -196,7 +196,7 @@ def _cmd_clone(args) -> int:
     info = clone_pattern(args.pattern, args.clone)
     print(f"WORKSPACE  {info.source} -> {info.slug}")
     print(f"  destination {info.directory}")
-    print("  versioning  add workspace-patterns/ to your repository when ready")
+    print(f"  versioning  commit {info.directory.parent} to its workspace repository when ready")
     print(f"  run         just run {info.slug}")
     print(f"  test        just test {info.slug}")
     return 0

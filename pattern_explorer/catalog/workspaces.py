@@ -34,7 +34,7 @@ def _workspace_destination(slug: str) -> Path:
     existing = [path for path in collisions if path.exists()]
     if existing:
         raise FileExistsError(f"pattern name {slug!r} already exists at {existing[0]}")
-    return manifest.WORKSPACE_PATTERNS_DIR / slug
+    return manifest.workspace_pattern_write_dir() / slug
 
 
 def _write_workspace_metadata(directory: Path, source: str, created_at: str) -> None:
@@ -67,9 +67,10 @@ def clone_pattern(source_slug: str, clone_slug: str) -> CloneInfo:
     destination = _workspace_destination(clone_slug)
 
     created_at = datetime.now(timezone.utc).isoformat()
-    manifest.WORKSPACE_PATTERNS_DIR.mkdir(parents=True, exist_ok=True)
+    workspace_root = destination.parent
+    workspace_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
-        prefix=f".{clone_slug}-", dir=manifest.WORKSPACE_PATTERNS_DIR
+        prefix=f".{clone_slug}-", dir=workspace_root
     ) as temporary:
         staged = Path(temporary) / clone_slug
         shutil.copytree(
@@ -127,15 +128,16 @@ def create_workspace_pattern(slug: str) -> CloneInfo:
 
 
 def delete_clone(clone_slug: str) -> CloneInfo:
-    """Delete a managed workspace pattern without touching curated patterns."""
+    """Delete a managed pattern from the configured writable workspace root."""
     manifest.validate_pattern_slug(clone_slug)
-    destination = manifest.WORKSPACE_PATTERNS_DIR / clone_slug
+    workspace_root = manifest.workspace_pattern_write_dir()
+    destination = workspace_root / clone_slug
 
     if any(manifest.PATTERNS_DIR.glob(f"*/{clone_slug}/pattern.yaml")):
         raise CloneError(
             f"{clone_slug!r} is a library pattern; only local clones can be deleted"
         )
-    if not destination.exists():
+    if not destination.exists() and workspace_root == manifest.WORKSPACE_PATTERNS_DIR.resolve():
         legacy = manifest.LEGACY_CLONED_PATTERNS_DIR / clone_slug
         destination = legacy if legacy.exists() else destination
     if not destination.exists():

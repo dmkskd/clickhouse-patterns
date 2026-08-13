@@ -5,15 +5,16 @@
 - `patterns/<group>/<slug>/`: curated library. Every pattern lives inside a group
   folder (a family such as `aggregation-rollups` or `database-to-clickhouse`).
 - `patterns/<group>/group.yaml`: the group's card, one per folder (see Groups).
-- `workspace-patterns/<slug>/`: repository-local company or team extensions, flat.
-- `CLICKHOUSE_PATTERN_WORKSPACES`: additional workspace roots, separated by the platform path separator.
-- `just new <slug>`: documentation-first workspace scaffold.
-- `just clone <source> <slug>`: derived editable workspace pattern.
+- `workspace-patterns/<slug>/`: the default repository-local workspace root, flat.
+- `CLICKHOUSE_PATTERN_WORKSPACE_DIR`: optional writable workspace root, usually a separate private Git checkout. It is used by `just new`, `just clone`, and `just delete`, and is discovered automatically.
+- `CLICKHOUSE_PATTERN_WORKSPACES`: additional discovery-only workspace roots, separated by the platform path separator.
+- `just new <slug>`: documentation-first workspace scaffold in the configured writable root.
+- `just clone <source> <slug>`: derived editable workspace pattern in the configured writable root.
 
-Workspace patterns are always written flat to `workspace-patterns/`; only the
-curated library uses group folders. To add a curated pattern, put its folder
-inside the right group (create a new group folder with a `group.yaml` if none
-fits).
+Workspace patterns are always written flat inside their workspace root; only
+the curated library uses group folders. To add a curated pattern, put its
+folder inside the right group (create a new group folder with a `group.yaml` if
+none fits).
 
 ## Groups
 

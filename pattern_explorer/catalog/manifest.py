@@ -339,8 +339,8 @@ def discover_cloned_patterns() -> list[Pattern]:
 
 
 def workspace_pattern_dirs() -> list[Path]:
-    """Return canonical, legacy, and explicitly configured workspace roots."""
-    roots = [WORKSPACE_PATTERNS_DIR]
+    """Return writable, canonical, legacy, and explicitly configured workspace roots."""
+    roots = [workspace_pattern_write_dir(), WORKSPACE_PATTERNS_DIR]
     # Tests and embedders that replace the canonical root should remain isolated.
     if WORKSPACE_PATTERNS_DIR == _DEFAULT_WORKSPACE_PATTERNS_DIR:
         roots.append(LEGACY_CLONED_PATTERNS_DIR)
@@ -354,6 +354,18 @@ def workspace_pattern_dirs() -> list[Path]:
             seen.add(resolved)
             unique.append(resolved)
     return unique
+
+
+def workspace_pattern_write_dir() -> Path:
+    """Return the root used by workspace-creation commands.
+
+    An external root makes it possible to keep private workspace patterns in a
+    separate Git repository while the public catalog remains unchanged.
+    """
+    configured = os.environ.get("CLICKHOUSE_PATTERN_WORKSPACE_DIR")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return WORKSPACE_PATTERNS_DIR.resolve()
 
 
 def discover_workspace_patterns() -> list[Pattern]:

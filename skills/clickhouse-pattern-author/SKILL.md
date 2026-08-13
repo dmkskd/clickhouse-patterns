@@ -11,9 +11,15 @@ Before changing a pattern, read [references/pattern-model.md](references/pattern
 
 ## Choose the authoring path
 
-- For a new company or team architecture, run `just new <slug>`. This creates a documentation-first entry under `workspace-patterns/`.
+- For a new company or team architecture, run `just new <slug>`. It creates a documentation-first entry under `workspace-patterns/` by default.
 - To adapt an existing implementation, run `just clone <source> <slug>`. Preserve the derived runtime until the requested changes require otherwise.
 - Edit curated `patterns/` only when the user explicitly wants the shared library changed.
+
+For private or team-owned patterns, set `CLICKHOUSE_PATTERN_WORKSPACE_DIR` to a
+separate Git checkout before creating or cloning. `just new`, `just clone`, and
+`just delete` then use that checkout, which is also discovered automatically by
+the Explorer and CLI. Do not put private patterns in the public catalog merely
+to make them discoverable.
 
 Use lowercase hyphenated slugs. The `graph` is the single canonical representation of a pattern's architecture.
 

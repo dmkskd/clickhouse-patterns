@@ -161,7 +161,7 @@ def test_clone_command_prints_workspace_destination(
 
     output = capsys.readouterr().out
     assert f"destination {destination}" in output
-    assert "add workspace-patterns/ to your repository" in output
+    assert f"commit {destination.parent} to its workspace repository" in output
     assert "just run my-demo" in output
     assert "just test my-demo" in output
 
@@ -236,3 +236,23 @@ def test_configured_workspace_root_is_discovered(tmp_path, monkeypatch):
 
     assert pattern.location == "workspace"
     assert pattern.dir == configured / "company-orders"
+
+
+def test_external_workspace_root_is_used_for_creation_and_discovery(tmp_path, monkeypatch):
+    library = tmp_path / "patterns"
+    canonical = tmp_path / "workspace-patterns"
+    private_workspace = tmp_path / "private-patterns"
+    monkeypatch.setattr(manifest, "PATTERNS_DIR", library)
+    monkeypatch.setattr(manifest, "WORKSPACE_PATTERNS_DIR", canonical)
+    monkeypatch.setenv("CLICKHOUSE_PATTERN_WORKSPACE_DIR", str(private_workspace))
+    _write_pattern(library, "demo-source")
+
+    info = clone_pattern("demo-source", "private-demo")
+
+    assert info.directory == (private_workspace / "private-demo").resolve()
+    assert manifest.load_pattern("private-demo").dir == info.directory
+    assert private_workspace.resolve() in manifest.workspace_pattern_dirs()
+    assert not canonical.exists()
+
+    delete_clone("private-demo")
+    assert not info.directory.exists()

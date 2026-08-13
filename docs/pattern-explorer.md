@@ -22,11 +22,12 @@ Curated entries live in `patterns/<slug>/`. A reference entry documents a
 structured resource flow without runtime files. A runnable entry additionally
 declares Compose profiles, SQL/load steps, checks, and expected output.
 
-Company and team extensions live in `workspace-patterns/<slug>/`. Additional
-roots can be supplied with `CLICKHOUSE_PATTERN_WORKSPACES`. The legacy
-`cloned-patterns/` root remains a discovery source for migration. New content is
-written only to `workspace-patterns/`; migrate selected directories deliberately
-so ignored personal data does not suddenly become tracked team documentation.
+Company and team extensions live in `workspace-patterns/<slug>/` by default.
+Set `CLICKHOUSE_PATTERN_WORKSPACE_DIR` to a separate private repository to make
+it the write target for `just new`, `just clone`, and `just delete`; that root is
+also discovered automatically. Additional read-only roots can be supplied with
+`CLICKHOUSE_PATTERN_WORKSPACES`. The legacy `cloned-patterns/` root remains a
+discovery source for migration.
 
 A pattern names profiles; Pattern Explorer orchestration resolves them to
 `COMPOSE_PROFILES=… docker compose up --wait`.

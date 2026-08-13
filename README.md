@@ -81,8 +81,28 @@ flow and Docker infrastructure are a useful starting point:
 ```bash
 just new our-orders-cdc
 just clone cdc-postgres-peerdb my-orders-cdc
-# both create entries under workspace-patterns/
+# by default, both create entries under workspace-patterns/
 ```
+
+To keep patterns committed in a separate private repository, clone that
+repository alongside this one and make it the writable workspace root:
+
+```bash
+git clone git@github.com:your-org/clickhouse-pattern-workspaces.git ../pattern-workspaces
+export CLICKHOUSE_PATTERN_WORKSPACE_DIR="$PWD/../pattern-workspaces"
+just clone cdc-postgres-peerdb my-orders-cdc
+just list                         # confirms the workspace pattern is discovered
+just explore                      # shows it in Pattern Explorer's Workspace group
+```
+
+`CLICKHOUSE_PATTERN_WORKSPACE_DIR` is used for `just new`, `just clone`, and
+`just delete`, and is discovered automatically by every command launched with
+that environment, including `just list`, `just run`, and `just explore`. Static
+catalogs (`just site` and `just build-single`) include the configured workspace
+patterns when they are built. Keep the setting in a local shell or `direnv`
+configuration; the public catalog checkout stays unchanged. Use
+`CLICKHOUSE_PATTERN_WORKSPACES` when you only need to discover additional,
+read-only workspace roots.
 
 Use `just setup` once to install the repository's agent skills, then ask an
 LLM to use the authoring skill. In Codex, paste this prompt:

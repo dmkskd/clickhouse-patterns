@@ -40,10 +40,28 @@ just clone cdc-postgres-peerdb my-orders-cdc
 just run my-orders-cdc
 ```
 
+To version workspace patterns privately without adding them to this repository,
+use a separate Git checkout as the writable root:
+
+```bash
+git clone git@github.com:your-org/clickhouse-pattern-workspaces.git ../pattern-workspaces
+export CLICKHOUSE_PATTERN_WORKSPACE_DIR="$PWD/../pattern-workspaces"
+just clone cdc-postgres-peerdb my-orders-cdc
+just list                         # confirms the workspace pattern is discovered
+just explore                      # shows it in Pattern Explorer's Workspace group
+just run my-orders-cdc
+```
+
+`CLICKHOUSE_PATTERN_WORKSPACE_DIR` controls where `just new`, `just clone`, and
+`just delete` write, and every command launched with that environment discovers
+the root. Persist it in a local shell or `direnv` configuration, then commit the
+resulting pattern to the private repository. Static catalogs include the root's
+patterns when built with the setting present. `CLICKHOUSE_PATTERN_WORKSPACES`
+remains available for discovering additional roots without making them writable.
+
 `just list` shows workspace patterns separately, while `test-all` and pytest
 continue to run only the curated `patterns/` library. Commit a workspace to
-share it with a team, or set `CLICKHOUSE_PATTERN_WORKSPACES` to one or more
-additional roots (separated by the platform path separator).
+share it with a team.
 
 Delete a finished experiment with:
 
