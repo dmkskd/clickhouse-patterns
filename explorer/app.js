@@ -748,6 +748,7 @@
     if (updateUrl) updateRoute(selected.slug);
     renderList(search.value);
     session.renderSession();
+    window.scrollTo(0, 0);
   }
 
   search.addEventListener("input", () => renderList(search.value));
