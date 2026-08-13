@@ -7,6 +7,8 @@ from urllib.request import Request, urlopen
 import pytest
 
 from pattern_explorer.server.explorer import ExplorerConflict, ExplorerController, create_server
+from pattern_explorer.server.resource_readers import MinioReader, ReaderContext, RESOURCE_READERS
+from pattern_explorer.catalog.graph import Resource
 
 
 @pytest.fixture
@@ -200,6 +202,7 @@ def test_resource_inspection_returns_definition_and_bounded_live_sample(monkeypa
 
     result = controller.inspect_resource("demo", "mergetree:orders")
 
+    assert result["type"] == "clickhouse-table"
     assert result["engine"] == "ReplacingMergeTree"
     assert result["columns"][0] == {
         "name": "id",
@@ -210,6 +213,42 @@ def test_resource_inspection_returns_definition_and_bounded_live_sample(monkeypa
     }
     assert result["sample"]["rows"] == [[1, "alice"]]
     assert "LIMIT 20" in client.queries[-1][0]
+
+
+def test_reader_registry_registers_clickhouse_and_minio():
+    assert RESOURCE_READERS.reader_for("mergetree") is not None
+    assert RESOURCE_READERS.reader_for("minio") is not None
+    assert RESOURCE_READERS.reader_for("topic") is None
+
+
+def test_minio_reader_lists_only_the_declared_prefix(monkeypatch):
+    class FakeS3:
+        def list_objects_v2(self, **kwargs):
+            assert kwargs == {"Bucket": "clickhouse", "Prefix": "events/", "MaxKeys": 100}
+            return {"Contents": [{"Key": "events/batch-1.parquet", "Size": 42, "LastModified": __import__("datetime").datetime(2026, 8, 13)}]}
+
+    reader = MinioReader()
+    monkeypatch.setattr(reader, "_client", lambda _resource: FakeS3())
+    resource = Resource(
+        key="minio:files", kind="minio", name="files",
+        properties={"bucket": "clickhouse", "prefix": "events/", "format": "Parquet"},
+    )
+
+    result = reader.inspect(ReaderContext(resource, None, False, lambda: None))
+
+    assert result["type"] == "object-store"
+    assert result["objects"] == [{"key": "events/batch-1.parquet", "size": 42, "modified": "2026-08-13T00:00:00", "format": "Parquet"}]
+
+
+def test_minio_reader_refuses_object_outside_declared_prefix(monkeypatch):
+    reader = MinioReader()
+    resource = Resource(
+        key="minio:files", kind="minio", name="files",
+        properties={"bucket": "clickhouse", "prefix": "events/"},
+    )
+
+    with pytest.raises(ValueError, match="outside"):
+        reader.inspect(ReaderContext(resource, None, False, lambda: None), "other/data.parquet")
 
 
 def test_resource_inspection_never_selects_from_kafka_engine(monkeypatch):

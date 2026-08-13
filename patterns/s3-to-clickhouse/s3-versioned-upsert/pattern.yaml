@@ -17,7 +17,7 @@ tradeoffs:
     - Deduplication is on read via FINAL until a background merge collapses the parts, so a plain SELECT can show older versions.
 graph: |-
   load:
-    client:orchestrator(label=orchestrator) -[stage versioned batches]-> minio:batches(label=events/batch-*.parquet) -[INSERT INTO events FROM s3()]-> mergetree:events(engine=ReplacingMergeTree(version),label=demo.events)
+    client:orchestrator(label=orchestrator) -[stage versioned batches]-> minio:batches(bucket=clickhouse,prefix=events/,format=Parquet,label=events/batch-*.parquet) -[INSERT INTO events FROM s3()]-> mergetree:events(engine=ReplacingMergeTree(version),label=demo.events)
 
   query:
     mergetree:events -[FINAL · highest version per key]-> client:reader(label=reader)

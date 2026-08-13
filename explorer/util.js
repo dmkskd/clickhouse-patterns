@@ -48,7 +48,7 @@ window.PE.util = (() => {
   const REPEAT_Y = REPEAT * 0.42;
   const INSPECTABLE_KINDS = new Set([
     "kafka-table", "mv", "refreshable-mv", "distributed", "mergetree", "replicated-mergetree", "keepermap",
-    "remote-table"
+    "remote-table", "minio"
   ]);
   const TOPOLOGIES = {
     single: { label: "Single node", help: "One ClickHouse node" },
@@ -63,7 +63,7 @@ window.PE.util = (() => {
   // Diagram palettes: every theme-tuned color in the SVG renderer lives here.
   // `style` is the full per-scheme <style> block; icon/nodeShadow/grid* are
   // used by diagram.js markup directly. Selected by document's data-scheme.
-  const DIAGRAM_STYLE_SHARED = "text{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.edge{fill:none;stroke-width:1.8;stroke-dasharray:4 8;opacity:.78}.packet{filter:url(#glow)}.annotation-layer{pointer-events:none}.ghost-replica{opacity:.3}.replica-sync{fill:none;stroke:#a78bfa;stroke-width:1.5;stroke-dasharray:3 5;opacity:.9}[data-clickhouse-resource-key]{cursor:pointer}.inspectable-resource{cursor:pointer;outline:none;transform-box:fill-box;transform-origin:center;transition:transform .12s ease,filter .12s ease}.inspectable-resource:hover,.inspectable-resource:focus-visible{transform:scale(1.07);filter:brightness(1.3)}.note-badge{cursor:help}";
+  const DIAGRAM_STYLE_SHARED = "text{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.edge{fill:none;stroke-width:1.8;stroke-dasharray:4 8;opacity:.78}.packet{filter:url(#glow)}.annotation-layer{pointer-events:none}.ghost-replica{opacity:.3}.replica-sync{fill:none;stroke:#a78bfa;stroke-width:1.5;opacity:.9}[data-resource-key]{cursor:pointer}.inspectable-resource{cursor:pointer;outline:none;transform-box:fill-box;transform-origin:center;transition:transform .12s ease,filter .12s ease}.inspectable-resource:hover,.inspectable-resource:focus-visible{transform:scale(1.07);filter:brightness(1.3)}.note-badge{cursor:help}";
   const DIAGRAM_PALETTES = {
     dark: {
       icon: "#f3f5ff",

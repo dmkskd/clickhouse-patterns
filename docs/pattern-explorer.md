@@ -106,6 +106,31 @@ and implements the optional control APIs. `explorer/scripts/build-static.mjs`
 owns static-site copying and single-file HTML packaging; the local server serves
 the checked-in browser application directly rather than generating markup.
 
+## Live resource readers
+
+The local control plane reads live resources through a type-keyed, read-only
+reader registry. The graph resource kind selects the reader; the browser never
+connects directly to ClickHouse, MinIO, or another service. Each reader returns
+a bounded JSON payload to the authenticated local API, which the common
+inspector renders.
+
+ClickHouse table and view kinds use the `ClickHouseReader`: definition,
+columns, and at most 20 rows. Kafka-engine tables remain definition-only so a
+browser inspection cannot consume messages. `minio` uses `MinioReader`: it
+lists at most 100 objects under the declared prefix, then reads at most 8 MiB
+and 20 rows from a selected Parquet or Avro object.
+
+External resources must declare the connection-independent metadata that
+identifies what is safe to browse. For MinIO, that is `bucket`, `prefix`, and
+optionally `format`; labels remain presentation-only:
+
+```yaml
+minio:files(bucket=clickhouse,prefix=events/,format=Parquet,label=events/*.parquet)
+```
+
+Kafka, Postgres, and MySQL can be added later through the same registry
+interface, with explicit topic or table metadata rather than display labels.
+
 The page reports its capability mode explicitly:
 
 - **Static catalog**: search, grouping, descriptions, references, diagrams,

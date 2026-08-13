@@ -17,7 +17,7 @@ tradeoffs:
     - It requires Keeper, and control is inside ClickHouse, so an external orchestrator cannot decide what or when to load.
 graph: |-
   ingest:
-    client:producer(label=file producer) -[drop files in order]-> minio:queue(label=queue/*.parquet) -[S3Queue ordered · watermark in Keeper]-> s3queue:events_queue(label=demo.events_queue) -> mv:events_mv -> mergetree:events(label=demo.events)
+    client:producer(label=file producer) -[drop files in order]-> minio:queue(bucket=clickhouse,prefix=queue/,format=Parquet,label=queue/*.parquet) -[S3Queue ordered · watermark in Keeper]-> s3queue:events_queue(label=demo.events_queue) -> mv:events_mv -> mergetree:events(label=demo.events)
 
   query:
     mergetree:events -[read]-> client:reader(label=reader)

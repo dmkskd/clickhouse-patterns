@@ -319,7 +319,7 @@ window.PE.session = (() => {
       await refreshSession();
     }
 
-    function renderResourceInspector(payload) {
+    function renderClickHouseInspector(payload) {
       $("resource-inspector-title").textContent = `${payload.database}.${payload.table}`;
       $("resource-inspector-subtitle").textContent = payload.engine;
       const columnRows = payload.columns.map((column) => [
@@ -347,23 +347,67 @@ window.PE.session = (() => {
         </section>`;
     }
 
+    function renderObjectStoreInspector(payload) {
+      $("resource-inspector-title").textContent = payload.title;
+      $("resource-inspector-subtitle").textContent = payload.subtitle;
+      const rows = payload.objects.map((object) => [
+        object.key, String(object.size), object.modified, object.format
+      ]);
+      resourceInspectorBody.innerHTML = `<section class="resource-inspector-section">
+        <h3>Objects</h3>
+        <p class="resource-sample-meta">${esc(payload.bucket)} · ${esc(payload.prefix || "/")} · up to ${payload.object_limit} objects${payload.truncated ? " (more available)" : ""}</p>
+        ${rows.length ? window.PE.util.dataTable(["Object", "Bytes", "Modified", "Format"], rows) : '<p class="resource-inspector-note">No objects match this prefix.</p>'}
+      </section>`;
+      resourceInspectorBody.querySelectorAll("tbody tr").forEach((row, index) => {
+        const cell = row.querySelector("td");
+        const object = payload.objects[index];
+        if (!cell || !object) return;
+        const button = document.createElement("button");
+        button.className = "resource-object-link";
+        button.type = "button";
+        button.textContent = object.key;
+        button.addEventListener("click", () => openResourceInspector(payload.resource.key, object.key));
+        cell.replaceChildren(button);
+      });
+    }
+
+    function renderObjectPreviewInspector(payload) {
+      $("resource-inspector-title").textContent = payload.title;
+      $("resource-inspector-subtitle").textContent = payload.subtitle;
+      const sample = payload.sample;
+      resourceInspectorBody.innerHTML = `<section class="resource-inspector-section">
+        <h3>Object preview</h3>
+        <p class="resource-sample-meta">${esc(payload.object.key)} · ${payload.object.size} bytes</p>
+        ${payload.sample_disabled ? `<p class="resource-inspector-note">${esc(payload.sample_disabled)}</p>` : ""}
+        ${payload.sample_error ? `<p class="resource-inspector-note">This object could not be decoded: ${esc(payload.sample_error)}</p>` : ""}
+        ${sample ? `<p class="resource-sample-meta">Read-only sample · up to ${sample.limit} rows</p>${window.PE.util.dataTable(sample.columns, sample.rows)}` : ""}
+      </section>`;
+    }
+
+    function renderResourceInspector(payload) {
+      if (payload.type === "object-store") return renderObjectStoreInspector(payload);
+      if (payload.type === "object-preview") return renderObjectPreviewInspector(payload);
+      return renderClickHouseInspector(payload);
+    }
+
     function showResourceInspectorMessage(title, detail) {
       $("resource-inspector-title").textContent = title;
       $("resource-inspector-subtitle").textContent = "";
       resourceInspectorBody.innerHTML = `<div class="resource-inspector-message"><div>${esc(detail)}</div></div>`;
     }
 
-    async function openResourceInspector(resourceKey) {
+    async function openResourceInspector(resourceKey, objectKey = null) {
       const selected = ctx.getSelected();
       const resource = selected?.graph?.resources?.find((item) => item.key === resourceKey);
       if (!resource || !ctx.canInspect()) return;
       $("resource-inspector-title").textContent = resource.properties?.label || resource.name;
       $("resource-inspector-subtitle").textContent = KIND_LABELS[resource.kind] || resource.kind;
-      resourceInspectorBody.innerHTML = '<div class="resource-inspector-loading"><div>Reading the live ClickHouse resource…</div></div>';
+      resourceInspectorBody.innerHTML = `<div class="resource-inspector-loading"><div>Reading the live ${KIND_LABELS[resource.kind] || resource.kind} resource…</div></div>`;
       if (!resourceInspector.open) resourceInspector.showModal();
 
       try {
-        const resourceUrl = apiUrl(`api/resource?pattern=${encodeURIComponent(selected.slug)}&resource=${encodeURIComponent(resourceKey)}`);
+        const objectQuery = objectKey ? `&object=${encodeURIComponent(objectKey)}` : "";
+        const resourceUrl = apiUrl(`api/resource?pattern=${encodeURIComponent(selected.slug)}&resource=${encodeURIComponent(resourceKey)}${objectQuery}`);
         const response = await fetch(resourceUrl, {
           cache: "no-store",
           headers: { "X-Explorer-Token": ctx.getControl().token }
@@ -382,8 +426,8 @@ window.PE.session = (() => {
       const selected = ctx.getSelected();
       if (!enabled && resourceInspector.open) resourceInspector.close();
       [canvas, modalCanvas].forEach((container) => {
-        container.querySelectorAll("[data-clickhouse-resource-key]").forEach((node) => {
-          const resourceKey = node.dataset.clickhouseResourceKey;
+        container.querySelectorAll("[data-readable-resource-key]").forEach((node) => {
+          const resourceKey = node.dataset.readableResourceKey;
           node.classList.toggle("inspectable-resource", enabled);
           if (enabled) {
             const resource = selected?.graph?.resources?.find((item) => item.key === resourceKey);

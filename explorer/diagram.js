@@ -157,12 +157,12 @@ window.PE.diagram = (() => {
       const replicaLink = resource.scope === "replicas"
         ? `<path d="M ${x-34},${y+19} Q ${x},${y+46} ${x+34},${y+19}" class="replica-sync" marker-start="url(#arrow-replication)" marker-end="url(#arrow-replication)"/>`
         : "";
-      const clickhouseResource = INSPECTABLE_KINDS.has(resource.kind);
-      const nodeInspectable = clickhouseResource && inspectable;
+      const readableResource = INSPECTABLE_KINDS.has(resource.kind);
+      const nodeInspectable = readableResource && inspectable;
       const noteBadge = note
         ? `<g class="note-badge" aria-hidden="true"><circle cx="${x+30}" cy="${y-44}" r="7.5"/><text x="${x+30}" y="${y-40.5}" text-anchor="middle">i</text></g>`
         : "";
-      return `<g class="resource${nodeInspectable ? " inspectable-resource" : ""}${note ? " has-note" : ""}" id="resource-${esc(resource.key)}"${clickhouseResource ? ` data-clickhouse-resource-key="${esc(resource.key)}"` : ""}${note ? ` data-note="${esc(note)}"` : ""}${nodeInspectable ? ` data-resource-key="${esc(resource.key)}" tabindex="0" role="button" aria-label="Inspect ${esc(displayName)}"` : ""}>
+      return `<g class="resource${nodeInspectable ? " inspectable-resource" : ""}${note ? " has-note" : ""}" id="resource-${esc(resource.key)}"${readableResource ? ` data-readable-resource-key="${esc(resource.key)}"` : ""}${note ? ` data-note="${esc(note)}"` : ""}${nodeInspectable ? ` data-resource-key="${esc(resource.key)}" tabindex="0" role="button" aria-label="Inspect ${esc(displayName)}"` : ""}>
         ${nodeInspectable ? `<title>Inspect live definition and rows for ${esc(displayName)}</title>` : ""}
         <ellipse cx="${x}" cy="${y+33}" rx="${repeated || failoverGroup ? 70 : 48}" ry="12" fill="${palette().nodeShadow}" filter="url(#blur)"/>
         ${replicaLink}${cubes}${noteBadge}

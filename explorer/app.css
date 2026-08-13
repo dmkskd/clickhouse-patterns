@@ -450,6 +450,8 @@ button, input { font: inherit; }
 .resource-table th { position: sticky; top: 0; z-index: 1; background: #111526; color: #8792b1; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
 .resource-table tbody tr:last-child td { border-bottom: 0; }
 .resource-table td { overflow: hidden; text-overflow: ellipsis; }
+.resource-object-link { max-width: 320px; overflow: hidden; padding: 0; border: 0; background: none; color: #7fb0e6; font: inherit; text-align: left; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; white-space: nowrap; text-overflow: ellipsis; }
+.resource-object-link:hover { color: #a6caf0; }
 .resource-table .empty-value { color: #59627e; font-style: italic; }
 .resource-sample-meta { margin: -4px 0 10px; color: #687392; font-size: 11px; }
 

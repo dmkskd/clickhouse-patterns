@@ -15,14 +15,14 @@ tradeoffs:
     - Inserts only ever create objects; repeating one requires s3_truncate_on_insert or s3_create_new_file_on_insert, and there are no merges to consolidate what accumulates.
 graph: |-
   read:
-    minio:existing(label=exports/*.parquet,note=**The prefix**\nObjects written upstream before any ClickHouse table exists, plus everything written back into it later.\n- visible as soon as the table is declared\n- no load step, nothing to keep in sync)
+    minio:existing(bucket=clickhouse,prefix=exports/,format=Parquet,label=exports/*.parquet,note=**The prefix**\nObjects written upstream before any ClickHouse table exists, plus everything written back into it later.\n- visible as soon as the table is declared\n- no load step, nothing to keep in sync)
       -[objects matched by the glob]-> remote-table:reader(engine=S3,label=demo.exports_s3,note=**Read surface**\nA declaration over the whole prefix. Holds no data; every SELECT reads the objects.\n- the glob is what covers the prefix\n- a glob path is read-only)
       -> client:analyst(label=ClickHouse client)
 
   write:
     client:analyst
       -[INSERT]-> remote-table:writer(engine=S3,label=demo.exports_write,note=**Write surface**\nBound to one concrete key, because a glob cannot name the object an INSERT would create.\n- inserts only ever create objects\n- repeating one needs s3_truncate_on_insert or s3_create_new_file_on_insert)
-      -[creates the object]-> minio:appended(label=exports/appended.parquet,note=**Written from ClickHouse**\nLands in the same prefix the read surface covers, so the next SELECT returns it alongside the original objects.)
+      -[creates the object]-> minio:appended(bucket=clickhouse,prefix=exports/,format=Parquet,label=exports/appended.parquet,note=**Written from ClickHouse**\nLands in the same prefix the read surface covers, so the next SELECT returns it alongside the original objects.)
 category: ingestion
 flow: ingestion
 topology: single

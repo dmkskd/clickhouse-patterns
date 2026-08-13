@@ -13,6 +13,9 @@ dependencies = [
     "pymysql>=1.1",             # MySQL DML for CDC load steps
     "psycopg[binary]>=3.2",     # Postgres DML for CDC load steps
     "rich>=13.0",               # grouped/colorized `just list` and `just show`
+    "boto3>=1.35",              # read-only MinIO/S3 inspection
+    "pyarrow>=18.0",            # bounded Parquet object previews
+    "fastavro>=1.10",           # bounded Avro object previews
 ]
 
 [project.optional-dependencies]

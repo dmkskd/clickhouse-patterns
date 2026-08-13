@@ -8,14 +8,12 @@ import secrets
 import threading
 import webbrowser
 from collections import deque
-from datetime import date, datetime, timezone
-from decimal import Decimal
+from datetime import datetime, timezone
 from functools import partial
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
-from uuid import UUID
 
 from ..orchestration import session as sessions
 from ..rendering.site import (
@@ -34,19 +32,8 @@ from ..catalog.manifest import discover_patterns, discover_workspace_patterns, l
 from ..orchestration.nodes import connect
 from ..orchestration.topology import compose_topology
 from ..logs import configure_logging
+from .resource_readers import RESOURCE_READERS, ReaderContext
 
-
-_INSPECTABLE_CLICKHOUSE_KINDS = {
-    "kafka-table",
-    "mv",
-    "refreshable-mv",
-    "distributed",
-    "mergetree",
-    "replicated-mergetree",
-    "keepermap",
-    "remote-table",
-}
-_SAMPLE_LIMIT = 20
 
 
 def _browser_revision() -> str:
@@ -63,29 +50,6 @@ def _browser_revision() -> str:
 
 class ExplorerConflict(RuntimeError):
     """A requested browser operation conflicts with current session state."""
-
-
-def _quote_identifier(value: str) -> str:
-    return f"`{value.replace('`', '``')}`"
-
-
-def _json_value(value):
-    """Convert ClickHouse values to bounded, browser-safe JSON values."""
-    if value is None or isinstance(value, (bool, int, float)):
-        return value
-    if isinstance(value, str):
-        return value if len(value) <= 500 else f"{value[:497]}…"
-    if isinstance(value, (date, datetime)):
-        return value.isoformat()
-    if isinstance(value, (Decimal, UUID)):
-        return str(value)
-    if isinstance(value, bytes):
-        return value.hex()
-    if isinstance(value, dict):
-        return {str(key): _json_value(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_value(item) for item in value]
-    return str(value)
 
 
 class EventStream:
@@ -137,8 +101,8 @@ class ExplorerController:
         patterns = [*discover_patterns(), *discover_workspace_patterns()]
         return {"patterns": [_browser_pattern(pattern) for pattern in patterns]}
 
-    def inspect_resource(self, slug: str, resource_key: str) -> dict:
-        """Return live metadata and a bounded sample for one declared CH resource."""
+    def inspect_resource(self, slug: str, resource_key: str, object_key: str | None = None) -> dict:
+        """Dispatch a declared live resource to its type-specific, read-only reader."""
         status = get_session_status()
         if status is None:
             raise ExplorerConflict("start this pattern to inspect its live resources")
@@ -154,108 +118,23 @@ class ExplorerController:
         resource = graph.resources.get(resource_key)
         if resource is None:
             raise ValueError("resource is not declared by this pattern")
-        if resource.kind not in _INSPECTABLE_CLICKHOUSE_KINDS:
-            raise ValueError("this resource is not a ClickHouse table or view")
-
-        requested_database = None
-        requested_table = resource.name
-        if "." in resource.name:
-            requested_database, requested_table = resource.name.rsplit(".", 1)
-
-        client = connect(status.session.driver_node)
-        metadata_query = """
-            SELECT database, name, engine, create_table_query
-            FROM system.tables
-            WHERE name = {table:String}
-              AND database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
-        """
-        parameters = {"table": requested_table}
-        if requested_database:
-            metadata_query += " AND database = {database:String}"
-            parameters["database"] = requested_database
-        metadata_query += " ORDER BY database"
-        metadata = client.query(metadata_query, parameters=parameters).result_rows
-        if not metadata:
-            qualified = (
-                f"{requested_database}.{requested_table}"
-                if requested_database
-                else requested_table
+        reader = RESOURCE_READERS.reader_for(resource.kind)
+        if reader is None:
+            raise ValueError(f"no live reader is registered for `{resource.kind}` resources")
+        try:
+            return reader.inspect(
+                ReaderContext(
+                    resource=resource,
+                    session=status.session,
+                    source_changed=getattr(status, "source_changed", False),
+                    clickhouse_client=lambda: connect(status.session.driver_node),
+                ),
+                object_key=object_key,
             )
-            detail = f"{qualified} is not present in the live ClickHouse session"
-            if status.source_changed:
-                detail += (
-                    "; this pattern changed after the session started—reload it to "
-                    "inspect the newly declared resource"
-                )
-            raise ExplorerConflict(detail)
-        if len(metadata) > 1:
-            databases = ", ".join(row[0] for row in metadata)
-            raise ExplorerConflict(
-                f"{requested_table} exists in multiple databases ({databases}); "
-                "qualify its name in the resource graph"
-            )
-
-        database, table, engine, create_statement = metadata[0]
-        column_result = client.query(
-            """
-            SELECT name, type, default_kind, default_expression, comment
-            FROM system.columns
-            WHERE database = {database:String} AND table = {table:String}
-            ORDER BY position
-            """,
-            parameters={"database": database, "table": table},
-        )
-        columns = [
-            {
-                "name": row[0],
-                "type": row[1],
-                "default_kind": row[2],
-                "default_expression": row[3],
-                "comment": row[4],
-            }
-            for row in column_result.result_rows
-        ]
-
-        sample = None
-        sample_error = None
-        sample_disabled = None
-        if resource.kind == "kafka-table" or engine.lower() == "kafka":
-            sample_disabled = (
-                "Live rows are intentionally not read from Kafka-engine tables because "
-                "a SELECT can consume messages. Inspect the durable destination instead."
-            )
-        else:
-            try:
-                result = client.query(
-                    f"SELECT * FROM {_quote_identifier(database)}."
-                    f"{_quote_identifier(table)} LIMIT {_SAMPLE_LIMIT}"
-                )
-                sample = {
-                    "columns": list(result.column_names),
-                    "rows": [
-                        [_json_value(value) for value in row]
-                        for row in result.result_rows
-                    ],
-                    "limit": _SAMPLE_LIMIT,
-                }
-            except Exception as exc:  # noqa: BLE001 - definition remains useful
-                sample_error = f"{type(exc).__name__}: {str(exc).splitlines()[0]}"
-
-        return {
-            "resource": {
-                "key": resource.key,
-                "kind": resource.kind,
-                "declared_name": resource.name,
-            },
-            "database": database,
-            "table": table,
-            "engine": engine,
-            "create_statement": create_statement,
-            "columns": columns,
-            "sample": sample,
-            "sample_error": sample_error,
-            "sample_disabled": sample_disabled,
-        }
+        except ValueError as exc:
+            if resource.kind in {"kafka-table", "mv", "refreshable-mv", "distributed", "mergetree", "replicated-mergetree", "keepermap", "remote-table"} and "is not present in the live ClickHouse session" in str(exc):
+                raise ExplorerConflict(str(exc)) from exc
+            raise
 
     def topology(self, slug: str) -> dict:
         """Return the live container wiring behind one pattern's profiles.
@@ -529,7 +408,11 @@ class ExplorerRequestHandler(SimpleHTTPRequestHandler):
                 resource_key = query.get("resource", [""])[0]
                 if not slug or not resource_key:
                     raise ValueError("`pattern` and `resource` are required")
-                payload = self.controller.inspect_resource(slug, resource_key)
+                object_key = query.get("object", [None])[0]
+                if object_key is None:
+                    payload = self.controller.inspect_resource(slug, resource_key)
+                else:
+                    payload = self.controller.inspect_resource(slug, resource_key, object_key)
             except ExplorerConflict as exc:
                 self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
                 return

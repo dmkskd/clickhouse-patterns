@@ -15,7 +15,7 @@ tradeoffs:
     - It is a one-shot pull, so files that arrive later are not picked up; the S3Queue engine loads new files as they land.
 graph: |-
   load:
-    client:orchestrator(label=orchestrator) -[stage files]-> minio:files(label=events/*.parquet) -[INSERT INTO events FROM s3()]-> mergetree:events(engine=MergeTree,label=demo.events)
+    client:orchestrator(label=orchestrator) -[stage files]-> minio:files(bucket=clickhouse,prefix=events/,format=Parquet,label=events/*.parquet) -[INSERT INTO events FROM s3()]-> mergetree:events(engine=MergeTree,label=demo.events)
 
   query:
     mergetree:events -[read]-> client:reader(label=reader)

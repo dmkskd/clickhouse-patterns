@@ -17,7 +17,7 @@ tradeoffs:
     - Both sides need the same table structure, and it is a one-off bulk operation, not a streaming loader.
 graph: |-
   backup:
-    client:worker(label=clickhouse-local worker) -[1 · BACKUP TO S3]-> minio:backup(label=backups/events-backfill)
+    client:worker(label=clickhouse-local worker) -[1 · BACKUP TO S3]-> minio:backup(bucket=backups,prefix=events-backfill/,label=backups/events-backfill)
 
   restore:
     minio:backup -[2 · RESTORE FROM S3]-> mergetree:events(label=demo.events)
