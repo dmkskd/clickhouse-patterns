@@ -14,6 +14,32 @@ This repository is a catalog of runnable patterns for those choices, covering
 ingestion, output, CDC, replication, and sharding. Each pattern starts the
 services it needs, loads test data, and checks that it worked as expected.
 
+## Create your own patterns
+
+Patterns are designed to be explored, adapted, and extended. Create a new
+documentation-first workspace pattern, or clone a runnable example when its
+flow and Docker infrastructure are a useful starting point:
+
+```bash
+just new our-orders-cdc
+just clone cdc-postgres-peerdb my-orders-cdc
+# both create entries under workspace-patterns/
+```
+
+Use `just setup` once to install the repository's agent skills, then ask an
+LLM to use the authoring skill. In Codex, paste this prompt:
+
+```text
+Use $clickhouse-pattern-author to create a workspace pattern for <describe the
+system or feature>. Start from a suitable existing pattern if one fits;
+otherwise create a new one. Define the data flow, documentation, and the
+Docker-based runtime needed to validate it. Keep the curated patterns unchanged.
+```
+
+In Claude Code, use `/clickhouse-pattern-author` instead. The companion
+`clickhouse-pattern-lab` skill can run, inspect, reload, and validate a runnable
+pattern as it evolves.
+
 ## Explore locally
 
 ```bash

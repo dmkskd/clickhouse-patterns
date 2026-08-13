@@ -10,6 +10,8 @@ description: |-
   A second view keeps the history. An OLTP source overwrites rows in place, and a full replace discards the previous result on each refresh, so an earlier value cannot be recovered from either side. Reproducing last week's report or auditing a figure that moved overnight both require that record.
 
   `REFRESH EVERY 5 SECOND APPEND` appends each refresh instead of replacing it, stamped with the time it was observed. Current state is the newest snapshot, and earlier snapshots stay queryable.
+
+  This simple history example grows indefinitely. A real deployment needs a retention policy, such as a TTL on `snapshot_at`, aligned with the required history.
 graph: |-
   refresh:
     postgres:orders(label=public.orders,note=**Live OLTP source**\nThe application writes here directly; ClickHouse only reads, once per refresh.\n- must stay small enough to re-read whole\n- changes appear at the next refresh)
