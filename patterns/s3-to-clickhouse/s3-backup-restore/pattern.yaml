@@ -1,7 +1,7 @@
 manifest_version: 1
 title: "Offline backfill with BACKUP and RESTORE via S3"
 description: |-
-  A one-off, high-volume load assembled from primitives rather than a dedicated bulk-import feature. An offline worker builds the data, object storage carries it, and `BACKUP`/`RESTORE` moves it as native parts.
+  A one-off, high-volume load built from ClickHouse primitives. An offline worker builds the data, stages it in object storage, and `BACKUP`/`RESTORE` imports it as native parts.
 
   A worker (`clickhouse-local`, or any ClickHouse instance) pre-processes the data off the cluster and runs `BACKUP TABLE ... TO S3`; the serving cluster runs `RESTORE TABLE ... FROM S3` on the same location. The rows travel as packaged parts, so the target does not re-parse them.
 
