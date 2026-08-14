@@ -20,21 +20,23 @@ intro: |-
   [Kafka integrations guide](https://clickhouse.com/docs/integrations/connectors/data-ingestion/kafka/index)
   covers both.
 
-  **Using the Kafka table engine** keeps everything inside ClickHouse, so
-  there is no extra service to run, but consumption is tied to the engine's
-  consumer groups and offset handling. Across shards the classic engine cannot
-  pin a partition to a specific shard. The sharded patterns here work through
-  the three established ways around that: read every partition and filter down
-  to the ones a shard owns, store everything everywhere and deduplicate on read,
+  With the **Kafka table engine**, ClickHouse itself is the consumer: no extra
+  service is needed, but the engine owns consumer groups and offset handling.
+  In a sharded deployment, the Kafka table engine cannot
+  assign a topic partition to a particular shard. The sharded patterns work through the
+  three established ways around that: read every partition and filter down to
+  the ones a shard owns, store everything everywhere and deduplicate on read,
   or route the whole topic through a single consumer. A recent experimental
   addition, StorageKafka2 with the `kafka_partition_shard_num` and
   `kafka_shard_count` settings, gives each shard a fixed slice of the partitions
   natively, and one pattern demonstrates it.
 
-  **Using an external consumer** puts the consumer outside ClickHouse. It is one
-  more component to operate. In these examples, the ClickHouse Kafka Connect
-  Sink owns delivery, including a KeeperMap-backed exactly-once mode that holds
-  across replays.
+  **An external consumer** runs outside ClickHouse. It is one more component to
+  operate. In these examples, the ClickHouse Kafka Connect Sink owns delivery,
+  including a KeeperMap-backed exactly-once mode that holds across replays.
+
+  This catalog calls ClickHouse consuming from Kafka **pull**, and an external
+  consumer writing into ClickHouse **push**.
 
   Where the consumers run and where rows land is then decided by the target
   layout, which may be a single node, a replicated table that Keeper keeps in
