@@ -26,7 +26,7 @@ graph: |-
 category: ingestion
 flow: ingestion
 topology: single
-order: 6
+order: 2
 tags: [s3, s3-engine, query-in-place, export, glob]
 driver_node: ch
 profiles: [single, s3]

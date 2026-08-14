@@ -68,10 +68,10 @@ an external tool.
 
 Where the same data is queried repeatedly, importing it into a MergeTree is
 worth the copy. The other patterns in this group cover that conversion under
-different conditions: a [one-off glob load](../s3-bulk-load/), a
-[deduplicating target](../s3-versioned-upsert/) for files that restate earlier
-rows, and [S3Queue](../s3queue-unordered/) when new files should be imported as
-they arrive.
+different conditions: a [one-off glob load](../s3-bulk-load/) and
+[S3Queue](../s3queue-unordered/) when new files should be imported as they
+arrive. Files that restate earlier rows need a deduplicating target, such as
+`ReplacingMergeTree(version)`.
 
 ```bash
 just test s3-table-engine

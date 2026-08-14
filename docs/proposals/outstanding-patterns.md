@@ -476,11 +476,9 @@ Infra. `single` + `kafka`.
 
 Status. **Outstanding.** Related:
 [kafka-push-exactly-once](../../patterns/kafka-to-clickhouse/kafka-push-exactly-once/)
-validates Kafka Connect's KeeperMap-backed reprocessing behavior, and
-[s3-versioned-upsert](../../patterns/s3-to-clickhouse/s3-versioned-upsert/)
-demonstrates `ReplacingMergeTree(version)` idempotent reloads. The native
-insert-block deduplication and `insert_deduplication_token` mechanisms proposed
-here remain unexercised.
+validates Kafka Connect's KeeperMap-backed reprocessing behavior. The native
+insert-block deduplication, `insert_deduplication_token`, and
+`ReplacingMergeTree(version)` mechanisms proposed here remain unexercised.
 
 Background. At-least-once producers and retried batches can send the same data
 more than once. ClickHouse provides several deduplication mechanisms. Replicated tables
@@ -504,10 +502,8 @@ References.
 ### late-and-out-of-order-events
 
 Status. **Partially implemented.** Angle A (resolve latest entity state in
-ClickHouse) is implemented by
-[s3-versioned-upsert](../../patterns/s3-to-clickhouse/s3-versioned-upsert/),
-which also demonstrates that a stale re-load cannot undo a correction. Angle C
-(unordered object arrival) is implemented by
+ClickHouse) remains outstanding. Angle C (unordered object arrival) is
+implemented by
 [s3queue-unordered](../../patterns/s3-to-clickhouse/s3queue-unordered/), with
 [s3queue-ordered](../../patterns/s3-to-clickhouse/s3queue-ordered/) as the
 filename-watermark contrast. Angle B (event-time lateness with a stateful

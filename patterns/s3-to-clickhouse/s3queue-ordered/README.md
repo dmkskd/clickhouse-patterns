@@ -31,8 +31,8 @@ Recovery re-reads a range of the prefix from a starting point, which re-ingests
 the files already loaded in that range, so a full re-read duplicates the whole
 dataset, and a new consumer that **starts after a chosen key** only narrows the
 duplication to the recovery window. To recover without duplicates, point it at a
-deduplicating target ([s3-versioned-upsert](../s3-versioned-upsert/)); to avoid
-skips entirely, use [s3queue-unordered](../s3queue-unordered/).
+deduplicating target such as `ReplacingMergeTree(version)`; to avoid skips
+entirely, use [s3queue-unordered](../s3queue-unordered/).
 
 `load.py` drops three in-order files into `queue/`; nothing triggers a load. The
 engine picks them up and `_file` records each row's source, so

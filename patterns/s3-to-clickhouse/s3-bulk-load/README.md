@@ -1,4 +1,4 @@
-# Bulk load from S3 with s3() (glob over many files)
+# Bulk load from S3 with the s3() table function
 
 Profiles: `single`, `s3`. Driver: `ch`.
 
@@ -35,10 +35,9 @@ For a one-off or externally scheduled import where re-running the exact same loa
 is not a concern. It has no safety net, so re-running appends the rows again and
 nothing
 records which files were loaded, and files that arrive later are not picked up.
-Those needs are separate patterns:
-
-- deduplicate or apply corrections on re-load: [s3-versioned-upsert](../s3-versioned-upsert/) (needs a key)
-- load only new files, continuously: [s3queue-ingest](../s3queue-ingest/)
+For rows that need deduplication or corrections on re-load, use a stable key
+with a versioned `ReplacingMergeTree` target. To load only new files
+continuously, use [s3queue-ingest](../s3queue-ingest/).
 
 ```bash
 just test s3-bulk-load
