@@ -1,5 +1,5 @@
 manifest_version: 1
-status: under-review
+status: wip
 title: "Refreshable MV producing state transitions with hysteresis (firing/resolved)"
 description: |-
   Extends timed p90 alerting with persisted state and separate trigger and recovery thresholds. It publishes a level status stream on every evaluation and emits `FIRING` or `RESOLVED` edge events only when a service changes state.

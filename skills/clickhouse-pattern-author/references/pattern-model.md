@@ -43,8 +43,13 @@ Pattern readiness is declared in `pattern.yaml`, independently of whether it is
 runnable or reference-only:
 
 ```yaml
-status: preview                     # stable | preview | under-review
+status: wip                         # wip | under-review | stable
 ```
+
+Use `wip` while a pattern is actively being written or changed, `under-review`
+for a complete candidate awaiting sign-off, and `stable` only for a maintained
+recommended starting point. Status is shown on the individual pattern, not its
+group. It is independent of `mode` and `experimental`.
 
 ## Minimal reference manifest
 
@@ -52,6 +57,7 @@ status: preview                     # stable | preview | under-review
 title: Postgres orders to ClickHouse
 description: Explains the real data movement and the decision it represents.
 mode: reference
+status: wip
 category: cdc
 flow: ingestion
 topology: single

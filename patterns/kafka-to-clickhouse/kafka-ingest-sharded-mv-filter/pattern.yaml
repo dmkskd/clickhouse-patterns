@@ -1,5 +1,5 @@
 manifest_version: 1
-status: under-review
+status: wip
 title: "Each shard filters to its own partitions"
 description: |-
   Every shard runs its own `Kafka`-engine consumer, a separate consumer group on `demo.events_queue`, reading all four partitions, because the Kafka engine cannot deterministically assign partitions to specific shards.

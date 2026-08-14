@@ -70,7 +70,7 @@ def test_clone_creates_complete_local_copy_outside_curated_discovery(
     assert info.directory == destination.resolve()
     assert (destination / "pattern.yaml").read_text() == (
         source / "pattern.yaml"
-    ).read_text()
+    ).read_text() + "status: wip\n"
     assert (destination / "README.md").read_text() == "# Demo\n"
     metadata = read_clone_info(destination)
     assert metadata is not None
@@ -78,6 +78,7 @@ def test_clone_creates_complete_local_copy_outside_curated_discovery(
 
     loaded = manifest.load_pattern("my-demo")
     assert loaded.location == "workspace"
+    assert loaded.status == "wip"
     assert loaded.dir == destination
     assert [pattern.slug for pattern in manifest.discover_patterns()] == ["demo-source"]
     assert [pattern.slug for pattern in manifest.discover_cloned_patterns()] == ["my-demo"]
@@ -219,6 +220,7 @@ def test_new_workspace_pattern_is_documentation_first(isolated_pattern_roots):
     assert info.directory == (workspace / "our-orders-cdc").resolve()
     assert pattern.location == "workspace"
     assert pattern.runnable is False
+    assert pattern.status == "wip"
     assert pattern.graph
     assert pattern.profiles == []
     assert not (pattern.dir / "README.md").exists()

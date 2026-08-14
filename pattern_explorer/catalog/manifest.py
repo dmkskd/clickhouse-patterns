@@ -159,7 +159,7 @@ class Pattern(BaseModel):
     description: str
     graph: str | None = None
     mode: Literal["runnable", "reference"] = "runnable"
-    status: Literal["preview", "under-review", "stable"] = "preview"
+    status: Literal["wip", "under-review", "stable"] = "wip"
     category: str
     flow: str
     topology: str

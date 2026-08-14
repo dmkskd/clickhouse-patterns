@@ -31,6 +31,7 @@ Use lowercase hyphenated slugs. The `graph` is the single canonical representati
 4. Label connections with the mechanism that moves data, not a vague verb. Examples: `logical WAL · pgoutput`, `INSERT target FROM s3()`, `materialized view insert`.
 5. Write a concise description that answers what happens and why the pattern exists. Add concrete `tradeoffs.benefits` and `tradeoffs.drawbacks`.
 6. Link primary upstream documentation or a precise issue when it supports a compatibility or behavior claim.
+7. Set the pattern's `status` so colleagues understand its readiness: use `wip` while it is actively being written or changed, `under-review` for a complete candidate awaiting sign-off, and `stable` only once it is a maintained recommended starting point. This is independent of `mode` (`runnable` or `reference`) and `experimental`.
 
 Do not expose credentials, copy production data, or claim runtime behavior that was not verified. Never query a ClickHouse Kafka-engine table directly because that consumes messages.
 

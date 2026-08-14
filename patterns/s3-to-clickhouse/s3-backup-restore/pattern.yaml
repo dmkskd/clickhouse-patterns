@@ -1,4 +1,5 @@
 manifest_version: 1
+status: under-review
 title: "Offline backfill with BACKUP and RESTORE via S3"
 description: |-
   A one-off, high-volume load built from ClickHouse primitives. An offline worker builds the data, stages it in object storage, and `BACKUP`/`RESTORE` imports it as native parts.

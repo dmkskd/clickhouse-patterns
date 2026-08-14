@@ -1,5 +1,5 @@
 manifest_version: 1
-status: under-review
+status: wip
 title: "ClickHouse Sink"
 description: |-
   An external Kafka Connect worker running the official ClickHouse Kafka Connect Sink consumes the topic and writes record batches over HTTP into a `MergeTree` table.

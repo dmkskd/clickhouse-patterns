@@ -1,4 +1,5 @@
 manifest_version: 1
+status: under-review
 title: "Query-time aggregation (rollups computed on read)"
 description: |-
   Computes the rollup at read time, straight from the raw rows with a plain `GROUP BY` and nothing stored ahead of time.

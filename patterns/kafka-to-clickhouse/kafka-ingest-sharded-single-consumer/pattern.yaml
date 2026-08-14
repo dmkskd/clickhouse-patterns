@@ -1,5 +1,5 @@
 manifest_version: 1
-status: under-review
+status: wip
 title: "One consumer routes rows to shards"
 description: |-
   A single `Kafka`-engine consumer on shard 1 (`demo.events_queue`) reads every partition, because the Kafka engine cannot deterministically assign partitions to specific shards.

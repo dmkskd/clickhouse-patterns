@@ -1,5 +1,5 @@
 manifest_version: 1
-status: under-review
+status: wip
 title: "Refreshable MV producing to Kafka on a timer (p90 alert example)"
 description: |-
   Stores latency samples, evaluates service p90 every five seconds with a refreshable materialized view, and publishes breaching services to Kafka. It demonstrates `APPEND` refreshes into a Kafka target and the timer-imposed alert latency floor.

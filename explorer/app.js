@@ -75,9 +75,9 @@
   }
 
   function patternStatusBadge(status) {
-    const labels = { preview: "Preview", "under-review": "Under review", stable: "Stable" };
+    const labels = { wip: "WIP", "under-review": "Under review", stable: "Stable" };
     const help = {
-      preview: "Useful and runnable, but likely to evolve as the catalogue develops.",
+      wip: "Actively being written or changed; not yet ready for others to rely on.",
       "under-review": "Available for comparison, but its design or guidance is still being reviewed.",
       stable: "Reviewed, maintained, and suitable as a recommended starting point.",
     };
@@ -90,14 +90,14 @@
   }
 
   function groupStatusRollup(items) {
-    const labels = { preview: "preview", "under-review": "under review", stable: "stable" };
+    const labels = { wip: "WIP", "under-review": "under review", stable: "stable" };
     const counts = items.reduce((all, pattern) => {
       all[pattern.status] = (all[pattern.status] || 0) + 1;
       return all;
     }, {});
     const statuses = Object.keys(counts);
     const label = statuses.length === 1 ? labels[statuses[0]] : "mixed";
-    const help = ["stable", "preview", "under-review"]
+    const help = ["stable", "wip", "under-review"]
       .filter((status) => counts[status])
       .map((status) => `${counts[status]} ${labels[status]}`)
       .join(", ");

@@ -1,5 +1,5 @@
 manifest_version: 1
-status: under-review
+status: wip
 title: "Shared consumer group into a replicated table"
 description: |-
   Two ClickHouse replicas each run the same `Kafka`-engine consumer in one consumer group. The topic has a single partition, so Kafka keeps one consumer active and the other on standby.

@@ -1,4 +1,5 @@
 manifest_version: 1
+status: under-review
 title: "Materialized view rollups (fan-out from raw)"
 description: |-
   Precomputes the rollup as data arrives. One incremental materialized view per resolution reads the raw rows on each insert and stores a partial result (a state) in an `AggregatingMergeTree`, which queries combine on read.

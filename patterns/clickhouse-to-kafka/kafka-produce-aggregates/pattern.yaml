@@ -1,5 +1,5 @@
 manifest_version: 1
-status: under-review
+status: wip
 title: "Produce to Kafka from ClickHouse (Kafka engine write path)"
 description: |-
   Consumes events from Kafka, accumulates block-safe totals in a `SummingMergeTree`, and inserts an aggregate snapshot into an output `Kafka`-engine table. A second consumer reads the produced messages back, so the complete ClickHouse-to-Kafka write path is testable.

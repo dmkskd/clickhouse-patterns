@@ -1,4 +1,5 @@
 manifest_version: 1
+status: under-review
 title: "CDC · Postgres WAL → Debezium → Kafka → ClickHouse"
 description: |-
   A **Kafka topic** holds the change stream so that several systems can consume it independently. **Debezium** reads the Postgres WAL and publishes each change to that topic. The official **ClickHouse Sink** consumes that topic and writes to a MergeTree. Both connectors run on one Kafka Connect worker with the broker between them.

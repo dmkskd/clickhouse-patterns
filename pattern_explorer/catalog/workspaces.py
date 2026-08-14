@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import shutil
 import tempfile
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -78,6 +79,14 @@ def clone_pattern(source_slug: str, clone_slug: str) -> CloneInfo:
             staged,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"),
         )
+        cloned_manifest = staged / "pattern.yaml"
+        contents = cloned_manifest.read_text()
+        if re.search(r"^status:.*$", contents, flags=re.MULTILINE):
+            contents = re.sub(r"^status:.*$", "status: wip", contents, flags=re.MULTILINE)
+        else:
+            contents += "" if contents.endswith("\n") else "\n"
+            contents += "status: wip\n"
+        cloned_manifest.write_text(contents)
         _write_workspace_metadata(staged, source.slug, created_at)
         staged.replace(destination)
 
@@ -110,6 +119,7 @@ def create_workspace_pattern(slug: str) -> CloneInfo:
                 "    -> mergetree:destination(label=replace with the real destination)\n"
             ),
             "mode": "reference",
+            "status": "wip",
             "category": "custom",
             "flow": "ingestion",
             "topology": "single",

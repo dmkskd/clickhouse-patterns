@@ -1,5 +1,5 @@
 manifest_version: 1
-status: under-review
+status: wip
 title: "Each shard natively owns its partitions (experimental)"
 description: |-
   Each shard runs a `StorageKafka2` consumer that reads only the partitions it owns, using the experimental `kafka_partition_shard_num` and `kafka_shard_count` settings. ClickHouse assigns partition p to the shard where `p % shard_count == shard_num - 1`, so with two shards, shard 1 consumes partitions 0 and 2 while shard 2 consumes 1 and 3.
