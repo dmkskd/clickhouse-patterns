@@ -372,6 +372,9 @@ button, input { font: inherit; }
 .pattern-title-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .kicker, .section-heading span { color: var(--dim); font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .15em; text-transform: uppercase; }
 .pattern-header h1 { margin: 8px 0 10px; font-size: clamp(20px, 2vw, 28px); letter-spacing: -.02em; }
+.pattern-status-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin: -2px 0 0; }
+.pattern-provenance { color: var(--dim); font: 700 10px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .07em; text-transform: uppercase; }
+.pattern-status-detail .pattern-status { font-size: 10px; }
 .pattern-description { max-width: 900px; margin: 15px 0 0; color: #b7bfd4; font-size: 15px; line-height: 1.7; }
 .pattern-description p { margin: 0; }
 .pattern-description p + p { margin-top: 12px; }

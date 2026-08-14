@@ -485,8 +485,14 @@
   // The Definition strip under the diagram shows the pattern's source files in
   // lifecycle order: Structure (schema) -> Load -> Verify (query + expected).
   function codeBlock(file, code, lang) {
+    const source = code || "";
+    // Highlight.js escapes input before returning its markup. Keep the fallback
+    // escaped as well, so source files are never interpreted as page HTML.
+    const highlighted = window.hljs && ["yaml", "sql", "python"].includes(lang)
+      ? window.hljs.highlight(source, { language: lang, ignoreIllegals: true }).value
+      : esc(source);
     return `<figure class="code-file"><figcaption>${esc(file)}</figcaption>`
-      + `<pre class="code lang-${esc(lang)}"><code>${esc(code || "")}</code></pre></figure>`;
+      + `<pre class="code lang-${esc(lang)}"><code class="hljs language-${esc(lang)}">${highlighted}</code></pre></figure>`;
   }
 
   function showDefinition(pattern, key) {
@@ -751,6 +757,7 @@
     $("pattern-detail").hidden = false;
     renderBreadcrumb(selected);
     $("pattern-title").textContent = selected.title;
+    renderPatternMeta(selected);
     renderDescription(selected.description);
     renderRequires(selected.requires);
     renderExperimental(selected);
@@ -894,6 +901,16 @@
     }));
   }
 
+  function renderPatternMeta(pattern) {
+    const el = $("pattern-status-detail");
+    const provenance = document.createElement("span");
+    provenance.className = "pattern-provenance";
+    provenance.textContent = pattern.location === "workspace" ? "Workspace" : "Curated";
+    const status = patternStatusBadge(pattern.status);
+    el.replaceChildren(provenance, ...(status ? [status] : []));
+    el.hidden = false;
+  }
+
   function crumbSep() {
     const sep = document.createElement("span");
     sep.className = "crumb-sep";
@@ -931,11 +948,7 @@
       $("catalog-home")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
 
-    const provenance = document.createElement("span");
-    provenance.className = "crumb-current";
-    provenance.textContent = selected.location === "workspace" ? "Workspace" : "Curated";
-    const status = patternStatusBadge(selected.status);
-    nav.replaceChildren(all, crumbSep(), group, provenance, ...(status ? [status] : []));
+    nav.replaceChildren(all, crumbSep(), group);
   }
 
   function renderExperimental(selected) {

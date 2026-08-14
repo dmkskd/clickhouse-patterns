@@ -19,6 +19,7 @@
     })();
   </script>
   <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.12.0/build/styles/github-dark.min.css">
 </head>
 <body>
   <div class="app-shell">
@@ -92,6 +93,7 @@
                 <button id="clone-pattern" class="export-button" type="button">Clone</button>
               </div>
             </div>
+            <div id="pattern-status-detail" class="pattern-status-detail" hidden></div>
             <div id="pattern-requires" class="pattern-requires" hidden></div>
             <div id="pattern-superseded" class="pattern-superseded" hidden></div>
             <div id="pattern-description" class="pattern-description"></div>
@@ -224,6 +226,7 @@
     </div>
   </dialog>
   <script src="catalog.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.12.0/build/highlight.min.js"></script>
   <script src="util.js"></script>
   <script src="diagram.js"></script>
   <script src="topology.js"></script>
