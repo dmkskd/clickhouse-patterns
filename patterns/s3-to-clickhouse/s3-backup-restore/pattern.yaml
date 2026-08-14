@@ -3,12 +3,14 @@ title: "Offline backfill with BACKUP and RESTORE via S3"
 description: |-
   A one-off, high-volume load built from ClickHouse primitives. An offline worker builds the data, stages it in object storage, and `BACKUP`/`RESTORE` imports it as native parts.
 
-  A worker (`clickhouse-local`, or any ClickHouse instance) pre-processes the data off the cluster and runs `BACKUP TABLE ... TO S3`; the serving cluster runs `RESTORE TABLE ... FROM S3` on the same location. The rows travel as packaged parts, so the target does not re-parse them.
+  A worker (`clickhouse-local`, or any ClickHouse instance) pre-processes the data off the cluster and runs `BACKUP TABLE ... TO S3`. A client then runs `RESTORE TABLE ... FROM S3` against the target ClickHouse cluster, using the same location. The rows travel as packaged parts, so the target does not re-parse them.
 
-  The transfer goes through S3 rather than the cluster's filesystem, so `RESTORE` also loads into ClickHouse Cloud, the documented path for migrating a self-managed table into Cloud. It is a template for composing primitives, not the only way to arrange them.
+  The transfer goes through S3 rather than the cluster's filesystem, so `RESTORE` also loads into ClickHouse Cloud, the documented path for migrating a self-managed table into Cloud.
+
+  This pattern shows how to combine ClickHouse building blocks to meet a specific requirement, in this case a high-volume offline load.
 tradeoffs:
   benefits:
-    - The parts are built offline by a separate worker, so the cost of parsing and compressing an INSERT stream stays off the serving cluster.
+    - The parts are built offline by a separate worker, so the cost of parsing and compressing an INSERT stream stays off the target ClickHouse cluster.
     - Data moves through S3 with no filesystem access to the cluster, so RESTORE also loads into ClickHouse Cloud, unlike attaching parts from the detached directory.
     - BACKUP and RESTORE can target specific partitions, and ClickHouse verifies each part's checksum on restore.
   drawbacks:

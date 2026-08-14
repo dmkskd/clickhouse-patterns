@@ -6,7 +6,8 @@ For a one-off, high-volume load (a historical import or backfill), parsing rows 
 an INSERT stream is the expensive part. This pattern builds the parts offline and
 moves them into the cluster through S3: a worker runs
 [`BACKUP TABLE ... TO S3`](https://clickhouse.com/docs/operations/backup), and the
-serving cluster runs `RESTORE TABLE ... FROM S3` on the same location. Nothing is
+a client runs `RESTORE TABLE ... FROM S3` against the target ClickHouse cluster,
+using the same location. Nothing is
 re-parsed, and neither side needs filesystem access to the other.
 
 There is no dedicated bulk-import feature at work here. The pattern is a composition
