@@ -25,6 +25,7 @@ name; a pattern belongs to the group folder it lives in.
 title: Rollups                       # full family title
 label: Rollups                       # short filter-chip label (defaults to title)
 description: Turn raw rows into pre-aggregated summaries   # one line, card-fit
+status: preview                     # stable | preview | under-review
 icon: transform                      # transform | database | kafka-in | kafka-out | clone
 order: 1                             # display order across groups
 intro: |-

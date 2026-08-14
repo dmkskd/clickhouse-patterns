@@ -32,12 +32,20 @@ verify: 8000 rows / 8000 distinct
 
 An at-least-once sink would show 16000 rows here, every record inserted twice.
 
-## Comparison with the pull engine
+## Comparison with the Kafka engine
 
 The Kafka engine ([kafka-ingest-replicated](../kafka-ingest-replicated/)) is
 at-least-once, because a rebalance or restart mid-batch re-reads uncommitted
 messages and duplicates rows, so it needs a downstream dedup strategy. The Connect sink moves
 that guarantee into the ingestion layer, keeping the target table clean.
+
+## Delivery guarantees
+
+Before relying on the ClickHouse Kafka Connect Sink's guarantees in production,
+read the [official connector documentation](https://clickhouse.com/docs/integrations/connectors/data-ingestion/kafka/kafka-clickhouse-connect-sink)
+and its [design document](https://github.com/ClickHouse/clickhouse-kafka-connect/blob/main/docs/DESIGN.md).
+This example enables `exactlyOnce: true`; the design document explains the
+configuration, state, and retry behaviour behind that mode.
 
 ## Notes
 

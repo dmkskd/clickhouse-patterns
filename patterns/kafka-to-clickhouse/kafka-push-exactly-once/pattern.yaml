@@ -1,7 +1,11 @@
 manifest_version: 1
 title: "ClickHouse Sink + exactly-once"
 description: |-
-  Enables the official ClickHouse Kafka Connect Sink's `KeeperMap`-backed exactly-once mode, ingests a topic, then deletes committed Kafka offsets to force complete reprocessing. The durable replicated table must remain at 8000 rows instead of duplicating the replayed records.
+  Enables the official ClickHouse Kafka Connect Sink's `KeeperMap`-backed exactly-once mode.
+
+  The test ingests a topic, deletes committed Kafka offsets to force complete reprocessing, and verifies that the durable replicated table remains at 8000 rows rather than duplicating replayed records.
+
+  `exactlyOnce` is disabled by default. Before relying on this mode's delivery guarantees, read the linked connector documentation and design document carefully to avoid surprises during failure and recovery. They explain its configuration, state, and retry behaviour.
 tradeoffs:
   benefits:
     - KeeperMap records topic-partition offset ranges and insert state so confirmed replayed batches can be skipped.

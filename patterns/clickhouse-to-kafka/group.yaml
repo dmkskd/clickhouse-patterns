@@ -1,5 +1,6 @@
 title: ClickHouse → Kafka
 description: Produce rows and derived state to Kafka with the Kafka engine
+status: under-review
 icon: kafka-out
 order: 4
 intro: |-

@@ -1,8 +1,8 @@
-# Push ingestion via the ClickHouse Sink
+# Kafka Connect ingestion via the ClickHouse Sink
 
 Profiles: `single`, `kafka`, `connect`. Driver: `ch`.
 
-The push counterpart to [kafka-ingest-replicated](../kafka-ingest-replicated/),
+The external-consumer counterpart to [kafka-ingest-replicated](../kafka-ingest-replicated/),
 in which ClickHouse is a passive sink. A Kafka Connect worker runs the
 [official ClickHouse Kafka Connect Sink](https://github.com/ClickHouse/clickhouse-kafka-connect)
 and writes to ClickHouse over HTTP.
@@ -12,7 +12,7 @@ topic "events" -> Kafka Connect worker -HTTP-> demo.events (MergeTree)
                   (ClickHouseSinkConnector)     on ch
 ```
 
-## Pull vs push
+## Kafka engine or Kafka Connect Sink
 
 The [ClickHouse docs](https://clickhouse.com/docs/integrations/kafka) split the
 options as:
@@ -20,12 +20,12 @@ options as:
 | Method | Use when | Delivery |
 |---|---|---|
 | ClickPipes | ClickHouse Cloud | at-least-once |
-| Kafka Connect Sink (this pattern) | high configurability, or already running Connect | exactly-once |
-| Kafka engine (pull) | self-hosting, low barrier, or writing to Kafka | at-least-once |
+| Kafka Connect Sink (this pattern) | high configurability, or already running Connect | at-least-once by default; optional exactly-once |
+| Kafka engine | self-hosting, low barrier, or writing to Kafka | at-least-once |
 
 The engine couples the consumer lifecycle to the ClickHouse server (rebalances,
-assignment stalls), whereas Connect decouples ingestion and supports
-exactly-once delivery.
+assignment stalls), whereas Connect decouples ingestion and offers an optional
+exactly-once mode.
 
 ## Run
 
@@ -43,6 +43,14 @@ before the load step registers it via the Connect REST API.
 - `value.converter = JsonConverter`, `schemas.enable=false`: plain JSON mapped to columns.
 - `exactlyOnce: false` here. For exactly-once see
   [kafka-push-exactly-once](../kafka-push-exactly-once/).
+
+## Delivery guarantees
+
+Before relying on the ClickHouse Kafka Connect Sink's guarantees in production,
+read the [official connector documentation](https://clickhouse.com/docs/integrations/connectors/data-ingestion/kafka/kafka-clickhouse-connect-sink)
+and its [design document](https://github.com/ClickHouse/clickhouse-kafka-connect/blob/main/docs/DESIGN.md).
+`exactlyOnce` is disabled in this pattern and by default; the design document
+explains the configuration, state, and retry behaviour behind exactly-once mode.
 
 ## Connector landscape
 

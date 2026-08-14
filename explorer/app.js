@@ -74,6 +74,17 @@
     return pattern.group || fallbackGroup(pattern).key;
   }
 
+  function groupStatusBadge(status) {
+    const labels = { preview: "Preview", "under-review": "Under review", stable: "Stable" };
+    const help = {
+      preview: "Useful and runnable, but likely to evolve as the catalogue develops.",
+      "under-review": "Available for comparison, but its design or guidance is still being reviewed.",
+      stable: "Reviewed, maintained, and suitable as a recommended starting point.",
+    };
+    if (!labels[status]) return "";
+    return `<span class="group-status ${esc(status)}" title="${esc(help[status])}">${labels[status]}</span>`;
+  }
+
 
 
   function matchesCatalogFilters(pattern) {
@@ -216,7 +227,8 @@
     card.innerHTML =
       `<div class="group-card-head">${patternGroupIcon(info.icon)}` +
       `<div class="group-card-titles"><strong>${esc(info.title)}</strong>` +
-      `<span class="group-card-count">${count} ${count === 1 ? "pattern" : "patterns"}</span></div></div>` +
+      `<div class="group-card-meta">${groupStatusBadge(info.status)}` +
+      `<span class="group-card-count">${count} ${count === 1 ? "pattern" : "patterns"}</span></div></div></div>` +
       (summary ? `<p class="group-card-intro">${esc(summary)}</p>` : "") +
       (chips ? `<div class="group-intro-tags">${chips}</div>` : "");
     const openGroup = () => { catalogFilters.group = key; renderCatalogHome(); };
@@ -283,6 +295,7 @@
     const [lead, ...rest] = paras;
     header.innerHTML =
       `<div class="group-intro-head"><h3>${esc(info.title)}</h3>` +
+      groupStatusBadge(info.status) +
       `<span class="group-intro-count">${count} ${count === 1 ? "pattern" : "patterns"}</span></div>` +
       (lead ? `<p class="group-intro-lead">${renderIntro(lead)}</p>` : "") +
       (rest.length ? `<div class="group-intro-body">${renderIntroBody(rest)}</div>` : "") +

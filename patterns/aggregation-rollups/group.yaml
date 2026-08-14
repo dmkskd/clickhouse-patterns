@@ -1,5 +1,6 @@
 title: Rollups
 description: Turn raw rows into pre-aggregated summaries
+status: preview
 icon: transform
 order: 1
 intro: |-

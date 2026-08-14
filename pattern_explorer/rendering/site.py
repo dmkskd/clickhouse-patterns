@@ -107,6 +107,7 @@ def _browser_group(group) -> dict:
         "title": group.title,
         "label": group.label or group.title,
         "description": group.description,
+        "status": group.status,
         "icon": group.icon,
         "order": group.order,
         "intro": group.intro,
@@ -121,6 +122,7 @@ _WORKSPACES_GROUP = {
     "title": "Workspace patterns",
     "label": "Workspace",
     "description": "Company and team extensions",
+    "status": "stable",
     "icon": "clone",
     "order": 100,
     "intro": "Company and team extensions derived from the shared library. These "

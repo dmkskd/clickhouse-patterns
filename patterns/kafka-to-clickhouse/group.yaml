@@ -1,22 +1,27 @@
 title: Kafka → ClickHouse
-description: Pull with the Kafka engine, or push with a connector; delivery semantics and partitioning decide the design
+description: Ingest with the Kafka engine or an external consumer; delivery semantics and partitioning decide the design
+status: under-review
 icon: kafka-in
 order: 3
 intro: |-
-  Ingesting a Kafka topic into ClickHouse involves three decisions:
+  Kafka ingestion into ClickHouse has several viable designs, each with
+  different trade-offs. Choosing one means making a few design choices:
 
   - **Delivery semantics.** At-least-once by default; exactly-once needs extra machinery.
   - **Partition mapping.** How topic partitions map onto consumers and shards.
   - **Offset ownership.** Which component holds the committed offsets, and so what is re-read after a restart.
+  - **Data transformation.** Where records are parsed, filtered, or reshaped before they are written to the target table.
 
-  ClickHouse supports the read from either side, and that choice largely
-  determines the other two. It can consume the topic itself with the Kafka table
-  engine, usually called pull, or an external Kafka Connect sink can read the
-  topic and push records in over HTTP. ClickHouse's
+  Kafka records reach ClickHouse in one of two ways. ClickHouse can consume the
+  topic itself with the Kafka table engine. Or an external Kafka consumer can
+  consume the topic and write batches to ClickHouse, typically through the
+  official ClickHouse Kafka Connect Sink. This choice largely determines the
+  offset owner and partition mapping.
+  ClickHouse's
   [Kafka integrations guide](https://clickhouse.com/docs/integrations/connectors/data-ingestion/kafka/index)
   covers both.
 
-  **Pulling with the Kafka table engine** keeps everything inside ClickHouse, so
+  **Using the Kafka table engine** keeps everything inside ClickHouse, so
   there is no extra service to run, but consumption is tied to the engine's
   consumer groups and offset handling. Across shards the classic engine cannot
   pin a partition to a specific shard. The sharded patterns here work through
@@ -27,15 +32,17 @@ intro: |-
   `kafka_shard_count` settings, gives each shard a fixed slice of the partitions
   natively, and one pattern demonstrates it.
 
-  **Pushing with a Kafka Connect sink** puts the consumer outside ClickHouse. It
-  is one more component to operate, but the connector owns delivery, including a
-  KeeperMap-backed exactly-once mode that holds across replays.
+  **Using an external consumer** puts the consumer outside ClickHouse. It is one
+  more component to operate. In these examples, the ClickHouse Kafka Connect
+  Sink owns delivery, including a KeeperMap-backed exactly-once mode that holds
+  across replays.
 
   Where the consumers run and where rows land is then decided by the target
   layout, which may be a single node, a replicated table that Keeper keeps in
   sync across two nodes, or several shards that have to agree on which partition
-  each of them owns. The following patterns pair pull and push with each layout,
-  so the consumer and table arrangement can be seen in every combination.
+  each of them owns. The following patterns show both approaches with each
+  layout, so the consumer and table arrangement can be seen in every combination.
+
 related:
   - group: aggregation-rollups
     note: To roll the ingested events into summaries

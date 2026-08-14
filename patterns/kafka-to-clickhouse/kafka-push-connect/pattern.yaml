@@ -1,7 +1,10 @@
 manifest_version: 1
 title: "ClickHouse Sink"
 description: |-
-  An external Kafka Connect worker running the official ClickHouse Kafka Connect Sink consumes the topic and pushes record batches over HTTP into a `MergeTree` table, the push counterpart to the `Kafka`-engine pull patterns where ClickHouse reads the topic itself. Delivery is at-least-once by default.
+  An external Kafka Connect worker running the official ClickHouse Kafka Connect Sink consumes the topic and writes record batches over HTTP into a `MergeTree` table.
+
+  The consumer runs outside ClickHouse, which receives the batches as inserts. Delivery is at-least-once by default.
+
 graph: |-
   ingestion:
     client:producer(label=event producer)

@@ -1,6 +1,7 @@
 title: Databases → ClickHouse
 label: Databases
 description: Get Postgres or MySQL data into a ClickHouse query
+status: preview
 icon: database
 order: 2
 intro: |-

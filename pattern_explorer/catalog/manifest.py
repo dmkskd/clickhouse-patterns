@@ -278,6 +278,7 @@ class Group(BaseModel):
     title: str
     label: str = ""          # short filter-chip label; defaults to title
     description: str = ""
+    status: Literal["preview", "under-review", "stable"] = "stable"
     icon: str = "database"
     order: int = 1000
     intro: str = ""
