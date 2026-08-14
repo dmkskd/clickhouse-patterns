@@ -114,7 +114,8 @@ window.PE.session = (() => {
       const snap = control.snapshot;
       const active = snap?.session;
       const busy = snap?.operation?.status === "running";
-      const show = home && control.interactive && Boolean(active) && !busy && active.phase !== "failed";
+      const starting = busy || active?.phase === "starting";
+      const show = home && control.interactive && Boolean(active) && active.phase !== "failed";
       // Without a control plane the same slot explains how to get one, so the
       // hero's right column is never empty on the catalog home.
       const hint = home && !control.interactive;
@@ -135,20 +136,21 @@ window.PE.session = (() => {
       const activeGroup = ctx.patternGroups[activePattern?.group];
       const groupPrefix = activeGroup ? `${esc(activeGroup.label)} / ` : "";
       const titleText = esc(activePattern ? displayTitle(activePattern) : active.slug);
+      el.classList.toggle("starting", starting);
       el.innerHTML =
         `<div class="hero-session-row">` +
           `<span class="hero-session-dot"></span>` +
           `<div class="hero-session-text">` +
-            `<span class="hero-session-label">Running pattern</span>` +
+            `<span class="hero-session-label">${starting ? "Starting pattern" : "Running pattern"}</span>` +
             `<span class="hero-session-title"><span class="session-group">${groupPrefix}</span>${titleText}</span>` +
           `</div>` +
         `</div>` +
         `<div class="hero-session-actions">` +
-          `<button type="button" class="hero-open">Open running pattern</button>` +
-          `<button type="button" class="hero-stop danger">Stop session</button>` +
+          `<button type="button" class="hero-open">Open pattern</button>` +
+          (starting ? "" : `<button type="button" class="hero-stop danger">Stop session</button>`) +
         `</div>`;
       el.querySelector(".hero-open").onclick = () => ctx.selectPattern(active.slug);
-      el.querySelector(".hero-stop").onclick = () => $("stop-session").click();
+      el.querySelector(".hero-stop")?.addEventListener("click", () => $("stop-session").click());
     }
 
     function renderSession() {
@@ -185,6 +187,7 @@ window.PE.session = (() => {
       const active = snapshot.session;
       const operation = snapshot.operation;
       const busy = operation?.status === "running";
+      const starting = active?.phase === "starting";
       if (busy) panel.classList.add("busy");
       else if (active?.phase === "failed") panel.classList.add("failed");
       else if (active) panel.classList.add("active");
@@ -197,7 +200,7 @@ window.PE.session = (() => {
       const messages = progressMessages(snapshot);
       const latestProgress = [...messages].reverse().find((event) => event.type === "progress");
       if (busy) {
-        $("session-eyebrow").textContent = `${operation.name} in progress`;
+        $("session-eyebrow").textContent = starting ? "Starting services" : `${operation.name} in progress`;
         $("session-title").textContent = operation.pattern || active?.slug || "Pattern session";
         $("session-detail").textContent = latestProgress
           ? `Latest: ${latestProgress.payload.message}`
@@ -292,7 +295,7 @@ window.PE.session = (() => {
 
       const links = $("session-links");
       links.replaceChildren();
-      if (active?.play_url && active?.schema_url && !compact) {
+      if (active?.play_url && active?.schema_url && !compact && !starting) {
         [["SQL console", active.play_url], ["Schema", active.schema_url]].forEach(([label, href]) => {
           const link = document.createElement("a");
           link.href = href; link.target = "_blank"; link.rel = "noreferrer"; link.textContent = label;
@@ -311,7 +314,7 @@ window.PE.session = (() => {
         && (busy || operation?.status === "failed" || (canShowLogs && sessionLogsExpanded));
       setVisible("session-progress", showProgress);
       $("operation-state").textContent = operation
-        ? `${operation.status} · ${operationDuration(operation)}`
+        ? `${starting && operation.status === "running" ? "starting" : operation.status} · ${operationDuration(operation)}`
         : "";
       const progress = $("progress-events");
       progress.replaceChildren(...messages.map((event, index) => {
