@@ -1,7 +1,7 @@
 manifest_version: 1
 title: "S3Queue in ordered mode (filename watermark)"
 description: |-
-  ClickHouse watches an S3 prefix and ingests new files itself with the `S3Queue` engine, no external trigger.
+  ClickHouse watches an S3 prefix and reads new files itself with the `S3Queue` engine, with no external trigger. A materialized view writes their rows into a native `MergeTree` table.
 
   In ordered mode it keeps only a watermark in Keeper, the highest filename processed, so a file whose name sorts after the watermark is picked up and a file that lands with an earlier name is skipped.
 

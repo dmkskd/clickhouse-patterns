@@ -1,7 +1,7 @@
 manifest_version: 1
 title: "S3Queue in unordered mode (processed-file set)"
 description: |-
-  ClickHouse watches an S3 prefix and ingests new files itself with the `S3Queue` engine, no external trigger.
+  ClickHouse watches an S3 prefix and reads new files itself with the `S3Queue` engine, with no external trigger. A materialized view writes their rows into a native `MergeTree` table.
 
   In unordered mode it keeps the full set of processed files in Keeper, so it ingests every new file regardless of name, including one that arrives out of lexical order.
 
