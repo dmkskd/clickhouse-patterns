@@ -195,7 +195,7 @@ class ExplorerController:
             "active": status is not None,
             "session": status.as_dict() if status else None,
             "operation": operation,
-            "events": events[-30:],
+            "events": events[-100:],
         }
 
     def _reporter(self, slug: str):

@@ -37,6 +37,8 @@ window.PE.session = (() => {
     let liveReloadTimer = null;
     let liveRevision = null;
     let sessionLogsExpanded = false;
+    let sessionLogsClosed = false;
+    let clearedLogSequence = 0;
     let connInfoOpen = false;   // reveal the ClickHouse connection by clicking the Local server pill
 
     function setVisible(id, visible) {
@@ -56,17 +58,48 @@ window.PE.session = (() => {
 
     function progressMessages(snapshot) {
       const events = snapshot?.events || [];
-      return events.filter((event) => ["progress", "operation", "validation"].includes(event.type)).slice(-12);
+      return events
+        .filter((event) => event.sequence > clearedLogSequence && ["progress", "operation", "validation"].includes(event.type))
+        .slice(-100);
+    }
+
+    function progressMessage(event) {
+      let message;
+      if (event.type === "progress") message = event.payload.message;
+      else if (event.type === "validation") message = event.payload.passed ? "Validation passed" : `Validation failed: ${event.payload.detail}`;
+      else message = `${event.payload.name} ${event.payload.status}${event.payload.error ? ` — ${event.payload.error}` : ""}`;
+      return message;
+    }
+
+    function progressText(event, nextEvent, operation) {
+      const duration = stepDuration(event, nextEvent, operation);
+      return `${duration ? `${duration}  ` : ""}${progressMessage(event)}`;
     }
 
     function operationDuration(operation) {
       if (!operation?.started_at) return "";
       const start = new Date(operation.started_at).getTime();
       const end = operation.finished_at ? new Date(operation.finished_at).getTime() : Date.now();
-      const seconds = Math.max(0, Math.round((end - start) / 1000));
+      return formatDuration(end - start);
+    }
+
+    function formatDuration(milliseconds) {
+      const seconds = Math.max(0, Math.round(milliseconds / 1000));
       if (seconds < 60) return `${seconds}s`;
       const minutes = Math.floor(seconds / 60);
       return `${minutes}m ${String(seconds % 60).padStart(2, "0")}s`;
+    }
+
+    function stepDuration(event, nextEvent, operation) {
+      const started = new Date(operation?.started_at).getTime();
+      const eventStarted = new Date(event.timestamp).getTime();
+      const ended = nextEvent
+        ? new Date(nextEvent.timestamp).getTime()
+        : operation?.status === "running"
+          ? Date.now()
+          : new Date(operation?.finished_at).getTime();
+      if (!Number.isFinite(eventStarted) || !Number.isFinite(ended) || !Number.isFinite(started)) return "";
+      return formatDuration(ended - eventStarted);
     }
 
     // On the catalog home, a running pattern shows as a chip in the hero (top right)
@@ -269,24 +302,38 @@ window.PE.session = (() => {
 
       const canShowLogs = Boolean(messages.length && (active || operation?.status === "failed"));
       const logsButton = $("toggle-session-logs");
-      setVisible("toggle-session-logs", !busy && canShowLogs && !compact);
-      logsButton.textContent = sessionLogsExpanded ? "Hide logs" : "Show logs";
-      logsButton.setAttribute("aria-expanded", String(sessionLogsExpanded));
-      const showProgress = busy || operation?.status === "failed" || (canShowLogs && sessionLogsExpanded);
+      // During a run the panel normally opens itself, but after the user closes
+      // it this button must remain available to bring the live log back.
+      setVisible("toggle-session-logs", canShowLogs && !compact && (!busy || sessionLogsClosed));
+      logsButton.textContent = sessionLogsClosed ? "Show log" : sessionLogsExpanded ? "Hide logs" : "Show logs";
+      logsButton.setAttribute("aria-expanded", String(!sessionLogsClosed && sessionLogsExpanded));
+      const showProgress = !sessionLogsClosed
+        && (busy || operation?.status === "failed" || (canShowLogs && sessionLogsExpanded));
       setVisible("session-progress", showProgress);
       $("operation-state").textContent = operation
         ? `${operation.status} · ${operationDuration(operation)}`
         : "";
       const progress = $("progress-events");
-      progress.replaceChildren(...messages.map((event) => {
+      progress.replaceChildren(...messages.map((event, index) => {
         const item = document.createElement("li");
-        if (event.type === "progress") item.textContent = event.payload.message;
-        else if (event.type === "validation") item.textContent = event.payload.passed ? "Validation passed" : `Validation failed: ${event.payload.detail}`;
-        else item.textContent = `${event.payload.name} ${event.payload.status}${event.payload.error ? ` — ${event.payload.error}` : ""}`;
-        if (event.payload?.error || event.payload?.passed === false) item.className = "error";
+        const failed = event.payload?.error || event.payload?.passed === false;
+        const current = busy && event === latestProgress;
+        const elapsed = document.createElement("time");
+        elapsed.className = "progress-duration";
+        const duration = stepDuration(event, messages[index + 1], operation);
+        elapsed.textContent = duration ? `${duration}` : "";
+        elapsed.title = current ? "Time in the current step" : "Time until the next lifecycle update";
+        const message = document.createElement("span");
+        message.textContent = progressMessage(event);
+        item.replaceChildren(elapsed, message);
+        if (current) item.classList.add("current");
+        else if (!failed) item.classList.add("completed");
+        if (failed) item.classList.add("error");
         return item;
       }));
       progress.scrollTop = progress.scrollHeight;
+      $("clear-session-logs").hidden = messages.length === 0;
+      $("copy-session-logs").hidden = messages.length === 0;
     }
 
     async function refreshSession() {
@@ -502,6 +549,7 @@ window.PE.session = (() => {
       if (!selected) return;
       const active = ctx.getControl().snapshot?.session;
       sessionLogsExpanded = false;
+      sessionLogsClosed = false;
       try {
         if (active && active.slug !== selected.slug) {
           // The server performs teardown + launch as one ordered operation so the
@@ -519,6 +567,7 @@ window.PE.session = (() => {
       // and pass/fail show inline (the runner emits them as progress); the button
       // itself reflects the resulting state, and the panel can be closed afterward.
       sessionLogsExpanded = true;
+      sessionLogsClosed = false;
       try { await command(apiUrl("api/session/validate")); }
       catch (error) { showToast(error.message, "error"); }
     });
@@ -539,11 +588,30 @@ window.PE.session = (() => {
     });
     $("toggle-session-logs").addEventListener("click", () => {
       sessionLogsExpanded = !sessionLogsExpanded;
+      sessionLogsClosed = !sessionLogsExpanded;
       renderSession();
     });
     $("close-session-logs").addEventListener("click", () => {
       sessionLogsExpanded = false;
+      sessionLogsClosed = true;
       renderSession();
+    });
+    $("clear-session-logs").addEventListener("click", () => {
+      const events = ctx.getControl().snapshot?.events || [];
+      clearedLogSequence = Math.max(clearedLogSequence, ...events.map((event) => event.sequence || 0));
+      renderSession();
+    });
+    $("copy-session-logs").addEventListener("click", async () => {
+      const snapshot = ctx.getControl().snapshot;
+      const operation = snapshot?.operation;
+      const lines = progressMessages(snapshot)
+        .map((event, index, events) => progressText(event, events[index + 1], operation));
+      try {
+        await navigator.clipboard.writeText(lines.join("\n"));
+        showToast("Log copied", "ok");
+      } catch (error) {
+        showToast("Could not copy the log", "error");
+      }
     });
 
     return { renderSession, connectControlPlane, openResourceInspector, syncResourceInteractivity };

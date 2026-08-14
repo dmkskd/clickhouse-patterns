@@ -37,6 +37,10 @@ CONFIG = {
     "value.converter": "org.apache.kafka.connect.json.JsonConverter",
     "value.converter.schemas.enable": "false",
     "consumer.override.auto.offset.reset": "earliest",
+    # Four replay batches rather than Kafka Connect's default 16 × 500-record
+    # polls. This keeps the exactly-once state transition visible but reduces
+    # the per-batch KeeperMap work in this small proof scenario.
+    "consumer.override.max.poll.records": "2000",
 }
 
 
@@ -88,21 +92,26 @@ wait_state("STOPPED")
 api("DELETE", f"/connectors/{NAME}/offsets")
 api("PUT", f"/connectors/{NAME}/resume")
 wait_state("RUNNING")
-print("offsets reset; connector reprocessing from 0")
+print("offsets reset; replay requested from 0")
 
 # 3. wait until it has re-consumed everything (offsets back to end). This is the
 # proof that reprocessing actually happened; without it the final count == N
 # assertion is satisfied by the initial ingest alone and proves nothing.
 committed = 0
-for _ in range(90):
+for attempt in range(90):
     committed = committed_offset()
     if committed >= N:
         break
+    # /offsets exposes Kafka Connect's checkpoint, not per-batch replay
+    # progress. Its value can stay zero after KeeperMap has finished handling
+    # the replay, so describe this truthfully as a checkpoint wait.
+    if attempt == 0:
+        print("awaiting Kafka Connect checkpoint for the replay")
     time.sleep(1)
 else:
     raise SystemExit(
         f"reprocessing did not complete: committed offset {committed} < {N}. "
         "Offsets were not reset/reconsumed, so exactly-once is unproven."
     )
-print(f"reprocessing done (committed offset {committed}); dedup must now hold")
+print(f"replay checkpoint confirmed at offset {committed}; dedup must now hold")
 time.sleep(3)   # let any (erroneous) duplicate inserts surface before verify

@@ -161,11 +161,20 @@ button, input { font: inherit; }
 .session-progress { grid-column: 1 / -1; padding-top: 11px; border-top: 1px solid #242b43; }
 .progress-heading { display: flex; align-items: center; gap: 10px; color: var(--dim); font: 700 9px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .11em; text-transform: uppercase; }
 #operation-state { margin-left: auto; }
+.progress-actions { display: flex; align-items: center; gap: 3px; }
+.progress-duration { display: inline-block; width: 4.5em; margin-right: 8px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.progress-icon { width: 20px; height: 20px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--muted); font: 15px/1 system-ui, sans-serif; cursor: pointer; }
+.progress-icon:hover { color: var(--text); }
 .progress-close { flex: 0 0 auto; width: 20px; height: 20px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: #aeb7cf; font-size: 15px; line-height: 1; cursor: pointer; }
 .progress-close:hover { border-color: #526086; color: #fff; }
-.session-progress ol { max-height: 118px; overflow-y: auto; margin: 8px 0 0; padding: 0; list-style: none; color: #aab3ca; font: 10px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.session-progress ol { max-height: 190px; overflow-y: auto; margin: 8px 0 0; padding: 0; list-style: none; color: #aab3ca; font: 10px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .session-progress li::before { content: "› "; color: var(--green); }
+.session-progress li.current { margin-inline: -6px; padding: 2px 6px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 700; }
+.session-progress li.current::before { content: ""; display: inline-block; width: 8px; height: 8px; margin: 0 7px 0 1px; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent); border-radius: 50%; vertical-align: -1px; animation: progress-spin .75s linear infinite; }
+.session-progress li.current .progress-duration { color: var(--accent); }
+.session-progress li.completed::before { content: "✓ "; }
 .session-progress li.error { color: #f2a1a8; }
+@keyframes progress-spin { to { transform: rotate(360deg); } }
 .session-progress li.error::before { color: #ef6b73; }
 
 .catalog-home { max-width: 1500px; margin: 0 auto; }
