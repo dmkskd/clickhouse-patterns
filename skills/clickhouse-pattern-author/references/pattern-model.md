@@ -25,7 +25,6 @@ name; a pattern belongs to the group folder it lives in.
 title: Rollups                       # full family title
 label: Rollups                       # short filter-chip label (defaults to title)
 description: Turn raw rows into pre-aggregated summaries   # one line, card-fit
-status: preview                     # stable | preview | under-review
 icon: transform                      # transform | database | kafka-in | kafka-out | clone
 order: 1                             # display order across groups
 intro: |-
@@ -39,6 +38,13 @@ related:                             # optional cross-links to sibling groups
 
 `category` and `flow` stay on each pattern as plain taxonomy; grouping is the
 folder, not those fields.
+
+Pattern readiness is declared in `pattern.yaml`, independently of whether it is
+runnable or reference-only:
+
+```yaml
+status: preview                     # stable | preview | under-review
+```
 
 ## Minimal reference manifest
 

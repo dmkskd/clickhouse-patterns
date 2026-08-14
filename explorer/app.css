@@ -268,11 +268,11 @@ button, input { font: inherit; }
 .group-intro-head { display: flex; align-items: baseline; gap: 11px; }
 .catalog-group-intro h3 { margin: 0; color: #e6eaf5; font-size: 19px; font-weight: 700; }
 .group-intro-count { padding: 2px 9px; border: 1px solid #2b3450; border-radius: 999px; color: #aeb8d2; font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
-.group-status { display: inline-flex; align-items: center; gap: 4px; color: var(--dim); font: 700 9px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
-.group-status::before { width: 5px; height: 5px; border-radius: 50%; background: var(--group-status-dot); content: ""; }
-.group-status.preview { --group-status-dot: var(--blue); }
-.group-status.under-review { --group-status-dot: var(--amber); }
-.group-status.stable { --group-status-dot: var(--green); }
+.pattern-status { display: inline-flex; align-items: center; gap: 4px; color: var(--dim); font: 700 9px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.pattern-status::before { width: 5px; height: 5px; border-radius: 50%; background: var(--pattern-status-dot); content: ""; }
+.pattern-status.preview { --pattern-status-dot: var(--blue); }
+.pattern-status.under-review { --pattern-status-dot: var(--amber); }
+.pattern-status.stable { --pattern-status-dot: var(--green); }
 .catalog-group-intro p, .catalog-group-intro .group-intro-list { color: #99a3bd; font-size: 13px; line-height: 1.6; }
 /* Capped at a readable line length rather than the full viewport. The cap sits on
    the text elements, not the wrapping div, because `ch` resolves against each
@@ -326,6 +326,8 @@ button, input { font: inherit; }
 .group-card-titles strong { color: #e6eaf5; font-size: 15px; }
 .group-card-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .group-card-count { color: #7c88a6; font: 700 9.5px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .07em; text-transform: uppercase; }
+.group-status-rollup { color: var(--dim); font: 700 9.5px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+.group-status-rollup::before { margin-right: 6px; color: var(--dim); content: "·"; }
 .group-card-intro { margin: 0; color: #8a94ad; font-size: 12px; line-height: 1.5; }
 .group-card-list { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
 .group-card-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 9px; border-radius: 7px; }

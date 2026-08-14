@@ -74,15 +74,34 @@
     return pattern.group || fallbackGroup(pattern).key;
   }
 
-  function groupStatusBadge(status) {
+  function patternStatusBadge(status) {
     const labels = { preview: "Preview", "under-review": "Under review", stable: "Stable" };
     const help = {
       preview: "Useful and runnable, but likely to evolve as the catalogue develops.",
       "under-review": "Available for comparison, but its design or guidance is still being reviewed.",
       stable: "Reviewed, maintained, and suitable as a recommended starting point.",
     };
-    if (!labels[status]) return "";
-    return `<span class="group-status ${esc(status)}" title="${esc(help[status])}">${labels[status]}</span>`;
+    if (!labels[status]) return null;
+    const badge = document.createElement("span");
+    badge.className = `pattern-status ${status}`;
+    badge.title = help[status];
+    badge.textContent = labels[status];
+    return badge;
+  }
+
+  function groupStatusRollup(items) {
+    const labels = { preview: "preview", "under-review": "under review", stable: "stable" };
+    const counts = items.reduce((all, pattern) => {
+      all[pattern.status] = (all[pattern.status] || 0) + 1;
+      return all;
+    }, {});
+    const statuses = Object.keys(counts);
+    const label = statuses.length === 1 ? labels[statuses[0]] : "mixed";
+    const help = ["stable", "preview", "under-review"]
+      .filter((status) => counts[status])
+      .map((status) => `${counts[status]} ${labels[status]}`)
+      .join(", ");
+    return `<span class="group-status-rollup" title="${esc(help)}">${esc(label)}</span>`;
   }
 
 
@@ -144,6 +163,8 @@
     const context = document.createElement("span");
     context.className = "catalog-card-context";
     context.innerHTML = `<span>${esc(info.title)}</span><small>${pattern.location === "workspace" ? "Workspace" : "Curated"}</small>`;
+    const status = patternStatusBadge(pattern.status);
+    if (status) context.querySelector("small").append(" · ", status);
     const badge = document.createElement("span");
     badge.className = `topology-badge ${pattern.topology}`;
     badge.textContent = topology.label;
@@ -210,7 +231,6 @@
     card.className = "group-card";
     card.tabIndex = 0;
     card.setAttribute("role", "button");
-    const count = items.length;
     const tags = [...new Set(items.flatMap((pattern) => pattern.tags || []))].slice(0, 8);
     const chips = tags.map((tag) => `<span class="group-intro-tag">${esc(tag)}</span>`).join("");
     // The tile shows one sentence only: the group's short description, or the
@@ -227,8 +247,7 @@
     card.innerHTML =
       `<div class="group-card-head">${patternGroupIcon(info.icon)}` +
       `<div class="group-card-titles"><strong>${esc(info.title)}</strong>` +
-      `<div class="group-card-meta">${groupStatusBadge(info.status)}` +
-      `<span class="group-card-count">${count} ${count === 1 ? "pattern" : "patterns"}</span></div></div></div>` +
+      `<div class="group-card-meta"><span class="group-card-count">${items.length} ${items.length === 1 ? "pattern" : "patterns"}</span>${groupStatusRollup(items)}</div></div></div>` +
       (summary ? `<p class="group-card-intro">${esc(summary)}</p>` : "") +
       (chips ? `<div class="group-intro-tags">${chips}</div>` : "");
     const openGroup = () => { catalogFilters.group = key; renderCatalogHome(); };
@@ -281,7 +300,7 @@
     return out.join("");
   }
 
-  function groupHeader(info, count) {
+  function groupHeader(info, items) {
     const header = document.createElement("section");
     header.className = "catalog-group-intro";
     const paras = (info.intro || info.description || "").split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
@@ -295,8 +314,8 @@
     const [lead, ...rest] = paras;
     header.innerHTML =
       `<div class="group-intro-head"><h3>${esc(info.title)}</h3>` +
-      groupStatusBadge(info.status) +
-      `<span class="group-intro-count">${count} ${count === 1 ? "pattern" : "patterns"}</span></div>` +
+      `<span class="group-intro-count">${items.length} ${items.length === 1 ? "pattern" : "patterns"}${groupStatusRollup(items)}</span>` +
+      `</div>` +
       (lead ? `<p class="group-intro-lead">${renderIntro(lead)}</p>` : "") +
       (rest.length ? `<div class="group-intro-body">${renderIntroBody(rest)}</div>` : "") +
       (related ? `<div class="group-related"><span>Related</span><ul>${related}</ul></div>` : "");
@@ -342,7 +361,7 @@
     grid.classList.remove("as-groups");
     const [groupKey, groupItems] = [...byGroup][0];
     const info = PATTERN_GROUPS[groupKey] || patternGroup(groupItems[0])[1];
-    grid.replaceChildren(groupHeader(info, groupItems.length), ...groupItems.map(patternCard));
+    grid.replaceChildren(groupHeader(info, groupItems), ...groupItems.map(patternCard));
   }
 
   function renderList(filter = "") {
@@ -912,7 +931,11 @@
       $("catalog-home")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
 
-    nav.replaceChildren(all, crumbSep(), group);
+    const provenance = document.createElement("span");
+    provenance.className = "crumb-current";
+    provenance.textContent = selected.location === "workspace" ? "Workspace" : "Curated";
+    const status = patternStatusBadge(selected.status);
+    nav.replaceChildren(all, crumbSep(), group, provenance, ...(status ? [status] : []));
   }
 
   function renderExperimental(selected) {

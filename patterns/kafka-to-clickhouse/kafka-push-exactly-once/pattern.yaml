@@ -1,4 +1,5 @@
 manifest_version: 1
+status: under-review
 title: "ClickHouse Sink + exactly-once"
 description: |-
   Enables the official ClickHouse Kafka Connect Sink's `KeeperMap`-backed exactly-once mode.

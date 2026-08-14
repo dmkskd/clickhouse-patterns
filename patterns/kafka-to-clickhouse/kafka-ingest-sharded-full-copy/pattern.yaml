@@ -1,4 +1,5 @@
 manifest_version: 1
+status: under-review
 title: "Each shard stores everything, dedup on read"
 description: |-
   Every shard runs its own `Kafka`-engine consumer, a separate consumer group on `demo.events_queue`, reading every partition, because the Kafka engine cannot deterministically assign partitions to specific shards.

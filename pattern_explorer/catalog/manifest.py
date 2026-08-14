@@ -159,6 +159,7 @@ class Pattern(BaseModel):
     description: str
     graph: str | None = None
     mode: Literal["runnable", "reference"] = "runnable"
+    status: Literal["preview", "under-review", "stable"] = "preview"
     category: str
     flow: str
     topology: str
@@ -278,7 +279,6 @@ class Group(BaseModel):
     title: str
     label: str = ""          # short filter-chip label; defaults to title
     description: str = ""
-    status: Literal["preview", "under-review", "stable"] = "stable"
     icon: str = "database"
     order: int = 1000
     intro: str = ""

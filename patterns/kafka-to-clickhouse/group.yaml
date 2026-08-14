@@ -1,6 +1,5 @@
 title: Kafka → ClickHouse
-description: Ingest with the Kafka engine or an external consumer; delivery semantics and partitioning decide the design
-status: under-review
+description: Bring Kafka topics into ClickHouse with the Kafka engine or an external consumer
 icon: kafka-in
 order: 3
 intro: |-

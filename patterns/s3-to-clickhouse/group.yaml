@@ -1,6 +1,5 @@
 title: S3 → ClickHouse
-description: From a one-line s3() load to incremental, idempotent, and bulk ingestion
-status: preview
+description: Consume data from S3 by querying objects directly, importing batches, or ingesting continuously
 icon: s3
 order: 5
 intro: |-
