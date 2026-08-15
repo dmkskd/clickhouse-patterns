@@ -2,7 +2,7 @@ manifest_version: 1
 status: under-review
 title: "Cascading materialized views (rollups built from rollups)"
 description: |-
-  Precomputes the per-minute summary rows from the raw trades, then builds the per-5-minute rows from the per-minute rows instead of going back to the raw data. Each new row flows one step up the chain (raw to 1 minute to 5 minutes), so the raw trades are read once.
+  Precomputes the per-minute summary rows from raw market data, then builds the per-5-minute rows from the per-minute rows instead of going back to the raw data. Each new row flows one step up the chain (raw to 1 minute to 5 minutes), so the raw market data is read once.
 
   Running totals, highs and lows combine trivially when levels are stacked, but opening and closing prices do not. Getting those right across levels is what this pattern shows.
 tradeoffs:

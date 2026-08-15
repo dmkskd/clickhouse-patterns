@@ -4,7 +4,7 @@ title: "Materialized view rollups (fan-out from raw)"
 description: |-
   Precomputes the rollup as data arrives. One incremental materialized view per resolution reads the raw rows on each insert and stores a partial result (a state) in an `AggregatingMergeTree`, which queries combine on read.
 
-  Applied to trades, each candle is assembled from partials spread across several inserts, and ClickHouse still combines them into the right answer.
+  For a market-data feed, each candle is assembled from partials spread across several inserts, and ClickHouse still combines them into the right answer.
 tradeoffs:
   benefits:
     - Queries read a small precomputed table instead of rescanning the raw stream.
