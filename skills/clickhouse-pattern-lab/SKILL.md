@@ -58,7 +58,9 @@ Use `slug`, `phase`, `driver_node`, `driver_url`, `reachable`, and
 - If no session is active and no pattern can be inferred, run `just list` and
   ask for the intended pattern only when selection is genuinely ambiguous.
 - If `phase` is `failed`, preserve the environment for diagnosis. Do not reload
-  or stop it before collecting evidence.
+  or stop it before collecting evidence. If the record itself cannot be acted on,
+  such as a pattern directory that no longer exists, see Recover A Broken
+  Environment.
 - If `source_changed` is true, state that the live environment may represent the
   previous source. Do not reload during inspection unless the user requests it.
 
@@ -156,6 +158,21 @@ Make changes in repository files, never through MCP:
 3. Run `just reload` to rebuild cleanly from the edited source.
 4. Run `just validate`.
 5. Inspect the rebuilt runtime through MCP when evidence is needed.
+
+## Recover A Broken Environment
+
+`just reset` is the recovery path when the session record and the running
+containers disagree: a run interrupted partway, containers left behind by a
+failed start, an unreadable state file, or a session whose pattern directory was
+renamed or deleted. It removes the Compose project across every profile and
+clears the session state, so it does not depend on the manifest still loading.
+
+Use it only after collecting the evidence a failed session holds, because it
+destroys that environment. Confirm with the user before running it, and check
+`docker ps` first: the Compose project is shared, so a reset also removes
+containers belonging to a `just run` the user owns in another terminal.
+
+`just stop` remains the ordinary way to end a session.
 
 `reload` destroys session volumes. Use it only after an intentional source edit
 or an explicit request. A foreground `just run` owns its cleanup; do not call

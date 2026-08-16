@@ -15,7 +15,9 @@ FROM
     FROM system.parts
     WHERE database = 'demo' AND table = 'recompressed_metrics' AND active
     UNION ALL
-    SELECT 'ttl_recompression_merges' AS check, toString(count()) AS value
+    -- At least one, not exactly one: the number of recompression merges is not
+    -- deterministic, only that the rewrite happened.
+    SELECT 'ttl_recompression_merge_ran' AS check, toString(count() >= 1) AS value
     FROM system.part_log
     WHERE database = 'demo' AND table = 'recompressed_metrics'
       AND merge_reason = 'TTLRecompressMerge'

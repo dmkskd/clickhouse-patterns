@@ -44,7 +44,14 @@ just list                          # list the available patterns
 just describe                      # explain what each pattern demonstrates
 just run kafka-ingest-replicated   # validate a pattern, then clean up on Enter
 just test kafka-ingest-replicated  # non-interactive run that tears down at the end
+just reset                         # recovery: remove every container and clear the session
 ```
+
+Use `just reset` when the lab and the recorded session disagree: a run that was
+interrupted, containers left behind, or a session pointing at a pattern that has
+since been renamed. It removes the Compose project across every profile and
+deletes the session state, so the next `just run` starts from nothing. `just
+stop` remains the ordinary way to end a session.
 
 For example, `kafka-ingest-replicated` sends 20,000 Kafka messages into a
 two-replica ClickHouse table and checks that every message reached both replicas:

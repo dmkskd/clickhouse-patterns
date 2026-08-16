@@ -2,8 +2,8 @@ manifest_version: 1
 status: wip
 title: "Replicated S3 tiers: one remote copy per replica"
 description: |-
-  This is the replicated companion to **Hot/cold placement: TTL move to an S3
-  volume**. It focuses on the physical S3 layout after the same MOVE TTL policy
+  This is the replicated companion to [[ttl-move-to-s3|Hot/cold placement: TTL
+  move to an S3 volume]]. It focuses on the physical S3 layout after the same MOVE TTL policy
   is applied on two replicas.
 
   In the standard self-hosted `ReplicatedMergeTree` layout, each replica owns

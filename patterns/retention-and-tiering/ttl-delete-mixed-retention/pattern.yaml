@@ -1,6 +1,6 @@
 manifest_version: 1
 status: wip
-title: "Retention based on row values"
+title: "TTL deletion: different retention period per row"
 description: |-
   Retention can depend on values in each row. For example, a log table can
   delete DEBUG rows after one day and INFO rows after one week.

@@ -141,6 +141,43 @@ superseded_since: "26.8"                                  # when the replacement
 
 Use this for workarounds that a later ClickHouse feature makes unnecessary, rather than deleting them: readers on older versions still need them. `superseded_by` must reference an existing pattern slug.
 
+## Linking patterns
+
+Four mechanisms exist and they are not interchangeable. Pick by where the reader
+is when the link should appear.
+
+**Inline in prose — `[[slug|label]]`** in a pattern `description`. Use when the
+sentence itself names another pattern and the reader should be able to follow it
+mid-thought. The label is the link text, so write the sentence first and let the
+link fall where the name already is.
+
+```yaml
+description: |-
+  This is the replicated companion to [[ttl-move-to-s3|Hot/cold placement: TTL
+  move to an S3 volume]].
+```
+
+**Standing pointer — `related_patterns`** on a pattern. Use for a pattern the
+reader should know about even though the prose does not name it, such as guidance
+to read before changing this table. It renders as "Related guidance" buttons
+below the description, and the `note` says why the link is there.
+
+```yaml
+related_patterns:
+  - slug: ttl-policy-change-rollout
+    note: Read before changing this table's TTL on existing data.
+```
+
+**Group advisory — `advisories[].link_pattern`** in `group.yaml`. Use when a
+caution applies across the whole family and one pattern explains it. It appears
+on the group landing page, before the reader has chosen a pattern.
+
+**Group cross-reference — `related`** in `group.yaml`, linking group to group.
+Use for a neighbouring family, not for an individual pattern.
+
+Do not point at the same slug both inline and in `related_patterns`; the inline
+link already puts it in the reader's path.
+
 ## Quality checklist
 
 - The graph alone explains who initiates each transfer and where data persists.

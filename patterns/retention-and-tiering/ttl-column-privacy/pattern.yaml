@@ -1,6 +1,6 @@
 manifest_version: 1
 status: wip
-title: "Column TTL: erase selected values, retain the row"
+title: "Column TTL: remove selected column values"
 description: |-
   Column TTL expires values in a selected column while retaining all other
   columns in the row. During a TTL merge, an expired value becomes that column

@@ -142,15 +142,24 @@ window.PE.util = (() => {
     return tags.includes("push") ? "push" : tags.includes("pull") ? "pull" : null;
   }
 
-  // Description markup: `code` for keywords, **bold** for emphasis; the plain
-  // form (for catalog cards) strips it back to prose.
+  // Description markup: `code` for keywords, **bold** for emphasis,
+  // [[slug|label]] for a link to another pattern; the plain form (for catalog
+  // cards) strips it back to prose.
   function formatDescInline(s) {
     return esc(s.replace(/\s*\n\s*/g, " "))
       .replace(/`([^`]+)`/g, "<code>$1</code>")
-      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(
+        /\[\[([a-z0-9-]+)\|([^\]]+)\]\]/g,
+        '<button type="button" class="pattern-inline-link" data-pattern="$1">$2</button>'
+      );
   }
   function plainDesc(s) {
-    return String(s ?? "").replace(/[`*]/g, "").replace(/\s*\n\s*/g, " ").trim();
+    return String(s ?? "")
+      .replace(/\[\[[a-z0-9-]+\|([^\]]+)\]\]/g, "$1")
+      .replace(/[`*]/g, "")
+      .replace(/\s*\n\s*/g, " ")
+      .trim();
   }
 
   // Resource-inspector value/table formatting.

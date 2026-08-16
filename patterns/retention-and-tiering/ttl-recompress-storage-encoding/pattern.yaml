@@ -38,8 +38,10 @@ ready_when:
       SELECT count() FROM demo.recompressed_metrics
     value: 2
     timeout: 60
+  # A recompression merge can be selected more than once while the demo runs,
+  # so assert that at least one happened rather than an exact count.
   - query: >-
-      SELECT count() FROM system.part_log
+      SELECT count() >= 1 FROM system.part_log
       WHERE database = 'demo' AND table = 'recompressed_metrics'
         AND merge_reason = 'TTLRecompressMerge'
     value: 1

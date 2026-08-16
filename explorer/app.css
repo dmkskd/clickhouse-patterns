@@ -176,6 +176,8 @@ button, input { font: inherit; }
 .session-progress li.error { color: #f2a1a8; }
 @keyframes progress-spin { to { transform: rotate(360deg); } }
 .session-progress li.error::before { color: #ef6b73; }
+.session-progress li.progress-hint { margin-top: 7px; padding-top: 7px; border-top: 1px solid #242b43; color: #8a94ad; }
+.session-progress li.progress-hint::before { content: "↻ "; color: #8a94ad; }
 
 .catalog-home { max-width: 1500px; margin: 0 auto; }
 .catalog-hero { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 36px; max-width: 1500px; margin: 0 auto 18px; padding: 26px 30px; border: 1px solid var(--line); border-radius: 14px; background:
@@ -305,8 +307,8 @@ button, input { font: inherit; }
 .group-advisory summary em { color: var(--muted); font-size: 12px; font-style: normal; }
 .group-advisory-body { padding: 0 12px 11px; color: var(--muted); font-size: 12px; line-height: 1.55; }
 .group-advisory-body p { margin: 0 0 8px; }
-.group-advisory-body a, .group-advisory-link { padding: 0; border: 0; background: none; color: var(--blue); font: inherit; cursor: pointer; text-decoration: none; }
-.group-advisory-body a:hover, .group-advisory-link:hover { text-decoration: underline; }
+.group-advisory-body a, .group-advisory-link, .pattern-inline-link { padding: 0; border: 0; background: none; color: var(--blue); font: inherit; cursor: pointer; text-decoration: none; }
+.group-advisory-body a:hover, .group-advisory-link:hover, .pattern-inline-link:hover { text-decoration: underline; }
 
 .catalog-group-intro strong { color: #cbd3e8; font-weight: 600; }
 .catalog-group-intro a { color: #4cc3f7; text-decoration: none; }

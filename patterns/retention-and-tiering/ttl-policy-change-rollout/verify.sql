@@ -1,8 +1,8 @@
 -- Expected evidence:
 -- * the table definition already carries the new 30-day policy;
--- * only the older month, the one that was materialized, lost its rows, so the
+-- * only the earlier month, the one that was materialized, lost its rows, so the
 --   change reached part of the history rather than all of it;
--- * the recent month's active part still carries the delete deadline computed
+-- * the later month's active part still carries the delete deadline computed
 --   from the one-year policy, which is why a background TTL merge does not
 --   consider it expired yet;
 -- * exactly one mutation ran, the MATERIALIZE TTL for that single month.

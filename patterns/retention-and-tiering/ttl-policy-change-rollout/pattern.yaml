@@ -19,20 +19,20 @@ description: |-
     `MATERIALIZE TTL IN PARTITION ...`. That is a mutation: it rewrites the
     partition's parts and enforces the new policy on them.
 
-  This pattern runs the rollout on a table holding two months of expired
-  history, January and February 2025. It changes retention from five years to
-  30 days without materializing, then materializes January only, and verifies
-  that February still holds its rows under the deadline computed by the old
-  five-year policy.
+  This pattern runs the rollout on a table holding two months of history, both
+  already past 30 days and both still within the one-year policy the table
+  starts with. It shortens retention to 30 days without materializing, then
+  materializes the earlier month only, and verifies that the later month still
+  holds its rows under the deadline the one-year policy gave them.
 graph: |-
   history:
-    client:writer -[monthly batches]-> mergetree:events(label=demo.events,note=**Table**\n- PARTITION BY toYYYYMM(event_time)\n- Starts at event_time + 5 years DELETE\n- Holds January 2025 and February 2025)
+    client:writer -[monthly batches]-> mergetree:events(label=demo.events,note=**Table**\n- PARTITION BY toYYYYMM(event_time)\n- Starts at event_time + 1 year DELETE\n- Holds two months of history)
 
   policy_change:
     client:operator -[MODIFY TTL · materialize_ttl_after_modify=0]-> mergetree:events
 
   staged_rollout:
-    mergetree:events -[MATERIALIZE TTL IN PARTITION 202501]-> part:january_2025(label=January 2025,note=**Mutation rewrite**\n- Expired rows dropped under the new 30-day policy\n- February 2025 keeps the deadline of the old policy\n- Its expired rows are dropped only when it is materialized in turn)
+    mergetree:events -[MATERIALIZE TTL · one partition]-> part:earlier_month(label=earlier month,note=**Mutation rewrite**\n- Rows past 30 days are dropped under the new policy\n- The later month keeps its one-year deadline\n- Its rows are dropped only when it is materialized in turn)
 category: retention
 flow: transform
 topology: single

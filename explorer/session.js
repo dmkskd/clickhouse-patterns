@@ -334,6 +334,15 @@ window.PE.session = (() => {
         if (failed) item.classList.add("error");
         return item;
       }));
+      // A failed start or switch can leave containers up and a session record
+      // that no longer matches them. The browser cannot tear that down, so
+      // point at the terminal command that can.
+      if (operation?.status === "failed") {
+        const hint = document.createElement("li");
+        hint.className = "progress-hint";
+        hint.textContent = "If the environment is left inconsistent, run  just reset  in a terminal to remove every container and clear the session.";
+        progress.append(hint);
+      }
       progress.scrollTop = progress.scrollHeight;
       $("clear-session-logs").hidden = messages.length === 0;
       $("copy-session-logs").hidden = messages.length === 0;

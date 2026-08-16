@@ -999,6 +999,11 @@
       return list;
     });
     el.replaceChildren(...nodes);
+    // [[slug|label]] in a description renders as a button, wired the same way
+    // as a group advisory link so it opens the pattern in place.
+    el.querySelectorAll(".pattern-inline-link").forEach((btn) =>
+      btn.addEventListener("click", () => selectPattern(btn.dataset.pattern))
+    );
   }
 
   function renderPatternMeta(pattern) {

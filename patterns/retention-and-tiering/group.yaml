@@ -1,6 +1,6 @@
 title: TTL retention & tiering
 label: TTL
-description: Use TTL to delete, rewrite, roll up, recompress, or move aging MergeTree data
+description: Use TTL to delete, rewrite, roll up, recompress, or move expired MergeTree data
 icon: database
 order: 6
 intro: |-
@@ -9,8 +9,8 @@ intro: |-
   - **Deletion:** remove data after its retention period.
   - **Privacy:** erase selected column values while retaining the other columns
     in the row.
-  - **Recompression:** change the storage encoding of older parts.
-  - **Downsampling:** replace old detailed rows with aggregate rows.
+  - **Recompression:** change the storage encoding of eligible parts.
+  - **Downsampling:** replace expired raw rows with aggregate rows.
   - **Tier placement:** move eligible parts to another disk or volume.
 
   TTL policies have different write, CPU, and storage costs. Check each pattern
@@ -30,6 +30,6 @@ advisories:
 
 related:
   - group: aggregation-rollups
-    note: For materialized-view rollups maintained at ingest rather than by aging data
+    note: For materialized-view rollups maintained at ingest rather than as data expires
   - group: s3-to-clickhouse
     note: For object storage as an input or backup target rather than a MergeTree tier
