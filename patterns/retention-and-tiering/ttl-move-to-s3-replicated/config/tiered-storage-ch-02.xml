@@ -1,0 +1,23 @@
+<clickhouse>
+  <storage_configuration>
+    <disks>
+      <cold_s3>
+        <type>s3</type>
+        <endpoint>http://minio:9000/clickhouse/ttl-replicated/ch-02/</endpoint>
+        <access_key_id>clickhouse</access_key_id>
+        <secret_access_key>clickhouse_secret</secret_access_key>
+      </cold_s3>
+    </disks>
+    <policies>
+      <tiered>
+        <volumes>
+          <hot><disk>default</disk></hot>
+          <cold>
+            <disk>cold_s3</disk>
+            <perform_ttl_move_on_insert>0</perform_ttl_move_on_insert>
+          </cold>
+        </volumes>
+      </tiered>
+    </policies>
+  </storage_configuration>
+</clickhouse>

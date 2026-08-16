@@ -343,6 +343,27 @@ so keep `schema.sql` / `verify.sql` files to:
 This is enough for the current patterns. A ClickHouse-aware splitter can replace
 it when a pattern needs literals with those characters.
 
+## Per-pattern ClickHouse configuration
+
+Some examples need server configuration that should not change the base stack:
+an S3 disk and storage policy, a named collection, or a user-profile setting.
+Declare additive fragments in `pattern.yaml`; the runner emits a small Compose
+overlay and mounts them only while that pattern is up:
+
+```yaml
+clickhouse_config:
+  - node: ch
+    file: config/tiered-storage.xml
+    depends_on: [minio-init]
+```
+
+Fragments are relative to the pattern directory, must be XML, and mount under
+`/etc/clickhouse-server/config.d/` by default (`directory: users.d` is also
+available). This intentionally does not provide a way to replace `config.xml`:
+the shared listener, user, and topology configuration remains owned by the
+stack. A fragment takes effect at server startup, so use `just reload` after an
+edit to an active pattern.
+
 ## Isolation
 
 Pattern Explorer orchestration runs under the Compose project name `chp` (see

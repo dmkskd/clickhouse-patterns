@@ -29,7 +29,7 @@ def _read_pattern_file(pattern, name: str | None) -> str | None:
 
 def _definition(pattern) -> dict:
     """The pattern's source files, grouped by lifecycle phase, for the browser's
-    Structure / Load / Verify strip. Absent files are None (their tab is dropped)."""
+    Structure / Load / Verify / Configuration strip. Absent files are dropped."""
     def block(name, lang):
         code = _read_pattern_file(pattern, name)
         return {"file": name, "code": code, "lang": lang} if code is not None else None
@@ -43,11 +43,23 @@ def _definition(pattern) -> dict:
             "sqlFile": pattern.verify.sql, "sql": verify_sql,
             "expectedFile": pattern.verify.expected, "expected": verify_expected,
         }
+    config = [
+        {
+            "file": item.file,
+            "code": _read_pattern_file(pattern, item.file),
+            "lang": "xml",
+            "node": item.node,
+            "mountPath": f"/etc/clickhouse-server/{item.directory}/99-pattern-{item.destination_name}",
+            "dependsOn": item.depends_on,
+        }
+        for item in pattern.clickhouse_config
+    ]
     return {
         "manifest": block("pattern.yaml", "yaml"),
         "structure": block(pattern.schema_sql, "sql"),
         "load": block(pattern.load, load_lang),
         "verify": verify,
+        "config": config or None,
     }
 
 

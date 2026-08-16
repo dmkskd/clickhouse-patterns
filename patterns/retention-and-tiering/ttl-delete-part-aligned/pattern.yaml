@@ -1,0 +1,66 @@
+manifest_version: 1
+status: wip
+title: "TTL deletion: rewrite rows or drop whole parts"
+description: |-
+  DELETE TTL removes data after its retention period. By default, ClickHouse
+  can rewrite a part that contains both expired and current rows: it removes the
+  expired rows and writes its survivors into a new part.
+
+  Use `ttl_only_drop_parts = 1` when rows placed in the same part are expected
+  to expire in the same retention window. ClickHouse drops that part only after
+  its last row expires; a newer row keeps the entire part until its own retention
+  period ends.
+
+  **When deletion happens.** DELETE TTL is asynchronous background work. When
+  every row in a part is expired, ClickHouse can schedule that part for removal.
+  The actual deletion time depends on:
+
+  - **Merge selection:** an ordinary merge can apply the TTL, or ClickHouse can
+    select an off-schedule DELETE-TTL merge.
+  - **TTL cooldown:** `merge_with_ttl_timeout` limits repeated DELETE-TTL merges
+    in the same partition; its default is four hours.
+  - **Capacity:** selected work waits for an available TTL-merge slot and
+    background merge worker.
+
+  Use `system.parts`, `system.merges`, and `system.part_log` to observe the
+  active part, running work, and the resulting part lifecycle.
+graph: |-
+  ingest:
+    client:writer -[expiry-aligned batches]-> mergetree:events(note=**Table layout**\n- Partition: event month\n- TTL: event_time + 30 days DELETE\n- Setting: ttl_only_drop_parts = 1)
+
+  expiry:
+    mergetree:events -[expired whole part · background TTL]-> client:storage(label=part removed)
+category: retention
+flow: transform
+topology: single
+order: 1
+tags: [ttl, delete, retention, partitions, parts, ttl-only-drop-parts]
+profiles: [single]
+driver_node: ch
+schema_sql: schema.sql
+load: load.py
+ready_when:
+  - query: >-
+      SELECT count() FROM demo.part_aligned_events
+    value: 2
+    timeout: 60
+  - query: >-
+      SELECT count() FROM system.parts
+      WHERE database = 'demo' AND table = 'part_aligned_events' AND active
+    value: 1
+    timeout: 60
+verify:
+  sql: verify.sql
+  expected: expected.txt
+references:
+  - label: "ClickHouse: Manage data with TTL"
+    url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
+  - label: "ClickHouse: MergeTree settings"
+    url: https://clickhouse.com/docs/reference/settings/merge-tree-settings
+tradeoffs:
+  benefits:
+    - Removes fully expired parts without a row-level rewrite, greatly reducing TTL write amplification.
+    - Makes retention work predictable when partitioning, batch boundaries, and the expiry expression agree.
+  drawbacks:
+    - A part containing one newer row cannot be dropped, so actual deletion may lag the row-level deadline.
+    - Requires deliberate partition and ingest design; it cannot rescue mixed-retention data already spread across parts.

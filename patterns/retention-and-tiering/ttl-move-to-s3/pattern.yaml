@@ -1,0 +1,75 @@
+manifest_version: 1
+status: wip
+title: "TTL move: hot/cold storage with S3"
+description: |-
+  Use this base pattern to keep recent parts on local storage and place older
+  parts on an S3-backed volume. See the replicated companion pattern when the
+  table has multiple replicas.
+
+  A `TO VOLUME` or `TO DISK` TTL moves the files of each MergeTree part that
+  meets its TTL condition from one storage tier to another. Across tiers,
+  ClickHouse copies the part to the destination, switches the active part, and
+  retires the source for later cleanup. Use it for a hot/warm/cold lifecycle:
+  local storage for recent writes and low-latency reads, then an S3-backed disk
+  for older parts.
+
+  The storage policy defines a local hot tier and an S3-backed cold tier. The
+  table selects that policy with `SETTINGS storage_policy = 'tiered'` and names
+  the cold tier in its TTL.
+  An already-eligible inserted part moves immediately by default;
+  `perform_ttl_move_on_insert = 0` defers that potentially slow S3 write to the
+  background mover. Inspect `system.parts.disk_name`, `system.part_log`, and
+  `system.moves` to see the actual move.
+graph: |-
+  ingest:
+    client:writer -> mergetree:events(engine=MergeTree,policy=tiered,ttl=event_time+30d TO VOLUME cold)
+
+  tiering:
+    mergetree:events -[whole eligible parts · TTL move]-> minio:cold_parts(label=S3 cold volume)
+
+  query:
+    {mergetree:events, minio:cold_parts} -[transparent MergeTree read]-> client:reader
+category: retention
+flow: transform
+topology: single
+order: 6
+tags: [ttl, tiering, s3, storage-policy, volume, move, minio]
+driver_node: ch
+profiles: [single, s3]
+clickhouse_config:
+  - node: ch
+    file: config/tiered-storage.xml
+    depends_on: [minio-init]
+references:
+  - label: "ClickHouse: Manage data with TTL"
+    url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
+  - label: "ClickHouse: External disks for storing data"
+    url: https://clickhouse.com/docs/concepts/features/configuration/server-config/storing-data
+tradeoffs:
+  benefits:
+    - Moves whole eligible parts to lower-cost storage rather than rewriting individual rows.
+    - Keeps table and query semantics intact while making recent and historical placement explicit.
+  drawbacks:
+    - Needs server storage configuration and careful S3 operational design, rather than SQL alone.
+    - Older reads may be slower or cost more, so a cache and workload measurement are often necessary.
+
+schema_sql: schema.sql
+load: load.py
+ready_when:
+  - query: >-
+      SELECT count() FROM system.parts
+      WHERE database = 'demo' AND table = 'tiered_events'
+        AND active AND disk_name = 'cold_s3'
+    value: 1
+    node: ch
+    timeout: 60
+  - query: >-
+      SELECT count() FROM system.parts
+      WHERE database = 'demo' AND table = 'tiered_events'
+        AND active AND disk_name = 'default'
+    value: 1
+    node: ch
+    timeout: 60
+verify:
+  sql: verify.sql
+  expected: expected.txt

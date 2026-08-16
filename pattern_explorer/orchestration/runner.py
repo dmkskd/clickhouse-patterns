@@ -172,6 +172,6 @@ def run_pattern(
         start_session(pattern, report=report)
         return validate_pattern(pattern, update=update, report=report)
 
-    with stack(pattern.profiles, report=report):
+    with stack(pattern.profiles, pattern=pattern, report=report):
         prepare_pattern(pattern, report=report)
         return validate_pattern(pattern, update=update, report=report)

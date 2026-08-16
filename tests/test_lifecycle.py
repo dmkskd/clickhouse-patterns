@@ -52,7 +52,7 @@ def isolated_session(tmp_path, monkeypatch):
 def test_start_status_and_stop_session(pattern, isolated_session, monkeypatch):
     compose = FakeCompose()
     prepared = []
-    monkeypatch.setattr(lifecycle, "docker", lambda profiles: SimpleNamespace(compose=compose))
+    monkeypatch.setattr(lifecycle, "docker", lambda profiles, pattern=None: SimpleNamespace(compose=compose))
     monkeypatch.setattr(
         lifecycle,
         "prepare_pattern",
@@ -101,7 +101,7 @@ def test_start_status_and_stop_session(pattern, isolated_session, monkeypatch):
 
 def test_failed_start_remains_inspectable(pattern, isolated_session, monkeypatch):
     compose = FakeCompose()
-    monkeypatch.setattr(lifecycle, "docker", lambda profiles: SimpleNamespace(compose=compose))
+    monkeypatch.setattr(lifecycle, "docker", lambda profiles, pattern=None: SimpleNamespace(compose=compose))
 
     def fail(_pattern, report=None):
         raise RuntimeError("load did not complete")
@@ -143,7 +143,7 @@ def test_browser_run_records_owner_and_validation_phase(
     pattern, isolated_session, monkeypatch
 ):
     compose = FakeCompose()
-    monkeypatch.setattr(lifecycle, "docker", lambda profiles: SimpleNamespace(compose=compose))
+    monkeypatch.setattr(lifecycle, "docker", lambda profiles, pattern=None: SimpleNamespace(compose=compose))
     monkeypatch.setattr(lifecycle, "prepare_pattern", lambda value, report=None: None)
     monkeypatch.setattr(sessions, "load_session_pattern", lambda active: pattern)
     monkeypatch.setattr(

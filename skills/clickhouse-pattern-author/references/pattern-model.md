@@ -94,6 +94,29 @@ Common kinds include `postgres`, `connector`, `peerdb`, `minio`, `topic`, `clien
 
 Runnable patterns declare non-empty `profiles`, a `driver_node`, and real lifecycle files such as `schema_sql`, `load`, and `verify` (its `sql` and `expected` files). `ready_when` entries provide convergence checks. Never add placeholder runtime files to a reference pattern.
 
+### Per-pattern ClickHouse configuration
+
+Use `clickhouse_config` for additive XML fragments that a runnable pattern needs
+on a particular ClickHouse service. The runner mounts each fragment only for
+that pattern, under `config.d` (the default) or `users.d`; it never replaces the
+shared `config.xml`. Sources are relative to the pattern directory and must be
+`.xml` files. The fragment is merged by ClickHouse at server startup, so reload
+the pattern after changing it.
+
+```yaml
+clickhouse_config:
+  - node: ch
+    file: config/tiered-storage.xml
+    directory: config.d                 # config.d | users.d
+    name: tiered-storage.xml            # optional; source basename by default
+    depends_on: [minio-init]            # optional Compose services that must be healthy first
+```
+
+Use this for server concerns such as a storage policy, named collection, system
+log, or user profile needed by one example. Keep table-specific settings in DDL
+(`SETTINGS storage_policy = ...`) and do not put credentials in a committed
+fragment; use development-only values or an environment-backed configuration.
+
 ### ClickHouse version bounds (`requires`)
 
 When a pattern only works on a range of ClickHouse versions, declare it. Before applying schema, the runner queries `SELECT version()` on `driver_node` and fails fast with a clear message if the running server is out of range.

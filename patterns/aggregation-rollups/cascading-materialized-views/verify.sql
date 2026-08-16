@@ -1,15 +1,32 @@
--- The 5-minute candle, produced entirely by the cascade: raw -> mv_1m ->
--- candles_1m (states) -> mv_5m -> candles_5m (states). ClickHouse never re-read
--- the raw trades to build this. The states are finalized here with -Merge and
--- must equal the same 5m window computed directly from raw.
-SELECT
-    symbol,
-    toString(bucket)   AS bucket,
-    argMinMerge(open)  AS open,
-    max(high)          AS high,
-    min(low)           AS low,
-    argMaxMerge(close) AS close,
-    sum(volume)        AS volume
-FROM demo.candles_5m
-GROUP BY symbol, bucket
-ORDER BY symbol, bucket;
+-- Verify both levels of the cascade. The 1m rollup is built from the raw
+-- market data; the 5m rollup is built from the 1m aggregate states.
+SELECT *
+FROM
+(
+    SELECT
+        '1m'                AS source,
+        symbol,
+        toString(bucket)    AS bucket,
+        argMinMerge(open)   AS open,
+        max(high)           AS high,
+        min(low)            AS low,
+        argMaxMerge(close)  AS close,
+        sum(volume)         AS volume
+    FROM demo.candles_1m
+    GROUP BY symbol, bucket
+
+    UNION ALL
+
+    SELECT
+        '5m'                AS source,
+        symbol,
+        toString(bucket)    AS bucket,
+        argMinMerge(open)   AS open,
+        max(high)           AS high,
+        min(low)            AS low,
+        argMaxMerge(close)  AS close,
+        sum(volume)         AS volume
+    FROM demo.candles_5m
+    GROUP BY symbol, bucket
+)
+ORDER BY source, symbol, bucket;

@@ -283,7 +283,7 @@ window.PE.diagram = (() => {
       }
     });
 
-    const ch = graph.resources.filter((item) => ["kafka-table","mv","refreshable-mv","distributed","mergetree","replicated-mergetree","keepermap","consumer-group","remote-table"].includes(item.kind));
+    const ch = graph.resources.filter((item) => ["kafka-table","mv","refreshable-mv","distributed","mergetree","replicated-mergetree","part","keepermap","consumer-group","remote-table"].includes(item.kind));
     const topics = graph.resources.filter((item) => item.kind === "topic");
     const topicXs = topics.map((item) => positions[item.key][0]).sort((a, b) => a - b);
     const external = graph.resources.filter((item) => ["postgres", "mysql", "peerdb", "minio", "connector"].includes(item.kind));

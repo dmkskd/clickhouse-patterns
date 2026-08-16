@@ -1,0 +1,5 @@
+active_parts	1
+current_part_has_mutation_suffix	0
+current_part_level	0
+remaining_batch	current
+remaining_rows	2

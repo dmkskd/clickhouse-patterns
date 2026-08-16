@@ -1,0 +1,49 @@
+manifest_version: 1
+status: wip
+title: "Retention based on row values"
+description: |-
+  Retention can depend on values in each row. For example, a log table can
+  delete DEBUG rows after one day and INFO rows after one week.
+
+  A materialized expiry timestamp, calculated by `multiIf` at insert time,
+  gives each row its deadline. The table's DELETE TTL later removes rows after
+  that deadline during a TTL merge.
+graph: |-
+  ingest:
+    client:writer -[application logs]-> mergetree:events(note=**Retention policy**\n- DEBUG: 1 day\n- INFO: 7 days\n- expires_at: multiIf(log_level, event_time)\n- TTL: expires_at DELETE)
+
+  expiry:
+    mergetree:events -[TTL DELETE · rewrite expired rows]-> part:retained(label=rewritten part,note=**TTL result**\n- DEBUG rows removed\n- INFO rows written to this new part)
+category: retention
+flow: transform
+topology: single
+order: 2
+tags: [ttl, delete, retention, multiif, expiry, policy]
+profiles: [single]
+driver_node: ch
+schema_sql: schema.sql
+load: load.py
+ready_when:
+  - query: >-
+      SELECT count() FROM demo.variable_retention_events
+    value: 2
+    timeout: 60
+  - query: >-
+      SELECT count() FROM system.parts
+      WHERE database = 'demo' AND table = 'variable_retention_events' AND active
+    value: 1
+    timeout: 60
+verify:
+  sql: verify.sql
+  expected: expected.txt
+references:
+  - label: "ClickHouse: Manage data with TTL"
+    url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
+  - label: "Pattern proposal: measuring operational metrics"
+    url: https://github.com/dmkskd/clickhouse-patterns/blob/main/docs/proposals/measuring-metrics.md
+tradeoffs:
+  benefits:
+    - Expresses value-dependent retention in one table-level TTL policy.
+    - Gives each row a visible, queryable expiry timestamp.
+  drawbacks:
+    - The calculated expiry must be deterministic and based on row values.

@@ -57,6 +57,13 @@ def known_nodes() -> frozenset[str]:
     )
 
 
+@lru_cache(maxsize=1)
+def known_services() -> frozenset[str]:
+    """All Compose services available for pattern-local dependency wiring."""
+    data = yaml.safe_load(COMPOSE_FILE.read_text()) or {}
+    return frozenset((data.get("services") or {}).keys())
+
+
 class Expectation(BaseModel):
     """A convergence check: poll `query` on `node` until it equals `value`."""
 
@@ -150,6 +157,46 @@ class Requires(BaseModel):
         return self
 
 
+class ClickHouseConfigOverride(BaseModel):
+    """An additive server configuration fragment mounted for one CH service.
+
+    Full config.xml replacement would make a pattern depend on incidental stack
+    defaults.  Fragments are instead mounted into config.d or users.d, where
+    ClickHouse merges them with the shared development configuration.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    node: str
+    file: str
+    directory: Literal["config.d", "users.d"] = "config.d"
+    name: str = ""  # destination filename; defaults to the source basename
+    depends_on: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate(self):
+        if not self.file.endswith(".xml"):
+            raise ValueError("clickhouse_config file must be an .xml fragment")
+        if Path(self.file).is_absolute() or ".." in Path(self.file).parts:
+            raise ValueError("clickhouse_config file must be relative to the pattern directory")
+        destination = self.name or Path(self.file).name
+        if Path(destination).name != destination or not destination.endswith(".xml"):
+            raise ValueError("clickhouse_config name must be one .xml filename")
+        unknown_dependencies = set(self.depends_on) - known_services()
+        if unknown_dependencies:
+            raise ValueError(
+                f"unknown clickhouse_config dependency service(s) {sorted(unknown_dependencies)}; "
+                f"known: {sorted(known_services())}"
+            )
+        if self.node in self.depends_on:
+            raise ValueError("clickhouse_config cannot depend on its own node")
+        return self
+
+    @property
+    def destination_name(self) -> str:
+        return self.name or Path(self.file).name
+
+
 class Pattern(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -180,6 +227,9 @@ class Pattern(BaseModel):
     verify: Verify = Field(default_factory=Verify)
 
     requires: Requires = Field(default_factory=Requires)  # ClickHouse version bounds
+
+    # Additive config fragments, mounted only while this pattern's stack is up.
+    clickhouse_config: list[ClickHouseConfigOverride] = Field(default_factory=list)
 
     ready_when: list[Expectation] = Field(default_factory=list)
 
@@ -241,6 +291,17 @@ class Pattern(BaseModel):
                 f"unknown node(s) {sorted(unknown_nodes)}; known: {sorted(nodes)}"
             )
 
+        config_nodes = {item.node for item in self.clickhouse_config}
+        unknown_config_nodes = config_nodes - nodes
+        if unknown_config_nodes:
+            raise ValueError(
+                f"unknown clickhouse_config node(s) {sorted(unknown_config_nodes)}; "
+                f"known: {sorted(nodes)}"
+            )
+        destinations = [(item.node, item.directory, item.destination_name) for item in self.clickhouse_config]
+        if len(destinations) != len(set(destinations)):
+            raise ValueError("clickhouse_config cannot mount two fragments at the same destination")
+
         # Only check single-file fields the author set explicitly. Defaults that
         # happen to be absent are fine; the runner skips them.
         if self.dir != Path():
@@ -254,6 +315,9 @@ class Pattern(BaseModel):
                 for val in (self.verify.sql, self.verify.expected):
                     if val and not (self.dir / val).exists():
                         missing.append(val)
+            for item in self.clickhouse_config:
+                if not (self.dir / item.file).is_file():
+                    missing.append(item.file)
             if missing:
                 raise ValueError(
                     f"referenced file(s) not found in {self.dir}: "

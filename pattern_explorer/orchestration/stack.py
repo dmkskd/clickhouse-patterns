@@ -5,19 +5,48 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable
+from typing import Callable, TYPE_CHECKING
 
 from python_on_whales import DockerClient
 import yaml
+
+if TYPE_CHECKING:
+    from ..catalog.manifest import Pattern
 
 COMPOSE_FILE = Path(__file__).resolve().parents[2] / "compose" / "stack.yml"
 PROJECT = "chp"   # compose project name: namespaces containers, networks, volumes
 Reporter = Callable[[str], None]
 
 
-def docker(profiles: list[str]) -> DockerClient:
+def pattern_compose_file(pattern: "Pattern") -> Path | None:
+    """Write a small Compose overlay for a pattern's additive CH XML fragments."""
+    if not pattern.clickhouse_config:
+        return None
+    services: dict[str, dict] = {}
+    for item in pattern.clickhouse_config:
+        source = (pattern.dir / item.file).resolve()
+        target = f"/etc/clickhouse-server/{item.directory}/99-pattern-{item.destination_name}"
+        service = services.setdefault(item.node, {"volumes": [], "depends_on": {}})
+        service["volumes"].append(f"{source}:{target}:ro")
+        for dependency in item.depends_on:
+            service["depends_on"][dependency] = {"condition": "service_healthy"}
+    path = _RUNTIME_OVERRIDES / f"{pattern.slug}.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump({"services": services}, sort_keys=True))
+    return path
+
+
+_RUNTIME_OVERRIDES = Path(__file__).resolve().parents[2] / ".runtime" / "compose-overrides"
+
+
+def docker(profiles: list[str], pattern: "Pattern | None" = None) -> DockerClient:
+    compose_files = [str(COMPOSE_FILE)]
+    if pattern:
+        overlay = pattern_compose_file(pattern)
+        if overlay:
+            compose_files.append(str(overlay))
     return DockerClient(
-        compose_files=[str(COMPOSE_FILE)],
+        compose_files=compose_files,
         compose_profiles=profiles,
         compose_project_name=PROJECT,
     )
@@ -106,11 +135,12 @@ def compose_down(
 @contextmanager
 def stack(
     profiles: list[str],
+    pattern: "Pattern | None" = None,
     keep: bool = False,
     report: Reporter | None = None,
 ):
     """Context manager: `up --wait` on enter, `down -v` on exit (unless keep)."""
-    dc = docker(profiles)
+    dc = docker(profiles, pattern)
     compose_up(dc, profiles, report=report)
     try:
         yield dc

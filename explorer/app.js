@@ -192,11 +192,20 @@
 
     const tags = document.createElement("span");
     tags.className = "catalog-card-tags";
-    (pattern.tags || []).slice(0, 4).forEach((tag) => {
+    const visibleTags = (pattern.tags || []).slice(0, 4);
+    visibleTags.forEach((tag) => {
       const item = document.createElement("span");
       item.textContent = tag;
       tags.append(item);
     });
+    const hiddenTagCount = (pattern.tags || []).length - visibleTags.length;
+    if (hiddenTagCount > 0) {
+      const more = document.createElement("span");
+      more.className = "more";
+      more.textContent = "+" + hiddenTagCount;
+      more.title = hiddenTagCount + " more tags";
+      tags.append(more);
+    }
 
     const footer = document.createElement("span");
     footer.className = "catalog-card-footer";
@@ -231,8 +240,13 @@
     card.className = "group-card";
     card.tabIndex = 0;
     card.setAttribute("role", "button");
-    const tags = [...new Set(items.flatMap((pattern) => pattern.tags || []))].slice(0, 8);
-    const chips = tags.map((tag) => `<span class="group-intro-tag">${esc(tag)}</span>`).join("");
+    const allTags = [...new Set(items.flatMap((pattern) => pattern.tags || []))];
+    const visibleTags = allTags.slice(0, 5);
+    const hiddenTagCount = allTags.length - visibleTags.length;
+    const chips = visibleTags.map((tag) => `<span class="group-intro-tag">${esc(tag)}</span>`).join("")
+      + (hiddenTagCount > 0
+        ? `<span class="group-intro-tag more" title="${hiddenTagCount} more tags">+ more</span>`
+        : "");
     // The tile shows one sentence only: the group's short description, or the
     // first sentence of the intro as a fallback. The full intro lives on the
     // group's own page. Links/bold are flattened since the whole card is clickable.
@@ -483,12 +497,13 @@
   }
 
   // The Definition strip under the diagram shows the pattern's source files in
-  // lifecycle order: Structure (schema) -> Load -> Verify (query + expected).
+  // lifecycle order: Structure (schema) -> Load -> Verify (query + expected),
+  // plus any ClickHouse configuration fragments the pattern mounts.
   function codeBlock(file, code, lang) {
     const source = code || "";
     // Highlight.js escapes input before returning its markup. Keep the fallback
     // escaped as well, so source files are never interpreted as page HTML.
-    const highlighted = window.hljs && ["yaml", "sql", "python"].includes(lang)
+    const highlighted = window.hljs && ["yaml", "sql", "python", "xml"].includes(lang)
       ? window.hljs.highlight(source, { language: lang, ignoreIllegals: true }).value
       : esc(source);
     return `<figure class="code-file"><figcaption>${esc(file)}</figcaption>`
@@ -509,6 +524,12 @@
       body.className = "definition-body verify";
       body.innerHTML = codeBlock(v.sqlFile, v.sql, "sql")
         + (v.expected != null ? codeBlock(v.expectedFile, v.expected, "text") : "");
+    } else if (key === "config") {
+      body.className = "definition-body configuration";
+      body.innerHTML = def.config.map((item) =>
+        codeBlock(`${item.file} · ${item.node} → ${item.mountPath}`
+          + (item.dependsOn?.length ? ` · after ${item.dependsOn.join(", ")}` : ""), item.code, item.lang)
+      ).join("");
     } else {
       const d = def[key];
       body.className = "definition-body";
@@ -519,7 +540,7 @@
   function renderDefinition(pattern) {
     const strip = $("definition-strip");
     const def = pattern.definition || {};
-    const tabs = [["manifest", "Definition", def.manifest], ["structure", "Structure", def.structure], ["load", "Loader", def.load], ["verify", "Verification", def.verify]]
+    const tabs = [["manifest", "Definition", def.manifest], ["structure", "Structure", def.structure], ["load", "Loader", def.load], ["verify", "Verification", def.verify], ["config", "Configuration", def.config]]
       .filter(([, , data]) => data);
     if (!tabs.length) { strip.hidden = true; return; }
     strip.hidden = false;
@@ -758,6 +779,7 @@
     renderBreadcrumb(selected);
     $("pattern-title").textContent = selected.title;
     renderPatternMeta(selected);
+    renderPatternTags(selected.tags);
     renderDescription(selected.description);
     renderRequires(selected.requires);
     renderExperimental(selected);
@@ -893,12 +915,32 @@
   // markup and plain-text helpers it uses live in util.js.
   function renderDescription(text) {
     const el = $("pattern-description");
-    const paras = String(text ?? "").split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
-    el.replaceChildren(...paras.map((p) => {
-      const para = document.createElement("p");
-      para.innerHTML = formatDescInline(p);
-      return para;
-    }));
+    const blocks = String(text ?? "").split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
+    const nodes = blocks.map((block) => {
+      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+      if (!lines[0]?.startsWith("- ")) {
+        const para = document.createElement("p");
+        para.innerHTML = formatDescInline(block);
+        return para;
+      }
+
+      const list = document.createElement("ul");
+      const items = [];
+      for (const line of lines) {
+        if (line.startsWith("- ")) {
+          items.push(line.slice(2));
+        } else if (items.length) {
+          items[items.length - 1] += ` ${line}`;
+        }
+      }
+      for (const item of items) {
+        const li = document.createElement("li");
+        li.innerHTML = formatDescInline(item);
+        list.append(li);
+      }
+      return list;
+    });
+    el.replaceChildren(...nodes);
   }
 
   function renderPatternMeta(pattern) {
@@ -908,6 +950,22 @@
     provenance.textContent = pattern.location === "workspace" ? "Workspace" : "Curated";
     const status = patternStatusBadge(pattern.status);
     el.replaceChildren(provenance, ...(status ? [status] : []));
+    el.hidden = false;
+  }
+
+  function renderPatternTags(tags) {
+    const el = $("pattern-tags");
+    el.replaceChildren();
+    if (!tags?.length) {
+      el.hidden = true;
+      return;
+    }
+    tags.forEach((tag) => {
+      const item = document.createElement("span");
+      item.className = "pattern-tag";
+      item.textContent = tag;
+      el.append(item);
+    });
     el.hidden = false;
   }
 

@@ -1,0 +1,88 @@
+manifest_version: 1
+status: wip
+title: "Replicated S3 tiers: one remote copy per replica"
+description: |-
+  This is the replicated companion to **Hot/cold placement: TTL move to an S3
+  volume**. It focuses on the physical S3 layout after the same MOVE TTL policy
+  is applied on two replicas.
+
+  In the standard self-hosted `ReplicatedMergeTree` layout, each replica owns
+  an S3-backed copy of its cold part. With the default
+  `allow_remote_fs_zero_copy_replication = 0`, replication fetches the part to
+  each replica and each replica writes its own remote-disk objects.
+
+  This pattern makes that physical layout visible: `ch-01` writes beneath
+  `ttl-replicated/ch-01/` and `ch-02` beneath `ttl-replicated/ch-02/` in the
+  same MinIO bucket.
+
+  ClickHouse also offers experimental remote-filesystem zero-copy replication.
+  In that model, `ch-01` uploads a part's files to S3 once. To make the part
+  available on `ch-02`, ClickHouse creates local part metadata on `ch-02` that
+  refers to those existing S3 files; it does not upload a second S3 copy. It is
+  not recommended for production.
+tradeoffs:
+  benefits:
+    - "Keeps the usual two-replica availability model while moving cold capacity off local disks."
+    - "Either replica retains a complete cold part and can serve reads when its peer is unavailable."
+  drawbacks:
+    - "The replication factor applies in S3 too: two replicas create two cold object sets."
+    - "Cold reads and moves take on object-storage latency, throughput, caching, and egress considerations."
+graph: |-
+  replication:
+    client:writer
+      -[INSERT · old part]-> replicated-mergetree:events_ch01(label=demo.replicated_tiered_events,node=ch-01,tier=hot)
+      -[Keeper replication · part copy]-> replicated-mergetree:events_ch02(label=demo.replicated_tiered_events,node=ch-02,tier=hot)
+
+  move_replica_1:
+    replicated-mergetree:events_ch01
+      -[MOVE TTL · copies old part]-> minio:cold_copy_01(label=S3 prefix · ttl-replicated/ch-01/)
+
+  move_replica_2:
+    replicated-mergetree:events_ch02
+      -[MOVE TTL · copies old part]-> minio:cold_copy_02(label=S3 prefix · ttl-replicated/ch-02/)
+profiles: [cluster, s3]
+category: retention
+flow: transform
+topology: replicated
+order: 7
+tags: [ttl, tiering, s3, storage-policy, volume, move, replication, minio]
+driver_node: ch-01
+references:
+  - label: "ClickHouse: External disks and S3 storage"
+    url: "https://clickhouse.com/docs/concepts/features/configuration/server-config/storing-data"
+  - label: "ClickHouse: Zero-copy replication (experimental; not for production)"
+    url: "https://clickhouse.com/docs/concepts/features/configuration/server-config/storing-data#zero-copy-replication-not-ready-for-production"
+clickhouse_config:
+  - node: ch-01
+    file: config/tiered-storage-ch-01.xml
+    depends_on: [minio-init]
+  - node: ch-02
+    file: config/tiered-storage-ch-02.xml
+    depends_on: [minio-init]
+schema_sql: schema.sql
+load: load.py
+ready_when:
+  - query: >-
+      SELECT count() FROM system.parts
+      WHERE database = 'demo' AND table = 'replicated_tiered_events'
+        AND active AND disk_name = 'cold_s3'
+    value: 1
+    node: ch-01
+    timeout: 90
+  - query: >-
+      SELECT count() FROM system.parts
+      WHERE database = 'demo' AND table = 'replicated_tiered_events'
+        AND active AND disk_name = 'cold_s3'
+    value: 1
+    node: ch-02
+    timeout: 90
+  - query: >-
+      SELECT countDistinct(hostName())
+      FROM clusterAllReplicas('patterns', system.remote_data_paths)
+      WHERE disk_name = 'cold_s3' AND remote_path LIKE '%ttl-replicated/%'
+    value: 2
+    node: ch-01
+    timeout: 90
+verify:
+  sql: verify.sql
+  expected: expected.txt

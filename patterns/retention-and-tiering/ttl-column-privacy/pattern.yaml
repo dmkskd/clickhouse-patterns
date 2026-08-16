@@ -1,0 +1,50 @@
+manifest_version: 1
+status: wip
+title: "Column TTL: erase selected values, retain the row"
+description: |-
+  Column TTL expires values in a selected column while retaining all other
+  columns in the row. During a TTL merge, an expired value becomes that column
+  type's default. If that applies to every row in a part, the new part has no
+  file for the column.
+
+  For privacy minimisation, retain a request's time, status code, and path for
+  analysis while expiring identifying data such as its IP address, raw
+  user-agent string, or request body. Make the default value unambiguous to
+  downstream readers.
+graph: |-
+  ingest:
+    client:writer -> mergetree:access_events(engine=MergeTree,column-ttl=ip/user_agent+30d,note=**Column TTL**\n- TTL merges rewrite active parts\n- Expired IP and user-agent values become defaults\n- Rows and other columns remain)
+
+  query:
+    mergetree:access_events -[reads rewritten active parts after TTL merge]-> client:analyst
+category: retention
+flow: transform
+topology: single
+order: 3
+tags: [ttl, column-ttl, privacy, anonymization, data-minimization]
+profiles: [single]
+driver_node: ch
+schema_sql: schema.sql
+load: load.py
+ready_when:
+  - query: >-
+      SELECT count() FROM demo.access_events
+    value: 2
+    timeout: 60
+  - query: >-
+      SELECT count() FROM demo.access_events
+      WHERE client_ip = '' AND user_agent = ''
+    value: 2
+    timeout: 60
+verify:
+  sql: verify.sql
+  expected: expected.txt
+references:
+  - label: "ClickHouse: Manage data with TTL"
+    url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
+tradeoffs:
+  benefits:
+    - Reduces the lifetime and storage of sensitive or rarely needed detail without deleting the analytical event.
+  drawbacks:
+    - Expired values become type defaults, so consumers must distinguish a default from a genuine value.
+    - Like other TTL actions, physical change waits for background maintenance rather than occurring at an exact instant.

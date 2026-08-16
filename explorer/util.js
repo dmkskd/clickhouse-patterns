@@ -26,6 +26,7 @@ window.PE.util = (() => {
     distributed: ["#c3d6ff", "#7ba6f5", "#4a6fd0"],
     mergetree: ["#ffe1a1", "#f6b73c", "#c98f1d"],
     "replicated-mergetree": ["#ffe1a1", "#f6b73c", "#c98f1d"],
+    part: ["#fff0c8", "#e4a42b", "#a66c11"],
     keepermap: ["#d8caff", "#a78bfa", "#7054c8"],
     "remote-table": ["#cfe0ff", "#6f91d8", "#496bad"],
     postgres: ["#c3d6ff", "#6f91d8", "#496bad"],
@@ -40,6 +41,7 @@ window.PE.util = (() => {
     mv: "Materialized view", "refreshable-mv": "Refreshable MV",
     distributed: "Distributed table", mergetree: "MergeTree",
     "replicated-mergetree": "ReplicatedMergeTree", keepermap: "KeeperMap state",
+    part: "MergeTree part",
     "remote-table": "External table engine", postgres: "Postgres",
     mysql: "MySQL", peerdb: "PeerDB", minio: "Object storage", connector: "Connector",
     "consumer-group": "Kafka engine tables", s3queue: "S3Queue()"

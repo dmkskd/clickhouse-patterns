@@ -385,11 +385,23 @@ button, input { font: inherit; }
 .pattern-status-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin: -2px 0 0; }
 .pattern-provenance { color: var(--dim); font: 700 10px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .07em; text-transform: uppercase; }
 .pattern-status-detail .pattern-status { font-size: 10px; }
+.pattern-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: 1100px; margin: 12px 0 0; }
+.pattern-tag, .catalog-card-tags > .more { padding: 3px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+.catalog-card-tags > .more { color: var(--dim); }
 .pattern-description { max-width: 900px; margin: 15px 0 0; color: #b7bfd4; font-size: 15px; line-height: 1.7; }
 .pattern-description p { margin: 0; }
 .pattern-description p + p { margin-top: 12px; }
-.pattern-description code { padding: 1px 5px; border-radius: 4px; background: #171c2e; color: #cbd5f0; font: 0.86em ui-monospace, SFMono-Regular, Menlo, monospace; }
-.pattern-description strong { color: #e2e7f3; font-weight: 600; }
+.pattern-description ul { margin: 10px 0 12px; padding-left: 1.3em; }
+.pattern-description li { margin: 4px 0; padding-left: .1em; color: var(--muted); }
+.pattern-description li::marker { color: var(--dim); }
+.pattern-description code {
+  padding: 0 2px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text);
+  font: 600 .9em ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.pattern-description strong { color: var(--text); font-weight: 600; }
 .pattern-references { display: flex; flex-wrap: wrap; gap: 7px 14px; max-width: 1100px; margin-top: 10px; }
 .pattern-references a { color: #8fa8df; font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-decoration: none; }
 .pattern-references a::before { content: "↗ "; color: #5f6c90; }
@@ -484,6 +496,7 @@ button, input { font: inherit; }
 .definition-tabs button.active { color: var(--accent, #f6b73c) !important; border-color: var(--accent, #f6b73c) !important; font-weight: 700; }
 .definition-body { padding: 14px 18px 18px; }
 .definition-body.verify { display: grid; grid-template-columns: minmax(0, 1fr) minmax(140px, 320px); gap: 16px; align-items: start; }
+.definition-body.configuration { display: grid; gap: 16px; }
 .code-file { margin: 0; min-width: 0; }
 .code-file figcaption { color: var(--dim); font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
 .code-file pre.code { margin: 0; max-height: 360px; overflow: auto; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--text); font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; }
@@ -698,7 +711,7 @@ button, input { font: inherit; }
 [data-theme="soft"] .catalog-card-description, [data-theme="soft"] .group-card-intro { color: var(--muted); }
 [data-theme="soft"] .catalog-card-context > span { color: var(--muted); }
 [data-theme="soft"] .catalog-card-context small { color: var(--dim); }
-[data-theme="soft"] .catalog-card-tags > span, [data-theme="soft"] .group-intro-tag {
+[data-theme="soft"] .catalog-card-tags > span, [data-theme="soft"] .group-intro-tag, [data-theme="soft"] .pattern-tag {
   border: 0; background: var(--bg); box-shadow: var(--pressed-sm); color: var(--dim);
   padding: 4px 9px; border-radius: 999px;
 }
@@ -739,9 +752,6 @@ button, input { font: inherit; }
 [data-theme="soft"] .back-to-catalog { color: var(--muted); }
 [data-theme="soft"] .back-to-catalog:hover { color: var(--accent); }
 [data-theme="soft"] .pattern-description { color: var(--muted); }
-[data-theme="soft"] .pattern-description code { background: rgb(var(--hi) / calc(var(--hi-a) * 1.4)); color: var(--text); }
-/* Bold kept the dark-theme colour here, which is near-white and vanished on the light background. */
-[data-theme="soft"] .pattern-description strong { color: var(--text); }
 [data-theme="soft"] .pattern-references a { color: var(--blue); }
 [data-theme="soft"] .export-button {
   border: 0; background: var(--bg); box-shadow: var(--raised-sm); color: var(--muted);
@@ -1188,7 +1198,8 @@ button, input { font: inherit; }
    them read as dark patches instead. Same recipe as light, retuned for the fact
    that a dark surface carries far less highlight. */
 [data-theme="soft"][data-scheme="dark"] .catalog-card-tags > span,
-[data-theme="soft"][data-scheme="dark"] .group-intro-tag {
+[data-theme="soft"][data-scheme="dark"] .group-intro-tag,
+[data-theme="soft"][data-scheme="dark"] .pattern-tag {
   background: transparent;
   box-shadow:
     inset 1px 1px 2px rgb(0 0 0 / .5),

@@ -87,7 +87,7 @@ def _start_session(
     current = sessions.new_session(pattern, owner=owner)
     sessions.write_session(current)
     try:
-        dc = docker(pattern.profiles)
+        dc = docker(pattern.profiles, pattern)
         compose_up(dc, pattern.profiles, report=report)
         prepare_pattern(pattern, report=report)
     except Exception as exc:
@@ -166,7 +166,8 @@ def run_session(pattern: Pattern, report: Reporter | None = None) -> Result:
 
 def _stop_session(report: Reporter | None = None) -> sessions.Session:
     active = sessions.read_session(required=True)
-    dc = docker(active.profiles)
+    pattern = sessions.load_session_pattern(active)
+    dc = docker(active.profiles, pattern)
     compose_down(dc, active.profiles, report=report)
     sessions.clear_session()
     return active

@@ -359,14 +359,14 @@ def _cmd_up(args) -> int:
     p.require_runnable()
     _print_pattern_plan(p, "infrastructure only")
     print(f"up {p.slug}  profiles={p.profiles}")
-    docker(p.profiles).compose.up(detach=True, wait=True)
+    docker(p.profiles, p).compose.up(detach=True, wait=True)
     print(f"up. Tear down with:  just down {p.slug}")
     return 0
 
 
 def _cmd_down(args) -> int:
     p = load_pattern(args.pattern)
-    docker(p.profiles).compose.down(volumes=True, remove_orphans=True)
+    docker(p.profiles, p).compose.down(volumes=True, remove_orphans=True)
     active = sessions.read_session()
     if active and active.slug == p.slug:
         sessions.clear_session()

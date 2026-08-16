@@ -1,0 +1,3 @@
+active_parts	1
+rows	2
+ttl_recompression_merges	1

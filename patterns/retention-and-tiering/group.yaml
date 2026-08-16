@@ -1,0 +1,23 @@
+title: TTL retention & tiering
+label: TTL
+description: Use TTL to delete, rewrite, roll up, recompress, or move aging MergeTree data
+icon: database
+order: 6
+intro: |-
+  ClickHouse TTL applies lifecycle policies to MergeTree data.
+
+  - **Column values:** erase values in selected columns after their retention
+    period while retaining rows.
+  - **Rows:** automatically delete data after its retention period, or replace
+    old detail with aggregate rows.
+  - **Parts:** recompress data or move it to another storage tier without
+    changing its rows.
+
+  TTL policies have different write, CPU, and storage costs. Check each pattern
+  for its trade-offs and what to monitor.
+
+related:
+  - group: aggregation-rollups
+    note: For materialized-view rollups maintained at ingest rather than by aging data
+  - group: s3-to-clickhouse
+    note: For object storage as an input or backup target rather than a MergeTree tier
