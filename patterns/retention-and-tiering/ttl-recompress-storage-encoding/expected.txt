@@ -1,3 +1,4 @@
+active_part_codec	ZSTD(1)
 active_parts	1
 rows	2
 ttl_recompression_merges	1

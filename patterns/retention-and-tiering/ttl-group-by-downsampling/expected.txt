@@ -1,0 +1,6 @@
+active_rows	3
+current_detail_rows	2
+hourly_peak_bytes	300
+hourly_requests	3
+hourly_rollup_rows	1
+hourly_total_bytes	500

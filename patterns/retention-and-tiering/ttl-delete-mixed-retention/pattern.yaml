@@ -10,27 +10,30 @@ description: |-
   that deadline during a TTL merge.
 graph: |-
   ingest:
-    client:writer -[application logs]-> mergetree:events(note=**Retention policy**\n- DEBUG: 1 day\n- INFO: 7 days\n- expires_at: multiIf(log_level, event_time)\n- TTL: expires_at DELETE)
+    client:writer -[application logs]-> mergetree:events(note=**Retention policy**\n- DEBUG: 1 day\n- INFO: 7 days\n- expires_at: multiIf(log_level, event_time)\n- TTL merge removes DEBUG rows\n- INFO rows remain in the rewritten part)
 
-  expiry:
-    mergetree:events -[TTL DELETE · rewrite expired rows]-> part:retained(label=rewritten part,note=**TTL result**\n- DEBUG rows removed\n- INFO rows written to this new part)
+  query:
+    mergetree:events -[reads the active part after the TTL merge]-> client:analyst
 category: retention
 flow: transform
 topology: single
 order: 2
 tags: [ttl, delete, retention, multiif, expiry, policy]
+related_patterns:
+  - slug: ttl-policy-change-rollout
+    note: Read before changing this table's TTL on existing data.
 profiles: [single]
 driver_node: ch
 schema_sql: schema.sql
 load: load.py
 ready_when:
   - query: >-
-      SELECT count() FROM demo.variable_retention_events
+      SELECT count() FROM demo.events
     value: 2
     timeout: 60
   - query: >-
       SELECT count() FROM system.parts
-      WHERE database = 'demo' AND table = 'variable_retention_events' AND active
+      WHERE database = 'demo' AND table = 'events' AND active
     value: 1
     timeout: 60
 verify:
@@ -39,8 +42,6 @@ verify:
 references:
   - label: "ClickHouse: Manage data with TTL"
     url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
-  - label: "Pattern proposal: measuring operational metrics"
-    url: https://github.com/dmkskd/clickhouse-patterns/blob/main/docs/proposals/measuring-metrics.md
 tradeoffs:
   benefits:
     - Expresses value-dependent retention in one table-level TTL policy.

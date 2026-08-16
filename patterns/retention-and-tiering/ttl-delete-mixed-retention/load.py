@@ -6,7 +6,7 @@ ch = connect("ch")
 # One INSERT deliberately creates one mixed part. DEBUG rows are already past
 # their one-day retention period; INFO rows remain within their seven-day period.
 ch.command(
-    "INSERT INTO demo.variable_retention_events "
+    "INSERT INTO demo.events "
     "(event_time, log_level, id, payload) "
     "SELECT now() - INTERVAL 2 DAY, 'DEBUG', 1, 'debug-a' "
     "UNION ALL SELECT now() - INTERVAL 2 DAY, 'DEBUG', 2, 'debug-b' "

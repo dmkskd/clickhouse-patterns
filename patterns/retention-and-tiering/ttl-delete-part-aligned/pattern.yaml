@@ -2,14 +2,14 @@ manifest_version: 1
 status: wip
 title: "TTL deletion: rewrite rows or drop whole parts"
 description: |-
-  DELETE TTL removes data after its retention period. By default, ClickHouse
+  DELETE TTL removes data once its retention period has expired. By default, ClickHouse
   can rewrite a part that contains both expired and current rows: it removes the
   expired rows and writes its survivors into a new part.
 
-  Use `ttl_only_drop_parts = 1` when rows placed in the same part are expected
-  to expire in the same retention window. ClickHouse drops that part only after
-  its last row expires; a newer row keeps the entire part until its own retention
-  period ends.
+  Whole-part deletion avoids rewriting a part just to remove its expired rows.
+  It saves merge I/O, but needs data with similar expiry times to land in the
+  same part; otherwise ClickHouse keeps the part until its newest row expires.
+  Enable this behaviour with `ttl_only_drop_parts = 1`.
 
   **When deletion happens.** DELETE TTL is asynchronous background work. When
   every row in a part is expired, ClickHouse can schedule that part for removal.
@@ -26,27 +26,27 @@ description: |-
   active part, running work, and the resulting part lifecycle.
 graph: |-
   ingest:
-    client:writer -[expiry-aligned batches]-> mergetree:events(note=**Table layout**\n- Partition: event month\n- TTL: event_time + 30 days DELETE\n- Setting: ttl_only_drop_parts = 1)
-
-  expiry:
-    mergetree:events -[expired whole part · background TTL]-> client:storage(label=part removed)
+    client:writer -[expiry-aligned batches]-> mergetree:events(note=**Table layout**\n- Partition: event month\n- TTL: event_time + 30 days DELETE\n- Whole expired parts are dropped\n- ttl_only_drop_parts = 1)
 category: retention
 flow: transform
 topology: single
 order: 1
 tags: [ttl, delete, retention, partitions, parts, ttl-only-drop-parts]
+related_patterns:
+  - slug: ttl-policy-change-rollout
+    note: Read before changing this table's TTL on existing data.
 profiles: [single]
 driver_node: ch
 schema_sql: schema.sql
 load: load.py
 ready_when:
   - query: >-
-      SELECT count() FROM demo.part_aligned_events
+      SELECT count() FROM demo.events
     value: 2
     timeout: 60
   - query: >-
       SELECT count() FROM system.parts
-      WHERE database = 'demo' AND table = 'part_aligned_events' AND active
+      WHERE database = 'demo' AND table = 'events' AND active
     value: 1
     timeout: 60
 verify:

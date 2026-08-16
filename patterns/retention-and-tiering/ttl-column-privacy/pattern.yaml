@@ -22,6 +22,9 @@ flow: transform
 topology: single
 order: 3
 tags: [ttl, column-ttl, privacy, anonymization, data-minimization]
+related_patterns:
+  - slug: ttl-policy-change-rollout
+    note: Read before changing this table's TTL on existing data.
 profiles: [single]
 driver_node: ch
 schema_sql: schema.sql

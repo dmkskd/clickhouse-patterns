@@ -28,12 +28,15 @@ graph: |-
     mergetree:events -[whole eligible parts · TTL move]-> minio:cold_parts(label=S3 cold volume)
 
   query:
-    {mergetree:events, minio:cold_parts} -[transparent MergeTree read]-> client:reader
+    mergetree:events -[transparent reads across local and S3 parts]-> client:reader
 category: retention
 flow: transform
 topology: single
 order: 6
 tags: [ttl, tiering, s3, storage-policy, volume, move, minio]
+related_patterns:
+  - slug: ttl-policy-change-rollout
+    note: Read before changing this table's TTL on existing data.
 driver_node: ch
 profiles: [single, s3]
 clickhouse_config:
@@ -45,6 +48,8 @@ references:
     url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
   - label: "ClickHouse: External disks for storing data"
     url: https://clickhouse.com/docs/concepts/features/configuration/server-config/storing-data
+  - label: "Altinity: TTL moves and multi-volume storage"
+    url: https://altinity.com/blog/2020-3-23-putting-things-where-they-belong-using-new-ttl-moves
 tradeoffs:
   benefits:
     - Moves whole eligible parts to lower-cost storage rather than rewriting individual rows.

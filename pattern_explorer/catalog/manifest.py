@@ -86,6 +86,28 @@ class Reference(BaseModel):
     url: str
 
 
+class RelatedPattern(BaseModel):
+    """A contextual link to another pattern in the catalog."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str
+    note: str = ""
+
+
+class GroupAdvisory(BaseModel):
+    """A compact, expandable operational notice on a group landing page."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    summary: str = ""
+    body: str = ""
+    link_label: str = "Read more"
+    link: str = ""
+    link_pattern: str = ""
+
+
 class Tradeoffs(BaseModel):
     """Concrete benefits and drawbacks of choosing a pattern."""
 
@@ -214,6 +236,7 @@ class Pattern(BaseModel):
     experimental: bool = False   # newer/less-proven pattern; shown with an Experimental badge
     tags: list[str] = Field(default_factory=list)
     references: list[Reference] = Field(default_factory=list)
+    related_patterns: list[RelatedPattern] = Field(default_factory=list)
     # Advisory: this pattern still runs, but a better native option now exists.
     superseded_by: str = ""       # slug of the pattern that replaces this one
     superseded_since: str = ""    # ClickHouse version the replacement is available from
@@ -346,6 +369,7 @@ class Group(BaseModel):
     icon: str = "database"
     order: int = 1000
     intro: str = ""
+    advisories: list[GroupAdvisory] = Field(default_factory=list)
     related: list[GroupLink] = Field(default_factory=list)
     key: str = ""    # filled by the loader (the group folder name)
 

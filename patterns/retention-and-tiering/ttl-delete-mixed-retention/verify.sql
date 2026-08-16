@@ -4,16 +4,16 @@ SELECT *
 FROM
 (
     SELECT 'remaining_rows' AS check, toString(count()) AS value
-    FROM demo.variable_retention_events
+    FROM demo.events
     UNION ALL
     SELECT 'remaining_level' AS check, any(log_level) AS value
-    FROM demo.variable_retention_events
+    FROM demo.events
     UNION ALL
     SELECT 'future_expiries' AS check, toString(countIf(expires_at > now())) AS value
-    FROM demo.variable_retention_events
+    FROM demo.events
     UNION ALL
     SELECT 'active_parts' AS check, toString(count()) AS value
     FROM system.parts
-    WHERE database = 'demo' AND table = 'variable_retention_events' AND active
+    WHERE database = 'demo' AND table = 'events' AND active
 )
 ORDER BY check;

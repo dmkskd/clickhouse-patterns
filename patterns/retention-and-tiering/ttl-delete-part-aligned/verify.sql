@@ -8,22 +8,22 @@ SELECT *
 FROM
 (
     SELECT 'remaining_rows' AS check, toString(count()) AS value
-    FROM demo.part_aligned_events
+    FROM demo.events
     UNION ALL
     SELECT 'active_parts' AS check, toString(count()) AS value
     FROM system.parts
-    WHERE database = 'demo' AND table = 'part_aligned_events' AND active
+    WHERE database = 'demo' AND table = 'events' AND active
     UNION ALL
     SELECT 'remaining_batch' AS check, any(batch) AS value
-    FROM demo.part_aligned_events
+    FROM demo.events
     UNION ALL
     SELECT 'current_part_level' AS check, toString(max(level)) AS value
     FROM system.parts
-    WHERE database = 'demo' AND table = 'part_aligned_events' AND active
+    WHERE database = 'demo' AND table = 'events' AND active
     UNION ALL
     SELECT 'current_part_has_mutation_suffix' AS check,
            toString(countIf(length(splitByChar('_', name)) > 4)) AS value
     FROM system.parts
-    WHERE database = 'demo' AND table = 'part_aligned_events' AND active
+    WHERE database = 'demo' AND table = 'events' AND active
 )
 ORDER BY check;

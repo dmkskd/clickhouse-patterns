@@ -295,6 +295,18 @@ button, input { font: inherit; }
 .group-intro-list li { position: relative; margin: 0 0 7px; padding-left: 15px; }
 .group-intro-list li::before { content: "\2022"; position: absolute; left: 2px; color: var(--accent); }
 .group-intro-list li:last-child { margin-bottom: 0; }
+.group-advisory { max-width: 104ch; margin-top: 16px; border: 1px solid var(--line); border-left: 2px solid var(--amber); border-radius: 8px; background: color-mix(in srgb, var(--panel) 92%, var(--amber)); }
+.group-advisory summary { display: flex; align-items: baseline; gap: 8px; padding: 9px 12px; cursor: pointer; list-style: none; }
+.group-advisory summary::-webkit-details-marker { display: none; }
+.group-advisory summary::after { margin-left: auto; color: var(--dim); content: "+"; font: 700 14px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.group-advisory[open] summary::after { content: "−"; }
+.group-advisory summary > span { color: var(--amber); font: 700 9px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .09em; text-transform: uppercase; }
+.group-advisory summary strong { color: var(--text); font-size: 12px; }
+.group-advisory summary em { color: var(--muted); font-size: 12px; font-style: normal; }
+.group-advisory-body { padding: 0 12px 11px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.group-advisory-body p { margin: 0 0 8px; }
+.group-advisory-body a, .group-advisory-link { padding: 0; border: 0; background: none; color: var(--blue); font: inherit; cursor: pointer; text-decoration: none; }
+.group-advisory-body a:hover, .group-advisory-link:hover { text-decoration: underline; }
 
 .catalog-group-intro strong { color: #cbd3e8; font-weight: 600; }
 .catalog-group-intro a { color: #4cc3f7; text-decoration: none; }
@@ -406,6 +418,10 @@ button, input { font: inherit; }
 .pattern-references a { color: #8fa8df; font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-decoration: none; }
 .pattern-references a::before { content: "↗ "; color: #5f6c90; }
 .pattern-references a:hover { color: #dbe4ff; text-decoration: underline; }
+.pattern-related { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; max-width: 1100px; margin-top: 10px; }
+.pattern-related > span { color: var(--dim); font: 700 9px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; }
+.pattern-related button { padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--blue); font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; }
+.pattern-related button:hover { border-color: var(--blue); color: var(--text); }
 .pattern-actions { flex: 0 0 auto; display: flex; gap: 8px; align-items: center; }
 .export-button { flex: 0 0 auto; padding: 6px 11px; font-size: 12.5px; border: 1px solid var(--line); border-radius: 7px; background: #111526; color: #c9d0e4; cursor: pointer; }
 .export-button.icon-button { display: inline-grid; place-items: center; width: 32px; height: 30px; padding: 0; }

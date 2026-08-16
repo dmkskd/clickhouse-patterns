@@ -2,7 +2,7 @@ CREATE DATABASE IF NOT EXISTS demo;
 
 -- multiIf chooses a deterministic retention period from each log level. The
 -- table TTL then acts on the resulting expiry timestamp.
-CREATE TABLE demo.variable_retention_events
+CREATE TABLE demo.events
 (
     event_time DateTime,
     log_level LowCardinality(String),

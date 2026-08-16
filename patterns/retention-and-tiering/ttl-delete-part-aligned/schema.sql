@@ -2,7 +2,7 @@ CREATE DATABASE IF NOT EXISTS demo;
 
 -- One retention period for every row. Partitioning by the event month keeps the
 -- expired batch and the current batch in separate parts.
-CREATE TABLE demo.part_aligned_events
+CREATE TABLE demo.events
 (
     event_time DateTime,
     batch LowCardinality(String),

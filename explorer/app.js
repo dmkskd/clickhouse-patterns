@@ -283,17 +283,33 @@
       .replace(/`([^`]+)`/g, "<code>$1</code>");
   }
 
-  // A paragraph whose lines all start with "- " becomes a list; anything else
-  // stays a paragraph. Lets group.yaml lay out a set of options readably.
+  // Support wrapped list items from YAML literal blocks: the continuation line
+  // belongs to the preceding "- " item.
+  function introListItems(block) {
+    const items = [];
+    let current = null;
+    block.split("\n").map((line) => line.trim()).filter(Boolean).forEach((line) => {
+      if (line.startsWith("- ")) {
+        if (current !== null) items.push(current);
+        current = line.slice(2);
+      } else if (current !== null) {
+        current += ` ${line}`;
+      }
+    });
+    if (current !== null) items.push(current);
+    return items;
+  }
+
+  // A paragraph that starts a sequence of "- " items becomes a list; anything
+  // else stays a paragraph. Wrapped source lines remain in their list item.
   function isIntroList(block) {
-    const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-    return lines.length > 1 && lines.every((line) => line.startsWith("- "));
+    return block.trim().startsWith("- ") && introListItems(block).length > 1;
   }
 
   function renderIntroBlock(block) {
     if (isIntroList(block)) {
-      const items = block.split("\n").map((line) => line.trim()).filter(Boolean)
-        .map((line) => `<li>${renderIntro(line.slice(2))}</li>`).join("");
+      const items = introListItems(block)
+        .map((item) => `<li>${renderIntro(item)}</li>`).join("");
       return `<ul class="group-intro-list">${items}</ul>`;
     }
     return `<p>${renderIntro(block)}</p>`;
@@ -314,6 +330,24 @@
     return out.join("");
   }
 
+  function renderGroupAdvisories(advisories) {
+    return (advisories || []).map((advisory) => {
+      const title = esc(advisory.title || "Notice");
+      const summary = esc(advisory.summary || "");
+      const body = advisory.body ? `<p>${renderIntro(advisory.body)}</p>` : "";
+      const externalLink = advisory.link
+        ? `<a href="${esc(advisory.link)}" target="_blank" rel="noopener noreferrer">${esc(advisory.link_label || "Read more")}</a>`
+        : "";
+      const patternLink = advisory.link_pattern
+        ? `<button type="button" class="group-advisory-link" data-pattern="${esc(advisory.link_pattern)}">${esc(advisory.link_label || "Read more")}</button>`
+        : "";
+      return `<details class="group-advisory">` +
+        `<summary><span>Notice</span><strong>${title}</strong>${summary ? `<em>${summary}</em>` : ""}</summary>` +
+        `<div class="group-advisory-body">${body}${externalLink}${patternLink}</div>` +
+        `</details>`;
+    }).join("");
+  }
+
   function groupHeader(info, items) {
     const header = document.createElement("section");
     header.className = "catalog-group-intro";
@@ -323,6 +357,7 @@
       if (!target) return "";
       return `<li>${esc(link.note)} <button type="button" class="group-link" data-group="${esc(link.group)}">${esc(target.title)}</button></li>`;
     }).join("");
+    const advisories = renderGroupAdvisories(info.advisories);
     // First paragraph reads full width as a lead; the rest flow into two columns
     // so the summary uses the horizontal space instead of leaving it empty.
     const [lead, ...rest] = paras;
@@ -332,11 +367,15 @@
       `</div>` +
       (lead ? `<p class="group-intro-lead">${renderIntro(lead)}</p>` : "") +
       (rest.length ? `<div class="group-intro-body">${renderIntroBody(rest)}</div>` : "") +
+      advisories +
       (related ? `<div class="group-related"><span>Related</span><ul>${related}</ul></div>` : "");
     header.querySelectorAll(".group-link").forEach((btn) => btn.addEventListener("click", () => {
       catalogFilters.group = btn.dataset.group;
       renderCatalogHome();
       $("catalog-home")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }));
+    header.querySelectorAll(".group-advisory-link").forEach((btn) => btn.addEventListener("click", () => {
+      selectPattern(btn.dataset.pattern);
     }));
     return header;
   }
@@ -794,6 +833,25 @@
       return link;
     }));
     references.hidden = !selected.references?.length;
+    const relatedPatterns = $("pattern-related");
+    const related = (selected.related_patterns || [])
+      .map((relation) => ({ relation, target: patterns.find((pattern) => pattern.slug === relation.slug) }))
+      .filter(({ target }) => target);
+    relatedPatterns.replaceChildren();
+    if (related.length) {
+      const label = document.createElement("span");
+      label.textContent = "Related guidance";
+      relatedPatterns.append(label);
+      related.forEach(({ relation, target }) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = target.title;
+        button.title = relation.note || `Open ${target.title}`;
+        button.addEventListener("click", () => selectPattern(target.slug));
+        relatedPatterns.append(button);
+      });
+    }
+    relatedPatterns.hidden = !related.length;
     document.title = `${selected.title} — Pattern Explorer`;
     renderTradeoffs(selected);
     renderDefinition(selected);

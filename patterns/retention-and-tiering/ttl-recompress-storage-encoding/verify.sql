@@ -1,5 +1,6 @@
--- TTL recompression keeps every row unchanged. The part log proves that a
--- TTLRecompressMerge rewrote the part with the table's ZSTD(1) TTL codec.
+-- The active part's default codec must be the codec named in the TTL rule.
+-- `Default` in the explicit Delta/Gorilla column codecs resolves to that codec.
+-- The part log separately proves that ClickHouse performed the TTL rewrite.
 SELECT *
 FROM
 (
@@ -7,6 +8,10 @@ FROM
     FROM demo.recompressed_metrics
     UNION ALL
     SELECT 'active_parts' AS check, toString(count()) AS value
+    FROM system.parts
+    WHERE database = 'demo' AND table = 'recompressed_metrics' AND active
+    UNION ALL
+    SELECT 'active_part_codec' AS check, any(default_compression_codec) AS value
     FROM system.parts
     WHERE database = 'demo' AND table = 'recompressed_metrics' AND active
     UNION ALL

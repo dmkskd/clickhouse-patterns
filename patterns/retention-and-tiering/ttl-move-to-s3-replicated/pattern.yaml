@@ -46,6 +46,9 @@ flow: transform
 topology: replicated
 order: 7
 tags: [ttl, tiering, s3, storage-policy, volume, move, replication, minio]
+related_patterns:
+  - slug: ttl-policy-change-rollout
+    note: Read before changing this table's TTL on existing data.
 driver_node: ch-01
 references:
   - label: "ClickHouse: External disks and S3 storage"

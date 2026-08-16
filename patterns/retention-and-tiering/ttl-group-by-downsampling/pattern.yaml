@@ -1,29 +1,48 @@
 manifest_version: 1
-mode: reference
 status: wip
 title: "TTL GROUP BY: downsample historical detail"
 description: |-
-  Use `GROUP BY ... SET ...` TTL when old detail can be replaced with coarser
-  historical rows. For example, keep individual events for seven days, then
-  retain hourly counts and sums in the same table.
+  TTL GROUP BY replaces old detailed rows with aggregate rows in the same
+  MergeTree table. This example keeps individual request measurements for seven
+  days, then retains one hourly row with the request count, total bytes, and
+  peak request size.
 
-  This is a rewrite, not an insert-time materialized-view rollup. The `GROUP BY`
-  keys must be a prefix of the primary key, and the table needs columns that can
-  hold the aggregate results. Once the TTL merge runs, the original detail is
-  gone. Choose the age boundary and buckets from the questions users need to
-  answer, then measure merge cost and historical-query behaviour.
+  ClickHouse performs the aggregation during a background TTL merge. The GROUP
+  BY keys must be a prefix of the primary key, and the table needs columns to
+  hold the aggregate results. The original detail is gone once the rewrite
+  completes.
 graph: |-
   ingest:
-    client:writer -> mergetree:metrics(engine=MergeTree,ttl=GROUP BY)
+    client:writer -> mergetree:hourly_request_metrics(engine=MergeTree,note=**GROUP BY TTL**\n- Recent rows remain detailed\n- Old rows group by service and hour\n- Aggregate rows replace the old detail)
 
-  downsample:
-    mergetree:metrics -[TTL GROUP BY · old detail to buckets]-> part:rollup(label=aggregated historical part)
+  query:
+    mergetree:hourly_request_metrics -[queries recent detail and hourly history]-> client:analyst
 category: retention
 flow: transform
 topology: single
 order: 5
 tags: [ttl, group-by, rollup, downsampling, rewrite]
-profiles: []
+related_patterns:
+  - slug: ttl-policy-change-rollout
+    note: Read before changing this table's TTL on existing data.
+profiles: [single]
+driver_node: ch
+schema_sql: schema.sql
+load: load.py
+ready_when:
+  - query: >-
+      SELECT count() FROM demo.hourly_request_metrics
+    value: 3
+    timeout: 60
+  - query: >-
+      SELECT count() FROM system.part_log
+      WHERE database = 'demo' AND table = 'hourly_request_metrics'
+        AND merge_reason = 'TTLRecompressMerge'
+    value: 1
+    timeout: 60
+verify:
+  sql: verify.sql
+  expected: expected.txt
 references:
   - label: "ClickHouse: Manage data with TTL"
     url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl

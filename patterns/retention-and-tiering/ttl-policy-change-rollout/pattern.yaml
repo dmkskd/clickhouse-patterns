@@ -1,0 +1,45 @@
+manifest_version: 1
+mode: reference
+status: wip
+title: "Changing TTL on existing data"
+description: |-
+  Changing TTL on a populated table is a policy rollout, not just a metadata
+  change. By default, `ALTER TABLE ... MODIFY TTL` materializes the new policy
+  for existing parts, so the changed policy starts being applied to historical
+  data immediately.
+
+  For a staged rollout:
+
+  - Run `SET materialize_ttl_after_modify = 0` in the same session.
+  - Run `ALTER TABLE ... MODIFY TTL ...` to change the table definition.
+  - Later, apply the new rule to selected existing data with
+    `MATERIALIZE TTL IN PARTITION ...`.
+
+  The action determines the work: DELETE can remove or rewrite data,
+  RECOMPRESS and GROUP BY rewrite parts, and MOVE re-evaluates parts for
+  relocation. On a large table, materializing a changed policy can therefore
+  create substantial background removal, rewrite, or relocation work.
+graph: |-
+  policy_change:
+    client:operator -[ALTER TABLE · MODIFY TTL]-> mergetree:events(note=**Default behaviour**\n- New TTL is materialized for existing parts\n- Historical data begins to converge)
+
+  staged_rollout:
+    client:operator -[MATERIALIZE TTL · selected partition]-> mergetree:events
+category: retention
+flow: transform
+topology: single
+order: 3
+tags: [ttl, operations, alter, materialize, rollout]
+profiles: []
+references:
+  - label: "Altinity: modifying and materializing TTL"
+    url: https://kb.altinity.com/altinity-kb-queries-and-syntax/ttl/modify-ttl/
+  - label: "ClickHouse: Manage data with TTL"
+    url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
+tradeoffs:
+  benefits:
+    - Keeps the table definition and existing data aligned when immediate convergence is appropriate.
+    - Allows a large policy change to be applied partition by partition.
+  drawbacks:
+    - The default materialization can start broad TTL work across historical parts.
+    - Staging requires an explicit operational rollout rather than a metadata-only ALTER.

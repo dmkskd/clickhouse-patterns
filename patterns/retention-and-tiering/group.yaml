@@ -6,15 +6,27 @@ order: 6
 intro: |-
   ClickHouse TTL applies lifecycle policies to MergeTree data.
 
-  - **Column values:** erase values in selected columns after their retention
-    period while retaining rows.
-  - **Rows:** automatically delete data after its retention period, or replace
-    old detail with aggregate rows.
-  - **Parts:** recompress data or move it to another storage tier without
-    changing its rows.
+  - **Deletion:** remove data after its retention period.
+  - **Privacy:** erase selected column values while retaining the other columns
+    in the row.
+  - **Recompression:** change the storage encoding of older parts.
+  - **Downsampling:** replace old detailed rows with aggregate rows.
+  - **Tier placement:** move eligible parts to another disk or volume.
 
   TTL policies have different write, CPU, and storage costs. Check each pattern
   for its trade-offs and what to monitor.
+
+advisories:
+  - title: "Changing a TTL policy"
+    summary: "On a populated table, a TTL change is an operational change."
+    body: |-
+      `ALTER TABLE ... MODIFY TTL` materializes the new policy for existing
+      parts by default. DELETE, RECOMPRESS, and GROUP BY can therefore start
+      broad background removal or rewrite work; MOVE re-evaluates existing
+      parts for relocation. Set `materialize_ttl_after_modify = 0` to stage the
+      rollout, then materialize selected partitions deliberately.
+    link_label: "Read the rollout guidance"
+    link_pattern: ttl-policy-change-rollout
 
 related:
   - group: aggregation-rollups
