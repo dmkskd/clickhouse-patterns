@@ -32,9 +32,9 @@ parallelize across them. `SELECT count()` returns 3000.
 ## When to choose it
 
 For a one-off or externally scheduled import where re-running the exact same load
-is not a concern. It has no safety net, so re-running appends the rows again and
-nothing
-records which files were loaded, and files that arrive later are not picked up.
+is not a concern. The load is not idempotent and does not track ingestion state,
+so re-running appends the rows again, and files that arrive later are not picked
+up.
 For rows that need deduplication or corrections on re-load, use a stable key
 with a versioned `ReplacingMergeTree` target. To load only new files
 continuously, use [s3queue-ingest](../s3queue-ingest/).

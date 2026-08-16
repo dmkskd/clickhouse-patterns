@@ -113,9 +113,9 @@ What the extra services actually buy:
 | Postgres instances to operate | 2 (source + catalog) | 1 (source only), or 0 with a MySQL source |
 | ClickHouse version | Native + `s3()`, runs 26.7 | JDBC 0.6.5, pinned to 25.3 |
 
-At this pattern's scale nothing in the right-hand column is a problem, and
-nothing in the left-hand column is exercised. The two stacks produce identical
-results on three rows. The divergence starts where a single Debezium process stops fitting in one
+At this pattern's scale the two stacks produce identical results on three rows.
+The lightweight sink's limitations do not apply, and PeerDB's extra machinery is
+never used. They diverge where a single Debezium process no longer fits in one
 container's memory during the initial load, which is also where managed
 ClickPipes becomes the practical answer.
 

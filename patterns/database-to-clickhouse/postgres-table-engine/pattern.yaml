@@ -10,7 +10,7 @@ description: |-
 
   Because ClickHouse holds no copy, a row that the application updates or deletes in Postgres is simply read in its current state on the next query, so there are no stale rows to reconcile. The CDC patterns in this group reproduce that same behaviour only by adding a `ReplacingMergeTree`, a version column, a tombstone, and `FINAL` on every read.
 
-  The corresponding limitation is that every query places load on the operational database, and ClickHouse's storage engine contributes nothing to it.
+  The corresponding limitation is that every ClickHouse query becomes a Postgres query, so the analytical load lands on the operational database.
 graph: |-
   query:
     postgres:orders(label=public.orders,note=**Live OLTP source**\nThe application writes here directly; ClickHouse only reads it.\n- every read sees the current state\n- no stale rows on a change)
@@ -52,7 +52,7 @@ tradeoffs:
     - The database engine exposes the whole Postgres schema, so a new source table becomes queryable with no ClickHouse DDL at all.
   drawbacks:
     - Every query is a fresh round trip to the OLTP database, so a dashboard or a scheduled report puts analytical load directly on production Postgres.
-    - Rows arrive row-oriented over the wire and are not stored, so ClickHouse's compression, primary index, skip indexes, and projections are unused here.
+    - Rows arrive row-oriented over the wire and are not stored, so ClickHouse's compression, primary index, skip indexes, and projections are not used here.
     - Only the filters and projections ClickHouse can translate reach Postgres; anything else means transferring the rows and filtering afterwards.
     - Joining a Postgres table to a large local ClickHouse table re-reads the remote side per query, which is where this stops scaling.
     - Postgres credentials live in the DDL or the query, so access control and secret rotation become a ClickHouse concern.
