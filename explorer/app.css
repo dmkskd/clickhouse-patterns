@@ -1126,6 +1126,9 @@ button, input { font: inherit; }
 [data-theme="flat"][data-scheme="light"] .theme-switch button { border-color: var(--line); background: var(--panel); color: var(--muted); }
 [data-theme="flat"][data-scheme="light"] .theme-switch button:hover { color: var(--text); }
 [data-theme="flat"][data-scheme="light"] .theme-switch button.active { border-color: #aeb5c0; background: var(--panel); color: var(--text); }
+/* The repo link sits in the same cluster, so it follows the buttons. */
+[data-theme="flat"][data-scheme="light"] .theme-switch .repo-link { border-color: var(--line); background: var(--panel); color: var(--muted); }
+[data-theme="flat"][data-scheme="light"] .theme-switch .repo-link:hover { color: var(--text); }
 
 /* ---------- soft: breadcrumb — deep etched channel, chunky buttons ---------- */
 [data-theme="soft"] .pattern-breadcrumb {
