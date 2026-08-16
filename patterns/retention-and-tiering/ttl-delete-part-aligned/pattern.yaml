@@ -1,15 +1,16 @@
 manifest_version: 1
 status: wip
-title: "TTL deletion: rewrite rows or drop whole parts"
+title: "TTL deletion: drop whole expired parts"
 description: |-
   DELETE TTL removes data once its retention period has expired. By default, ClickHouse
   can rewrite a part that contains both expired and current rows: it removes the
   expired rows and writes its survivors into a new part.
 
-  Whole-part deletion avoids rewriting a part just to remove its expired rows.
-  It saves merge I/O, but needs data with similar expiry times to land in the
-  same part; otherwise ClickHouse keeps the part until its newest row expires.
-  Enable this behaviour with `ttl_only_drop_parts = 1`.
+  Whole-part deletion drops the part once all of its rows are expired. ClickHouse
+  removes its files instead of rewriting the survivors, so the cost does not
+  depend on the part's size. A part stays until its newest row expires, so rows
+  with similar expiry times need to land in the same part. Enable it with
+  `ttl_only_drop_parts = 1`.
 
   **When deletion happens.** DELETE TTL is asynchronous background work. When
   every row in a part is expired, ClickHouse can schedule that part for removal.
