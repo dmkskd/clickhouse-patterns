@@ -30,13 +30,13 @@ def pattern_compose_file(pattern: "Pattern") -> Path | None:
         service["volumes"].append(f"{source}:{target}:ro")
         for dependency in item.depends_on:
             service["depends_on"][dependency] = {"condition": "service_healthy"}
-    path = _RUNTIME_OVERRIDES / f"{pattern.slug}.yaml"
+    path = RUNTIME_OVERRIDES / f"{pattern.slug}.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump({"services": services}, sort_keys=True))
     return path
 
 
-_RUNTIME_OVERRIDES = Path(__file__).resolve().parents[2] / ".runtime" / "compose-overrides"
+RUNTIME_OVERRIDES = Path(__file__).resolve().parents[2] / ".runtime" / "compose-overrides"
 
 
 def docker(profiles: list[str], pattern: "Pattern | None" = None) -> DockerClient:
@@ -50,6 +50,15 @@ def docker(profiles: list[str], pattern: "Pattern | None" = None) -> DockerClien
         compose_profiles=profiles,
         compose_project_name=PROJECT,
     )
+
+
+def all_profiles() -> list[str]:
+    """Every profile the stack declares, for teardown that must miss nothing."""
+    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    names: set[str] = set()
+    for config in compose.get("services", {}).values():
+        names.update(config.get("profiles", []))
+    return sorted(names)
 
 
 def profile_services(profiles: list[str]) -> list[str]:

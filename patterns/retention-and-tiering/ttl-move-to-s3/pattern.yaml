@@ -32,7 +32,7 @@ graph: |-
 category: retention
 flow: transform
 topology: single
-order: 6
+order: 7
 tags: [ttl, tiering, s3, storage-policy, volume, move, minio]
 related_patterns:
   - slug: ttl-policy-change-rollout

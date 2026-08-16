@@ -9,7 +9,7 @@ from . import session as sessions
 from ..catalog.manifest import Pattern
 from .nodes import connect
 from .runner import Reporter, Result, prepare_pattern, validate_pattern
-from .stack import compose_down, compose_up, docker
+from .stack import RUNTIME_OVERRIDES, all_profiles, compose_down, compose_up, docker
 
 _log = logging.getLogger(__name__)
 
@@ -166,7 +166,16 @@ def run_session(pattern: Pattern, report: Reporter | None = None) -> Result:
 
 def _stop_session(report: Reporter | None = None) -> sessions.Session:
     active = sessions.read_session(required=True)
-    pattern = sessions.load_session_pattern(active)
+    # Stopping must not depend on the manifest still being loadable. A pattern
+    # renamed or deleted while its session was active would otherwise strand
+    # that session forever, since every route out of it (`just stop`, the
+    # Explorer's switch, `reload`) goes through here. The manifest only
+    # contributes the per-pattern Compose overlay, and teardown is scoped to
+    # the Compose project, so `down` does not need it.
+    try:
+        pattern = sessions.load_session_pattern(active)
+    except Exception:  # noqa: BLE001 - a stale session must still be stoppable
+        pattern = None
     dc = docker(active.profiles, pattern)
     compose_down(dc, active.profiles, report=report)
     sessions.clear_session()
@@ -176,6 +185,40 @@ def _stop_session(report: Reporter | None = None) -> sessions.Session:
 def stop_session(report: Reporter | None = None) -> sessions.Session:
     with sessions.operation_lock():
         return _stop_session(report=report)
+
+
+def reset_environment(report: Reporter | None = None) -> dict:
+    """Force the lab back to a clean slate, whatever state it is in.
+
+    `stop` is the ordinary path and depends on the session record describing a
+    pattern that still exists. Reset assumes nothing: it removes the whole
+    Compose project across every profile, then deletes the runtime files. Use
+    it when the recorded session disagrees with reality: a renamed or deleted
+    pattern, an unreadable state file, containers left by an interrupted run.
+
+    It deliberately skips `operation_lock`. A lock held by a process that died
+    is one of the states worth recovering from, and a lock held by a live
+    operation would only be released by killing it.
+    """
+    slug = ""
+    try:
+        active = sessions.read_session()
+        slug = active.slug if active else ""
+    except Exception:  # noqa: BLE001 - an unreadable record is itself what reset clears
+        slug = "(unreadable session record)"
+
+    profiles = all_profiles()
+    if report:
+        report(f"RESET   removing compose project across {len(profiles)} profiles")
+    docker(profiles).compose.down(volumes=True, remove_orphans=True)
+
+    sessions.clear_session()
+    overrides = sorted(RUNTIME_OVERRIDES.glob("*.yaml")) if RUNTIME_OVERRIDES.exists() else []
+    for path in overrides:
+        path.unlink()
+    if report:
+        report("RESET   session record and compose overrides cleared")
+    return {"slug": slug, "profiles": profiles, "overrides_removed": len(overrides)}
 
 
 def reload_session(report: Reporter | None = None) -> sessions.Session:

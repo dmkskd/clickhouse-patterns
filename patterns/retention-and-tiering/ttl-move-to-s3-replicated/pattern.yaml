@@ -44,7 +44,7 @@ profiles: [cluster, s3]
 category: retention
 flow: transform
 topology: replicated
-order: 7
+order: 8
 tags: [ttl, tiering, s3, storage-policy, volume, move, replication, minio]
 related_patterns:
   - slug: ttl-policy-change-rollout

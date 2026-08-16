@@ -1,36 +1,62 @@
 manifest_version: 1
-mode: reference
 status: wip
 title: "Changing TTL on existing data"
 description: |-
   Changing TTL on a populated table is a policy rollout, not just a metadata
   change. By default, `ALTER TABLE ... MODIFY TTL` materializes the new policy
   for existing parts, so the changed policy starts being applied to historical
-  data immediately.
+  data immediately. On a large table, materializing a changed policy can create
+  substantial background removal, rewrite, or relocation work.
 
-  For a staged rollout:
+  To change the policy without starting that work and decide when it happens:
 
-  - Run `SET materialize_ttl_after_modify = 0` in the same session.
-  - Run `ALTER TABLE ... MODIFY TTL ...` to change the table definition.
+  - Run `ALTER TABLE ... MODIFY TTL ...` with `materialize_ttl_after_modify = 0`
+    to change only the table definition. Existing parts keep the TTL metadata
+    of the previous policy, so background merges do not treat them as expired.
   - Later, apply the new rule to selected existing data with
-    `MATERIALIZE TTL IN PARTITION ...`.
+    `MATERIALIZE TTL IN PARTITION ...`. That is a mutation: it rewrites the
+    partition's parts and enforces the new policy on them.
 
   The action determines the work: DELETE can remove or rewrite data,
   RECOMPRESS and GROUP BY rewrite parts, and MOVE re-evaluates parts for
-  relocation. On a large table, materializing a changed policy can therefore
-  create substantial background removal, rewrite, or relocation work.
+  relocation.
+
+  This pattern runs the rollout on a table holding two months of expired
+  history, January and February 2025. It changes retention from five years to
+  30 days without materializing, then materializes January only, and verifies
+  that February still holds its rows under the deadline computed by the old
+  five-year policy.
 graph: |-
+  history:
+    client:writer -[monthly batches]-> mergetree:events(label=demo.events,note=**Table**\n- PARTITION BY toYYYYMM(event_time)\n- Starts at event_time + 5 years DELETE\n- Holds January 2025 and February 2025)
+
   policy_change:
-    client:operator -[ALTER TABLE · MODIFY TTL]-> mergetree:events(note=**Default behaviour**\n- New TTL is materialized for existing parts\n- Historical data begins to converge)
+    client:operator -[MODIFY TTL · materialize_ttl_after_modify=0]-> mergetree:events
 
   staged_rollout:
-    client:operator -[MATERIALIZE TTL · selected partition]-> mergetree:events
+    mergetree:events -[MATERIALIZE TTL IN PARTITION 202501]-> part:january_2025(label=January 2025,note=**Mutation rewrite**\n- Expired rows dropped under the new 30-day policy\n- February 2025 keeps the deadline of the old policy\n- It converges only when it is materialized in turn)
 category: retention
 flow: transform
 topology: single
 order: 3
 tags: [ttl, operations, alter, materialize, rollout]
-profiles: []
+profiles: [single]
+driver_node: ch
+schema_sql: schema.sql
+load: load.py
+ready_when:
+  - query: >-
+      SELECT count() FROM demo.events
+    value: 3
+    timeout: 60
+  - query: >-
+      SELECT countIf(is_done) FROM system.mutations
+      WHERE database = 'demo' AND table = 'events'
+    value: 1
+    timeout: 60
+verify:
+  sql: verify.sql
+  expected: expected.txt
 references:
   - label: "Altinity: modifying and materializing TTL"
     url: https://kb.altinity.com/altinity-kb-queries-and-syntax/ttl/modify-ttl/
@@ -43,3 +69,4 @@ tradeoffs:
   drawbacks:
     - The default materialization can start broad TTL work across historical parts.
     - Staging requires an explicit operational rollout rather than a metadata-only ALTER.
+    - While the rollout is incomplete, retention differs between materialized and staged partitions.

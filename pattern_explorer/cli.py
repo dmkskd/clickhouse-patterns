@@ -48,6 +48,7 @@ from .catalog.workspaces import (
 from .orchestration.lifecycle import (
     get_session_status,
     reload_session,
+    reset_environment,
     start_session,
     stop_session,
     validate_session,
@@ -701,6 +702,17 @@ def _cmd_stop(_args) -> int:
     return 0
 
 
+def _cmd_reset(_args) -> int:
+    outcome = reset_environment(report=_progress)
+    if outcome["slug"]:
+        print(f"RESET    cleared session {outcome['slug']}")
+    else:
+        print("RESET    no session record was present")
+    print("  removed containers, networks, and volumes for compose project 'chp'")
+    print("  start fresh with:  just run <pattern>")
+    return 0
+
+
 def _cmd_status(args) -> int:
     status = get_session_status()
     if args.json:
@@ -938,6 +950,10 @@ def main() -> int:
     sub.add_parser("stop", help="tear down the active pattern").set_defaults(
         func=lambda a: _guard(lambda: _cmd_stop(a), None)
     )
+    sub.add_parser(
+        "reset",
+        help="recovery: force-remove every container and clear session state",
+    ).set_defaults(func=_cmd_reset)
 
     for name in ("up", "down"):
         sp = sub.add_parser(name)

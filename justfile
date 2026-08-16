@@ -134,6 +134,11 @@ reload:
 stop:
     uv run python -m pattern_explorer stop
 
+# Recovery: force-remove every container and clear session state.
+[group('Patterns')]
+reset:
+    uv run python -m pattern_explorer reset
+
 # Run one pattern end to end and tear it down.
 [group('Testing')]
 test pattern *flags:
@@ -157,4 +162,4 @@ test-all:
 # Run the parametrized pytest suite.
 [group('Testing')]
 pytest *flags:
-    uv run --extra dev pytest {{flags}}
+    uv run --extra dev python -m pytest {{flags}}

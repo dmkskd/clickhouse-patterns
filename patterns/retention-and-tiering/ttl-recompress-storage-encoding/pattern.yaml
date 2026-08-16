@@ -24,7 +24,7 @@ graph: |-
 category: retention
 flow: transform
 topology: single
-order: 4
+order: 5
 tags: [ttl, recompress, codec, rewrite]
 related_patterns:
   - slug: ttl-policy-change-rollout
