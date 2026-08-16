@@ -2,13 +2,17 @@ manifest_version: 1
 status: under-review
 title: "Postgres table engine (query in place, no copy)"
 description: |-
-  Reads Postgres tables directly from ClickHouse without replicating them. The source is declared once and resolved on each query, so the only thing to operate is ClickHouse itself.
+  Reads Postgres tables directly from ClickHouse without copying any data. The source is declared once and resolved on each query, so the only system to operate is ClickHouse itself.
 
-  Three access paths are compared. The Postgres Table Engine is one ClickHouse table declared locally, bound to one Postgres table, with the column types chosen at declaration time. The Postgres Database Engine maps an entire schema in a single statement and requires no per-table DDL: its tables and types are discovered when queried, so a table added in Postgres becomes queryable without any change in ClickHouse. The postgresql() table function carries the connection inline and creates no object at all.
+  Three access paths are compared:
+
+  - **Postgres Table Engine:** one ClickHouse table declared locally, bound to one Postgres table, with the column types chosen at declaration time.
+  - **Postgres Database Engine:** maps an entire schema in a single statement and requires no per-table DDL. Its tables and types are discovered when queried, so a table added in Postgres becomes queryable without any change in ClickHouse.
+  - **postgresql() table function:** carries the connection inline and creates no object at all.
 
   Each path issues a fresh query to Postgres on every read.
 
-  Because ClickHouse holds no copy, a row that the application updates or deletes in Postgres is simply read in its current state on the next query, so there are no stale rows to reconcile. The CDC patterns in this group reproduce that same behaviour only by adding a `ReplacingMergeTree`, a version column, a tombstone, and `FINAL` on every read.
+  Because ClickHouse holds no copy, a row that the application updates or deletes in Postgres is simply read in its current state on the next query, so there are no stale rows to reconcile.
 
   The corresponding limitation is that every ClickHouse query becomes a Postgres query, so the analytical load lands on the operational database.
 graph: |-
