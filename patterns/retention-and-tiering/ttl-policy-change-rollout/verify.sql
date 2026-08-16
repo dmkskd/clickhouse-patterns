@@ -1,11 +1,13 @@
 -- Expected evidence:
 -- * the table definition already carries the new 30-day policy;
--- * only January 2025, the materialized month, lost its expired rows, so the
---   change was staged rather than applied to all history at once;
--- * February 2025's active part still carries the delete deadline computed
---   from the previous five-year policy, which is why a background TTL merge
---   does not consider it expired yet;
+-- * only the older month, the one that was materialized, lost its rows, so the
+--   change reached part of the history rather than all of it;
+-- * the recent month's active part still carries the delete deadline computed
+--   from the one-year policy, which is why a background TTL merge does not
+--   consider it expired yet;
 -- * exactly one mutation ran, the MATERIALIZE TTL for that single month.
+-- The two months are derived the same way the loader derives them, so the
+-- checks hold on any date the pattern runs.
 SELECT *
 FROM
 (
@@ -18,19 +20,20 @@ FROM
     SELECT 'remaining_rows' AS check, toString(count()) AS value
     FROM demo.events
     UNION ALL
-    SELECT 'rows_in_january_materialized' AS check, toString(count()) AS value
+    SELECT 'rows_in_materialized_month' AS check, toString(count()) AS value
     FROM demo.events
-    WHERE toYYYYMM(event_time) = 202501
+    WHERE toYYYYMM(event_time) = toYYYYMM(now() - INTERVAL 150 DAY)
     UNION ALL
-    SELECT 'rows_in_february_staged' AS check, toString(count()) AS value
+    SELECT 'rows_in_staged_month' AS check, toString(count()) AS value
     FROM demo.events
-    WHERE toYYYYMM(event_time) = 202502
+    WHERE toYYYYMM(event_time) = toYYYYMM(now() - INTERVAL 120 DAY)
     UNION ALL
-    SELECT 'february_delete_deadline_year' AS check,
-           toString(toYear(max(delete_ttl_info_max))) AS value
+    -- The staged part is still due for deletion roughly a year after its rows
+    -- were written, not 30 days after: its TTL metadata predates the change.
+    SELECT 'staged_deadline_still_months_away' AS check,
+           toString(countIf(delete_ttl_info_max > now() + INTERVAL 180 DAY)) AS value
     FROM system.parts
     WHERE database = 'demo' AND table = 'events' AND active
-      AND partition = '202502'
     UNION ALL
     SELECT 'finished_mutations' AS check, toString(countIf(is_done)) AS value
     FROM system.mutations

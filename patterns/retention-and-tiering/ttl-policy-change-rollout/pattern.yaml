@@ -2,11 +2,13 @@ manifest_version: 1
 status: wip
 title: "Changing TTL on existing data"
 description: |-
-  Changing TTL on a populated table is a policy rollout, not just a metadata
-  change. By default, `ALTER TABLE ... MODIFY TTL` materializes the new policy
-  for existing parts, so the changed policy starts being applied to historical
-  data immediately. On a large table, materializing a changed policy can create
-  substantial background removal, rewrite, or relocation work.
+  On a populated table, a TTL change alters the table definition and the data
+  that the table already holds.
+
+  By default, `ALTER TABLE ... MODIFY TTL` materializes the new policy for
+  existing parts, so the new rule starts being applied to stored data
+  immediately. On a large table, that materialization can create substantial
+  background removal, rewrite, or relocation work.
 
   To change the policy without starting that work and decide when it happens:
 
@@ -16,10 +18,6 @@ description: |-
   - Later, apply the new rule to selected existing data with
     `MATERIALIZE TTL IN PARTITION ...`. That is a mutation: it rewrites the
     partition's parts and enforces the new policy on them.
-
-  The action determines the work: DELETE can remove or rewrite data,
-  RECOMPRESS and GROUP BY rewrite parts, and MOVE re-evaluates parts for
-  relocation.
 
   This pattern runs the rollout on a table holding two months of expired
   history, January and February 2025. It changes retention from five years to
@@ -34,7 +32,7 @@ graph: |-
     client:operator -[MODIFY TTL · materialize_ttl_after_modify=0]-> mergetree:events
 
   staged_rollout:
-    mergetree:events -[MATERIALIZE TTL IN PARTITION 202501]-> part:january_2025(label=January 2025,note=**Mutation rewrite**\n- Expired rows dropped under the new 30-day policy\n- February 2025 keeps the deadline of the old policy\n- It converges only when it is materialized in turn)
+    mergetree:events -[MATERIALIZE TTL IN PARTITION 202501]-> part:january_2025(label=January 2025,note=**Mutation rewrite**\n- Expired rows dropped under the new 30-day policy\n- February 2025 keeps the deadline of the old policy\n- Its expired rows are dropped only when it is materialized in turn)
 category: retention
 flow: transform
 topology: single
@@ -64,7 +62,7 @@ references:
     url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
 tradeoffs:
   benefits:
-    - Keeps the table definition and existing data aligned when immediate convergence is appropriate.
+    - Keeps the table definition and existing data aligned when applying the change at once is appropriate.
     - Allows a large policy change to be applied partition by partition.
   drawbacks:
     - The default materialization can start broad TTL work across historical parts.

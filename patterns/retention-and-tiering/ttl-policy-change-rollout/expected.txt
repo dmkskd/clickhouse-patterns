@@ -1,6 +1,6 @@
-february_delete_deadline_year	2030
 finished_mutations	1
 remaining_rows	3
-rows_in_february_staged	3
-rows_in_january_materialized	0
+rows_in_materialized_month	0
+rows_in_staged_month	3
+staged_deadline_still_months_away	1
 table_ttl_expression	event_time + toIntervalDay(30)
