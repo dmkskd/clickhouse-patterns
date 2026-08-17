@@ -2,7 +2,14 @@ from types import SimpleNamespace
 
 from pattern_explorer import cli
 from pattern_explorer.cli import _cmd_describe, _cmd_status, _print_pattern_plan, _print_started
-from pattern_explorer.catalog.manifest import discover_patterns, load_pattern
+import pytest
+
+from pattern_explorer.catalog.manifest import (
+    PatternManifestError,
+    discover_patterns,
+    load_pattern,
+    load_pattern_dir,
+)
 from pattern_explorer.orchestration.runner import Result
 from pattern_explorer.orchestration.wait import ConvergenceError
 
@@ -275,6 +282,47 @@ def test_sharded_patterns_use_one_cluster_aware_schema():
 def test_every_pattern_defines_a_graph():
     for pattern in discover_patterns():
         assert pattern.graph, pattern.slug
+
+
+def test_invalid_manifest_names_its_file_and_field(tmp_path):
+    """Loading every manifest at once, the failure must say which one broke."""
+    directory = tmp_path / "broken"
+    directory.mkdir()
+    (directory / "pattern.yaml").write_text(
+        "title: Broken\n"
+        "description: A manifest with a colon that YAML reads as a mapping.\n"
+        "mode: reference\n"
+        "category: retention\n"
+        "flow: transform\n"
+        "topology: single\n"
+        "graph: |-\n"
+        "  lane:\n"
+        "    client:writer -> mergetree:events\n"
+        "tradeoffs:\n"
+        "  benefits:\n"
+        "    - One benefit.\n"
+        "  drawbacks:\n"
+        "    - The rollout is manual: each partition needs `MATERIALIZE TTL`.\n"
+    )
+
+    with pytest.raises(PatternManifestError) as failure:
+        load_pattern_dir(directory, "broken")
+
+    message = str(failure.value).splitlines()[0]
+    assert "broken/pattern.yaml" in message
+    assert "tradeoffs.drawbacks.0" in message
+    assert "valid string" in message
+
+
+def test_manifest_failure_does_not_blame_the_requested_pattern(capsys):
+    """A manifest error names its own file; any pattern load reads all of them."""
+    failure = PatternManifestError("patterns/g/other/pattern.yaml: tradeoffs.drawbacks.1 bad")
+
+    cli._explain(failure, "ttl-move-to-s3")
+
+    error = capsys.readouterr().err
+    assert "ttl-move-to-s3" not in error.splitlines()[0]
+    assert "patterns/g/other/pattern.yaml" in error
 
 
 def test_superseded_by_points_to_a_real_pattern():

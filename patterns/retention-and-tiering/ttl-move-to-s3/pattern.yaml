@@ -22,13 +22,13 @@ description: |-
   `system.moves` to see the actual move.
 graph: |-
   ingest:
-    client:writer -> mergetree:events(engine=MergeTree,policy=tiered,ttl=event_time+30d TO VOLUME cold)
+    client:writer -> mergetree:tiered_events(label=demo.tiered_events,engine=MergeTree,policy=tiered,ttl=event_time+30d TO VOLUME cold)
 
   tiering:
-    mergetree:events -[whole eligible parts · TTL move]-> minio:cold_parts(label=S3 cold volume)
+    mergetree:tiered_events -[whole eligible parts · TTL move]-> minio:cold_parts(bucket=clickhouse,prefix=ttl-tiered/,label=S3 cold volume)
 
   query:
-    mergetree:events -[transparent reads across local and S3 parts]-> client:reader
+    mergetree:tiered_events -[transparent reads across local and S3 parts]-> client:reader
 category: retention
 flow: transform
 topology: single

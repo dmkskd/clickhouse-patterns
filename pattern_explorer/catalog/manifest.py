@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 _ROOT = Path(__file__).resolve().parents[2]
 PATTERNS_DIR = _ROOT / "patterns"
@@ -25,6 +25,34 @@ _PATTERN_SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 # behind the older number so a file declares which parser it expects. Files
 # without the field are treated as version 1 (the shape before it was introduced).
 CURRENT_MANIFEST_VERSION = 1
+
+
+class PatternManifestError(ValueError):
+    """A pattern.yaml that could not be parsed or validated, named by path.
+
+    Pydantic reports the failing field but not the file it came from, and a
+    caller loading every manifest at once cannot tell which of them broke. This
+    carries the path in the first line of the message, where terse error
+    reporting can still see it.
+    """
+
+
+def _manifest_path(manifest: Path) -> str:
+    """Name the manifest the way the reader would type it, when it is in-tree."""
+    try:
+        return str(manifest.relative_to(_ROOT))
+    except ValueError:
+        return str(manifest)
+
+
+def _manifest_error(manifest: Path, exc: ValidationError) -> PatternManifestError:
+    problems = "; ".join(
+        f"{'.'.join(str(part) for part in error['loc']) or '<root>'} {error['msg']}"
+        for error in exc.errors()[:3]
+    )
+    if len(exc.errors()) > 3:
+        problems += f"; (+{len(exc.errors()) - 3} more)"
+    return PatternManifestError(f"{_manifest_path(manifest)}: {problems}")
 
 
 def validate_pattern_slug(slug: str) -> None:
@@ -387,10 +415,16 @@ def _load_pattern_dir(directory: Path, slug: str, location: str, group: str = ""
     manifest = directory / "pattern.yaml"
     if not manifest.exists():
         raise FileNotFoundError(f"no pattern.yaml in {directory}")
-    data = yaml.safe_load(manifest.read_text()) or {}
+    try:
+        data = yaml.safe_load(manifest.read_text()) or {}
+    except yaml.YAMLError as exc:
+        raise PatternManifestError(f"{_manifest_path(manifest)}: {str(exc).splitlines()[0]}") from exc
     if not group:
         group = directory.parent.name if location == "library" else "workspaces"
-    return Pattern(slug=slug, dir=directory, location=location, group=group, **data)
+    try:
+        return Pattern(slug=slug, dir=directory, location=location, group=group, **data)
+    except ValidationError as exc:
+        raise _manifest_error(manifest, exc) from exc
 
 
 def load_pattern_dir(directory: Path, slug: str, location: str = "library") -> Pattern:

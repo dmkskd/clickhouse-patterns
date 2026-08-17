@@ -380,7 +380,9 @@ window.PE.session = (() => {
 
     function renderClickHouseInspector(payload) {
       $("resource-inspector-title").textContent = `${payload.database}.${payload.table}`;
-      $("resource-inspector-subtitle").textContent = payload.engine;
+      $("resource-inspector-subtitle").textContent = payload.node
+        ? `${payload.engine} · node ${payload.node}`
+        : payload.engine;
       const columnRows = payload.columns.map((column) => [
         column.name,
         column.type,

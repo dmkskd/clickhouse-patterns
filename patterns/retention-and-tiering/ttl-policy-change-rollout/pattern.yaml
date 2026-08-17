@@ -2,15 +2,12 @@ manifest_version: 1
 status: wip
 title: "Changing TTL on existing data"
 description: |-
-  On a populated table, a TTL change alters the table definition and the data
-  that the table already holds.
+  By default, `ALTER TABLE ... MODIFY TTL` does two things: it changes the
+  table definition, and it immediately starts applying the new TTL policy to
+  all data the table already holds. On a large table, applying it to every
+  existing part may consume considerable resources.
 
-  By default, `ALTER TABLE ... MODIFY TTL` materializes the new policy for
-  existing parts, so the new rule starts being applied to stored data
-  immediately. On a large table, that materialization can create substantial
-  background removal, rewrite, or relocation work.
-
-  To change the policy without starting that work and decide when it happens:
+  To defer that work and decide when it happens:
 
   - Run `ALTER TABLE ... MODIFY TTL ...` with `materialize_ttl_after_modify = 0`
     to change only the table definition. Existing parts keep the TTL metadata
@@ -19,11 +16,10 @@ description: |-
     `MATERIALIZE TTL IN PARTITION ...`. That is a mutation: it rewrites the
     partition's parts and enforces the new policy on them.
 
-  This pattern runs the rollout on a table holding two months of history, both
-  already past 30 days and both still within the one-year policy the table
-  starts with. It shortens retention to 30 days without materializing, then
-  materializes the earlier month only, and verifies that the later month still
-  holds its rows under the deadline the one-year policy gave them.
+  This example shortens the policy from one year to 30 days on a table
+  holding two older months. The change leaves existing data untouched
+  (`materialize_ttl_after_modify = 0`); a later `MATERIALIZE TTL` on one
+  month drops its expired rows, while the other month keeps its own.
 graph: |-
   history:
     client:writer -[monthly batches]-> mergetree:events(label=demo.events,note=**Table**\n- PARTITION BY toYYYYMM(event_time)\n- Starts at event_time + 1 year DELETE\n- Holds two months of history)
@@ -62,9 +58,8 @@ references:
     url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
 tradeoffs:
   benefits:
-    - Keeps the table definition and existing data aligned when applying the change at once is appropriate.
-    - Allows a large policy change to be applied partition by partition.
+    - The ALTER changes only the table definition; no background work starts until you ask for it.
+    - Each step targets a chosen partition, so the rollout can be paused and resumed.
   drawbacks:
-    - The default materialization can start broad TTL work across historical parts.
-    - Staging requires an explicit operational rollout rather than a metadata-only ALTER.
-    - While the rollout is incomplete, retention differs between materialized and staged partitions.
+    - Until a partition is materialized, the new policy does not apply to it. An unfinished rollout leaves the table under two policies at once.
+    - "ClickHouse does not drive the rollout: every remaining partition needs an explicit `MATERIALIZE TTL`, tracked for example through `system.mutations`."

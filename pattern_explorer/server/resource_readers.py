@@ -30,7 +30,8 @@ class ReaderContext:
     resource: Resource
     session: Any
     source_changed: bool
-    clickhouse_client: Callable[[], Any]
+    # Takes an optional node name; falls back to the session's driver node.
+    clickhouse_client: Callable[..., Any]
 
 
 def json_value(value: Any) -> Any:
@@ -68,12 +69,19 @@ class ClickHouseReader:
         if object_key:
             raise ValueError("ClickHouse table inspection does not accept an object key")
         resource = context.resource
+        # `table=` carries the real name when the graph id is something else, as
+        # it is when one table is drawn once per replica.
+        declared = resource.properties.get("table") or resource.name
         requested_database = None
-        requested_table = resource.name
-        if "." in resource.name:
-            requested_database, requested_table = resource.name.rsplit(".", 1)
+        requested_table = declared
+        if "." in declared:
+            requested_database, requested_table = declared.rsplit(".", 1)
 
-        client = context.clickhouse_client()
+        node = resource.properties.get("node")
+        try:
+            client = context.clickhouse_client(node)
+        except KeyError as exc:
+            raise ValueError(f"resource declares `node={node}`, which is not a node in this session") from exc
         metadata_query = """
             SELECT database, name, engine, create_table_query
             FROM system.tables
@@ -88,7 +96,8 @@ class ClickHouseReader:
         metadata = client.query(metadata_query, parameters=parameters).result_rows
         if not metadata:
             qualified = f"{requested_database}.{requested_table}" if requested_database else requested_table
-            detail = f"{qualified} is not present in the live ClickHouse session"
+            where = f"on node {node}" if node else "in the live ClickHouse session"
+            detail = f"{qualified} is not present {where}"
             if context.source_changed:
                 detail += "; this pattern changed after the session started—reload it to inspect the newly declared resource"
             raise ValueError(detail)
@@ -126,7 +135,7 @@ class ClickHouseReader:
         return {
             "type": "clickhouse-table",
             "resource": {"key": resource.key, "kind": resource.kind, "declared_name": resource.name},
-            "database": database, "table": table, "engine": engine,
+            "database": database, "table": table, "engine": engine, "node": node,
             "create_statement": create_statement, "columns": columns, "sample": sample,
             "sample_error": sample_error, "sample_disabled": sample_disabled,
         }

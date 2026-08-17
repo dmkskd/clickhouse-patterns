@@ -215,6 +215,61 @@ def test_resource_inspection_returns_definition_and_bounded_live_sample(monkeypa
     assert "LIMIT 20" in client.queries[-1][0]
 
 
+def test_revision_is_cached_until_a_watched_file_changes(monkeypatch):
+    """The browser polls this every 1.5s; it must not re-read every manifest."""
+    from pattern_explorer.server import explorer as server
+
+    calls = []
+    monkeypatch.setattr(server, "_revision_cache", None)
+    monkeypatch.setattr(
+        server, "explorer_catalog_json", lambda: calls.append(1) or "{}"
+    )
+
+    first = server._browser_revision()
+    second = server._browser_revision()
+
+    assert first == second
+    assert len(calls) == 1
+
+
+def test_catalog_error_is_reported_once_while_it_repeats(monkeypatch, capsys):
+    from pattern_explorer.server import explorer as server
+
+    monkeypatch.setattr(server, "_last_catalog_error", None)
+    failure = ValueError("patterns/g/broken/pattern.yaml: tradeoffs.drawbacks.1 bad")
+
+    server._report_catalog_error(failure)
+    server._report_catalog_error(failure)
+
+    logged = capsys.readouterr().err
+    assert logged.count("patterns/g/broken/pattern.yaml") == 1
+    assert "Traceback" not in logged
+
+
+def test_broken_manifest_returns_an_error_not_a_traceback(explorer_server, monkeypatch):
+    """One invalid pattern.yaml must not take down every catalog route."""
+    from pattern_explorer.server import explorer as server
+
+    _srv, base = explorer_server
+    monkeypatch.setattr(server, "_last_catalog_error", None)
+    monkeypatch.setattr(server, "_revision_cache", None)
+
+    def broken():
+        raise ValueError("patterns/g/broken/pattern.yaml: tradeoffs.drawbacks.1 bad")
+
+    monkeypatch.setattr(server, "explorer_catalog_json", broken)
+
+    with pytest.raises(HTTPError) as failure:
+        get_json(f"{base}/api/revision")
+    assert failure.value.code == 503
+    assert "broken/pattern.yaml" in json.loads(failure.value.read())["error"]
+
+    with urlopen(f"{base}/catalog.js") as response:
+        script = response.read().decode()
+    assert "CLICKHOUSE_PATTERN_CATALOG_ERROR" in script
+    assert "broken/pattern.yaml" in script
+
+
 def test_reader_registry_registers_clickhouse_and_minio():
     assert RESOURCE_READERS.reader_for("mergetree") is not None
     assert RESOURCE_READERS.reader_for("minio") is not None

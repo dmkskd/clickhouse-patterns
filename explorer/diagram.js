@@ -145,7 +145,9 @@ window.PE.diagram = (() => {
     const kind = KIND_LABELS[resource.kind] || resource.kind.replaceAll("-", " ");
     const scope = resource.scope ? ` · ${resource.scope}` : "";
     const details = Object.entries(resource.properties || {})
-      .filter(([key]) => key !== "label" && key !== "note" && (!failoverGroup || !["member1", "member2"].includes(key)))
+      // `table` names the resource for live inspection; drawing it under a
+      // label that already shows the same name is pure duplication.
+      .filter(([key, value]) => key !== "label" && key !== "note" && !(key === "table" && value === displayName) && (!failoverGroup || !["member1", "member2"].includes(key)))
       .map(([key, value]) => `${key.replaceAll("-", " ")} ${value}`);
     if (repeated) details.push(`2 ${resource.scope}`);
     const detailSpans = details.map((detail, index) =>

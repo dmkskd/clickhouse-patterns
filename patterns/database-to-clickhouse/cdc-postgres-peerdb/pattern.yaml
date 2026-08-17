@@ -15,7 +15,7 @@ graph: |-
   snapshot:
     postgres:source_tables(label=public.orders + public.orders_existing,note=**Source Postgres** · service `postgres`\nThe replicated user data.\n- not the peerdb-catalog\n- read through a logical replication slot)
       -[initial copy]-> peerdb:snapshot_worker(mirror=two_table_mirror)
-      -[writes Avro]-> minio:snapshot_files(label=snapshot Avro,note=**Transient stage**\nDeleted once ClickHouse has read the objects.)
+      -[writes Avro]-> minio:snapshot_files(bucket=clickhouse,prefix=peerdb/,format=Avro,label=snapshot Avro,note=**Transient stage** · `s3://clickhouse/peerdb/two_table_mirror/`\nDeleted once ClickHouse has read the objects.\n- the mirror's single staging path, shared with the CDC batches)
       -[SNAPSHOT · INSERT INTO orders FROM s3()]-> mergetree:orders(label=test.orders · PeerDB-owned schema)
 
   snapshot:
@@ -25,7 +25,7 @@ graph: |-
   changes:
     postgres:source_tables
       -[logical WAL]-> peerdb:cdc_worker(mirror=two_table_mirror,checkpoint=metadata_last_sync_state)
-      -[writes Avro]-> minio:cdc_batch(label=CDC batch Avro,note=**Transient stage**\nDeleted once ClickHouse has read the objects.)
+      -[writes Avro]-> minio:cdc_batch(bucket=clickhouse,prefix=peerdb/,format=Avro,label=CDC batch Avro,note=**Transient stage** · `s3://clickhouse/peerdb/two_table_mirror/`\nDeleted once ClickHouse has read the objects.\n- same staging path as the snapshot objects)
       -[INSERT INTO _peerdb_raw … FROM s3()]-> mergetree:_peerdb_raw_two_table_mirror@peerdb-internal(label=mirror-wide CDC staging,table=test._peerdb_raw_two_table_mirror,note=**How this table fills**\nPeerDB writes raw CDC Avro here first.\n- Owned by the two_table_mirror job\n- Routed by _peerdb_destination_table_name)
 
   changes:

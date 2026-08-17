@@ -774,9 +774,13 @@ def _explain(exc: Exception, pattern: str | None) -> int:
     elif isinstance(exc, subprocess.CalledProcessError):
         head = "the load step failed"
         hint = "See the load script output above."
-    elif name == "ValidationError":
+    elif name in {"ValidationError", "PatternManifestError"}:
         head = "pattern.yaml is invalid"
         hint = "Fix the fields reported above (unknown field, unknown profile/node, or missing file)."
+        # A manifest error names its own file, which is often not the pattern
+        # that was asked for: loading any pattern reads every manifest.
+        if name == "PatternManifestError":
+            pattern = None
     elif isinstance(exc, FileNotFoundError):
         head = "pattern not found"
         hint = "Run `just list` to see available patterns."

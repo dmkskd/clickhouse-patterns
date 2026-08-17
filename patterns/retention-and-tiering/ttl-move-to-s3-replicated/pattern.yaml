@@ -30,16 +30,16 @@ tradeoffs:
 graph: |-
   replication:
     client:writer
-      -[INSERT · old part]-> replicated-mergetree:events_ch01(label=demo.replicated_tiered_events,node=ch-01,tier=hot)
-      -[Keeper replication · part copy]-> replicated-mergetree:events_ch02(label=demo.replicated_tiered_events,node=ch-02,tier=hot)
+      -[INSERT · old part]-> replicated-mergetree:events_ch01(label=demo.replicated_tiered_events,table=demo.replicated_tiered_events,node=ch-01,tier=hot)
+      -[Keeper replication · part copy]-> replicated-mergetree:events_ch02(label=demo.replicated_tiered_events,table=demo.replicated_tiered_events,node=ch-02,tier=hot)
 
   move_replica_1:
     replicated-mergetree:events_ch01
-      -[MOVE TTL · copies old part]-> minio:cold_copy_01(label=S3 prefix · ttl-replicated/ch-01/)
+      -[MOVE TTL · copies old part]-> minio:cold_copy_01(bucket=clickhouse,prefix=ttl-replicated/ch-01/,label=S3 prefix · ttl-replicated/ch-01/)
 
   move_replica_2:
     replicated-mergetree:events_ch02
-      -[MOVE TTL · copies old part]-> minio:cold_copy_02(label=S3 prefix · ttl-replicated/ch-02/)
+      -[MOVE TTL · copies old part]-> minio:cold_copy_02(bucket=clickhouse,prefix=ttl-replicated/ch-02/,label=S3 prefix · ttl-replicated/ch-02/)
 profiles: [cluster, s3]
 category: retention
 flow: transform

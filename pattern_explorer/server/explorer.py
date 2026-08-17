@@ -5,6 +5,7 @@ import errno
 import json
 import hashlib
 import secrets
+import sys
 import threading
 import webbrowser
 from collections import deque
@@ -28,7 +29,13 @@ from ..orchestration.lifecycle import (
     stop_session,
     validate_and_record_session,
 )
-from ..catalog.manifest import discover_patterns, discover_workspace_patterns, load_pattern
+from ..catalog.manifest import (
+    PATTERNS_DIR,
+    discover_patterns,
+    discover_workspace_patterns,
+    load_pattern,
+    workspace_pattern_dirs,
+)
 from ..orchestration.nodes import connect
 from ..orchestration.topology import compose_topology
 from ..logs import configure_logging
@@ -36,16 +43,52 @@ from .resource_readers import RESOURCE_READERS, ReaderContext
 
 
 
+_BROWSER_SOURCES = (
+    "index.html", "app.css", "util.js", "diagram.js", "topology.js",
+    "session.js", "app.js",
+)
+
+_revision_cache: tuple[tuple[float, ...], str] | None = None
+_last_catalog_error: str | None = None
+
+
+def _catalog_mtimes() -> tuple[float, ...]:
+    """Cheap change signal for the browser sources and every manifest."""
+    sources = [EXPLORER_DIR / name for name in _BROWSER_SOURCES]
+    manifests = sorted(PATTERNS_DIR.glob("*/*/pattern.yaml"))
+    for root in workspace_pattern_dirs():
+        manifests.extend(sorted(root.glob("*/pattern.yaml")))
+    return tuple(path.stat().st_mtime for path in [*sources, *manifests] if path.exists())
+
+
 def _browser_revision() -> str:
-    """Fingerprint the live browser sources and compiled catalog data."""
+    """Fingerprint the live browser sources and compiled catalog data.
+
+    The browser polls this every 1.5s. Rebuilding the catalog each time would
+    re-read and re-validate every manifest on disk, so the digest is kept until
+    a file's mtime moves.
+    """
+    global _revision_cache
+    mtimes = _catalog_mtimes()
+    if _revision_cache is not None and _revision_cache[0] == mtimes:
+        return _revision_cache[1]
     digest = hashlib.sha256()
-    for name in (
-        "index.html", "app.css", "util.js", "diagram.js", "topology.js",
-        "session.js", "app.js",
-    ):
+    for name in _BROWSER_SOURCES:
         digest.update((EXPLORER_DIR / name).read_bytes())
     digest.update(explorer_catalog_json().encode())
-    return digest.hexdigest()
+    revision = digest.hexdigest()
+    _revision_cache = (mtimes, revision)
+    return revision
+
+
+def _report_catalog_error(exc: Exception) -> str:
+    """Log a broken manifest once, then stay quiet while the poll repeats it."""
+    global _last_catalog_error
+    detail = f"{type(exc).__name__}: {str(exc).splitlines()[0]}"
+    if detail != _last_catalog_error:
+        _last_catalog_error = detail
+        print(f"catalog unavailable — {detail}", file=sys.stderr, flush=True)
+    return detail
 
 
 class ExplorerConflict(RuntimeError):
@@ -127,12 +170,12 @@ class ExplorerController:
                     resource=resource,
                     session=status.session,
                     source_changed=getattr(status, "source_changed", False),
-                    clickhouse_client=lambda: connect(status.session.driver_node),
+                    clickhouse_client=lambda node=None: connect(node or status.session.driver_node),
                 ),
                 object_key=object_key,
             )
         except ValueError as exc:
-            if resource.kind in {"kafka-table", "mv", "refreshable-mv", "distributed", "mergetree", "replicated-mergetree", "keepermap", "remote-table"} and "is not present in the live ClickHouse session" in str(exc):
+            if resource.kind in {"kafka-table", "mv", "refreshable-mv", "distributed", "mergetree", "replicated-mergetree", "keepermap", "remote-table"} and "is not present " in str(exc):
                 raise ExplorerConflict(str(exc)) from exc
             raise
 
@@ -378,19 +421,36 @@ class ExplorerRequestHandler(SimpleHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 - http.server API
         parsed_request = urlparse(self.path)
         route = parsed_request.path
+        # These three read every manifest on disk, so one invalid pattern.yaml
+        # fails them all. The browser polls two of them on a timer; without a
+        # boundary here each poll printed a full traceback.
         if route == "/catalog.js":
-            self._javascript(
-                f"window.CLICKHOUSE_PATTERN_CATALOG = {explorer_catalog_json()};\n"
-            )
+            try:
+                catalog = explorer_catalog_json()
+            except Exception as exc:  # noqa: BLE001 - a broken manifest must not kill the page
+                detail = json.dumps(_report_catalog_error(exc))
+                self._javascript(
+                    "window.CLICKHOUSE_PATTERN_CATALOG = "
+                    '{"generatedAt": "build", "patterns": [], "groups": []};\n'
+                    f"window.CLICKHOUSE_PATTERN_CATALOG_ERROR = {detail};\n"
+                )
+                return
+            self._javascript(f"window.CLICKHOUSE_PATTERN_CATALOG = {catalog};\n")
             return
         if route == "/api/config":
             self._json(HTTPStatus.OK, {"interactive": True, "token": self.token})
             return
         if route == "/api/revision":
-            self._json(HTTPStatus.OK, {"revision": _browser_revision()})
+            try:
+                self._json(HTTPStatus.OK, {"revision": _browser_revision()})
+            except Exception as exc:  # noqa: BLE001 - the poller retries; report once
+                self._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": _report_catalog_error(exc)})
             return
         if route == "/api/patterns":
-            self._json(HTTPStatus.OK, self.controller.catalog())
+            try:
+                self._json(HTTPStatus.OK, self.controller.catalog())
+            except Exception as exc:  # noqa: BLE001 - report the manifest, not a stack
+                self._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": _report_catalog_error(exc)})
             return
         if route == "/api/session":
             self._json(HTTPStatus.OK, self.controller.snapshot())
