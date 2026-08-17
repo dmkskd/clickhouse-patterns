@@ -285,19 +285,16 @@ button, input { font: inherit; }
 .pattern-status.wip { --pattern-status-dot: var(--violet); }
 .pattern-status.under-review { --pattern-status-dot: var(--amber); }
 .pattern-status.stable { --pattern-status-dot: var(--green); }
-.catalog-group-intro p, .catalog-group-intro .group-intro-list { color: #99a3bd; font-size: 13px; line-height: 1.6; }
-/* Capped at a readable line length rather than the full viewport. The cap sits on
-   the text elements, not the wrapping div, because `ch` resolves against each
-   element's own font size and the div does not inherit the paragraphs' 13px. */
-.group-intro-lead { margin: 12px 0 0; max-width: 104ch; }
+.catalog-group-intro p, .catalog-group-intro .group-intro-list { color: #b7bfd4; font-size: 15px; line-height: 1.7; }
+.group-intro-lead { margin: 12px 0 0; }
 .group-intro-body { margin: 14px 0 0; }
-.group-intro-body p { margin: 0 0 13px; max-width: 104ch; }
+.group-intro-body p { margin: 0 0 13px; }
 .group-intro-body p:last-child { margin-bottom: 0; }
-.group-intro-list { margin: 0 0 13px; padding: 0; max-width: 104ch; list-style: none; }
+.group-intro-list { margin: 0 0 13px; padding: 0; list-style: none; }
 .group-intro-list li { position: relative; margin: 0 0 7px; padding-left: 15px; }
 .group-intro-list li::before { content: "\2022"; position: absolute; left: 2px; color: var(--accent); }
 .group-intro-list li:last-child { margin-bottom: 0; }
-.group-advisory { max-width: 104ch; margin-top: 16px; border: 1px solid var(--line); border-left: 2px solid var(--amber); border-radius: 8px; background: color-mix(in srgb, var(--panel) 92%, var(--amber)); }
+.group-advisory { margin-top: 16px; border: 1px solid var(--line); border-left: 2px solid var(--amber); border-radius: 8px; background: color-mix(in srgb, var(--panel) 92%, var(--amber)); }
 .group-advisory summary { display: flex; align-items: baseline; gap: 8px; padding: 9px 12px; cursor: pointer; list-style: none; }
 .group-advisory summary::-webkit-details-marker { display: none; }
 .group-advisory summary::after { margin-left: auto; color: var(--dim); content: "+"; font: 700 14px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -392,7 +389,7 @@ button, input { font: inherit; }
 .crumb-sep { color: #47526f; }
 .crumb-current { max-width: 46ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8590ad; letter-spacing: .04em; }
 .pattern-breadcrumb .topology-badge { margin-left: 2px; }
-.pattern-header { max-width: 1500px; margin: 0 auto 18px; padding: 4px 2px 0; }
+.pattern-header { max-width: 1500px; margin: 0 auto 34px; padding: 4px 2px 0; }
 .pattern-title-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .kicker, .section-heading span { color: var(--dim); font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .15em; text-transform: uppercase; }
 .pattern-header h1 { margin: 8px 0 10px; font-size: clamp(20px, 2vw, 28px); letter-spacing: -.02em; }
@@ -402,11 +399,11 @@ button, input { font: inherit; }
 .pattern-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: 1100px; margin: 12px 0 0; }
 .pattern-tag, .catalog-card-tags > .more { padding: 3px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
 .catalog-card-tags > .more { color: var(--dim); }
-.pattern-description { max-width: 900px; margin: 15px 0 0; color: #b7bfd4; font-size: 15px; line-height: 1.7; }
+.pattern-description { max-width: none; margin: 15px 0 0; color: #b7bfd4; font-size: 15px; line-height: 1.7; }
 .pattern-description p { margin: 0; }
 .pattern-description p + p { margin-top: 12px; }
 .pattern-description ul { margin: 10px 0 12px; padding-left: 1.3em; }
-.pattern-description li { margin: 4px 0; padding-left: .1em; color: var(--muted); }
+.pattern-description li { margin: 4px 0; padding-left: .1em; color: var(--muted); break-inside: avoid; }
 .pattern-description li::marker { color: var(--dim); }
 .pattern-description code {
   padding: 0 2px;
