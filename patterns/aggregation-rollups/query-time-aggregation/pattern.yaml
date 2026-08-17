@@ -4,18 +4,16 @@ title: "Query-time aggregation (rollups computed on read)"
 description: |-
   The rollup is computed at read time, directly from the raw rows with a `GROUP BY`.
 
-  For a market-data feed, the same raw table answers both per-minute and per-5-minute candles (open, high, low, close, volume) on demand. Each row is written once, with no write amplification from derived tables, and the bucket size and the metrics are set in the query. The cost is that every query rescans every raw row in its time range.
-
-  First of three patterns for turning raw rows into rollups.
+  For a market-data feed, the same raw table answers both per-minute and per-5-minute candles (`open`, `high`, `low`, `close`, `volume`) on demand, with the bucket size and the metrics set in the query. Each row is written once. The cost is that every query rescans every raw row in its time range.
 tradeoffs:
   benefits:
-    - No write-time work and no extra tables; the raw table is the only thing to keep.
+    - The raw table is the only object to create and maintain, with no derived tables and no write amplification on insert.
     - Any time bucket or metric is available on read without deciding on it up front.
     - Always exact and consistent, with no backfill or derived state to keep in sync.
   drawbacks:
     - Every query rescans every raw row in its time range, so cost grows with the volume retained and the frequency of the queries.
-    - There is no precomputed table to make dashboards fast, so latency tracks raw volume.
-    - Opening and closing prices over wide ranges can be CPU and memory heavy under load.
+    - Interactive dashboards read the raw table on every refresh, so response time grows with the retention window.
+    - Non-additive aggregates such as `argMin`/`argMax` over wide ranges can be CPU and memory heavy under load.
 graph: |-
   ingest:
     client:loader -[INSERT · 3 batches]-> mergetree:trades(label=demo.trades)

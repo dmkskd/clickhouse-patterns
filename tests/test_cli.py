@@ -14,6 +14,21 @@ from pattern_explorer.orchestration.runner import Result
 from pattern_explorer.orchestration.wait import ConvergenceError
 
 
+def test_plain_description_strips_inline_pattern_links():
+    description = "Companion to [[ttl-move-to-s3|TTL move: hot/cold storage with S3]]."
+
+    assert cli._plain_description(description) == "Companion to TTL move: hot/cold storage with S3."
+
+
+def test_show_renders_inline_pattern_link_label(capsys):
+    assert cli._cmd_show(SimpleNamespace(pattern="ttl-move-to-s3-replicated")) == 0
+
+    output = capsys.readouterr().out
+    assert "TTL move: hot/cold storage with S3" in output
+    assert "[[" not in output
+    assert "[]" not in output
+
+
 def test_describe_explains_pattern_without_execution_details(capsys):
     pattern = load_pattern("cdc-mysql-clickhouse")
 
