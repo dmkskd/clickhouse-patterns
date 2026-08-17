@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import signal
 import subprocess
 import sys
@@ -82,6 +83,15 @@ _PROFILE_NAMES = {
 
 def _ordered_key(value: str, preferred: list[str]):
     return (preferred.index(value) if value in preferred else len(preferred), value)
+
+
+# Inline pattern links ([[slug|label]]) are Explorer markup; the terminal
+# renders the plain label, like the Explorer's plain form.
+_PATTERN_LINK_RE = re.compile(r"\[\[[a-z0-9-]+\|([^\]]+)\]\]")
+
+
+def _plain_description(text: str) -> str:
+    return _PATTERN_LINK_RE.sub(r"\1", text)
 
 
 def _schema_summary(pattern) -> str:
@@ -275,7 +285,7 @@ def _cmd_describe(_args) -> int:
             console.print(Padding(Text(pattern.title, style="bold"), (0, 0, 0, 4)))
             console.print(Padding(Text(_flow_summary(pattern), style="cyan"), (0, 0, 1, 4)))
             description = textwrap.fill(
-                pattern.description,
+                _plain_description(pattern.description),
                 width=max(20, reading_width - 4),
                 # Descriptions carry relative pattern links; hyphen breaking would
                 # split `../cdc-postgres-peerdb/` across lines.
@@ -328,7 +338,7 @@ def _cmd_show(args) -> int:
     body = (
         f"[bold]{p.title}[/bold]\n\n"
         f"[cyan]{_flow_summary(p)}[/cyan]\n\n"
-        f"{p.description}\n\n"
+        f"{_plain_description(p.description)}\n\n"
         f"{tradeoffs_section}"
         f"{references_section}"
         f"category   {p.category}\n"

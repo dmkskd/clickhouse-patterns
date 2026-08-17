@@ -40,7 +40,7 @@ before the load step registers it via the Connect REST API.
 ## Connector config
 
 - `topics: events` + `database: demo` writes to `demo.events` (topic name = table name).
-- `value.converter = JsonConverter`, `schemas.enable=false`: plain JSON mapped to columns.
+- `value.converter = JsonConverter`, `schemas.enable=false`: schemaless JSON mapped to columns.
 - `exactlyOnce: false` here. For exactly-once see
   [kafka-push-exactly-once](../kafka-push-exactly-once/).
 

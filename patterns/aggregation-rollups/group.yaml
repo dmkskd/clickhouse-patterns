@@ -6,7 +6,7 @@ intro: |-
   A rollup is an aggregated summary of raw rows, grouped into defined buckets.
   ClickHouse supports several ways to create and maintain these summaries:
 
-  - **On read.** A plain `GROUP BY` over the raw table, calculated when queried.
+  - **On read.** A `GROUP BY` over the raw table, calculated when queried.
   - **At insert time.** As new rows arrive, a materialized view updates a stored summary.
   - **Cascaded.** A materialized view builds a coarser summary from a finer summary already computed.
   - **On a schedule.** A refreshable materialized view reruns a full query and replaces its output.

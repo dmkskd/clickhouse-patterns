@@ -24,7 +24,7 @@ differently:
   combine with ordinary `max`/`min`/`sum` at every level. These compose without
   special handling, and they are what most examples show.
 - `open`, `close` are not additive. The first or last price of five minutes
-  cannot be recovered from five plain numbers without the underlying state. They use a
+  cannot be recovered from five finished numbers without the underlying state. They use a
   full `AggregateFunction`, and the 5-minute view combines the 1-minute states
   with the `-MergeState` combinator (`argMinMergeState`/`argMaxMergeState`) rather
   than the `-State` used against raw.

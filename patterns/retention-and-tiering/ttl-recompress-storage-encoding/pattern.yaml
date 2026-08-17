@@ -10,8 +10,8 @@ description: |-
   read the codec reference below before combining per-column codecs with TTL
   recompression.
 
-  Select the age boundary from real query needs, then compare compression ratio,
-  merge CPU, and historical-query latency. This is rewrite work paced by
+  Select the expiry threshold for recompression from query needs, then
+  compare compression ratio, merge CPU, and historical-query latency. This is rewrite work paced by
   `merge_with_recompression_ttl_timeout` (four hours by default); inspect
   `TTLRecompressMerge` entries in `system.part_log` alongside bytes on disk.
 graph: |-

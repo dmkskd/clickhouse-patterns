@@ -23,8 +23,8 @@ next pattern, `cascading-materialized-views`.)
 Not every column needs the same machinery:
 
 - `high`, `low`, `volume` are additive, so they use `SimpleAggregateFunction`,
-  which stores a plain, readable number. `SELECT * FROM candles_1m` shows them as
-  ordinary values, and they are read back with plain `max`/`min`/`sum`.
+  which stores a finished, readable number. `SELECT * FROM candles_1m` shows them as
+  ordinary values, and they are read back with `max`/`min`/`sum`.
 - `open`, `close` need `argMin`/`argMax`, which cannot be reduced to one running
   number, so they use a full `AggregateFunction` written with
   `argMinState`/`argMaxState` and read back with `argMinMerge`/`argMaxMerge`. In a

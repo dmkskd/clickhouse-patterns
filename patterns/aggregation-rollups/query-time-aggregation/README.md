@@ -15,8 +15,8 @@ loader --INSERT (3 batches)--> demo.trades (MergeTree)
 
 ## The rollups
 
-The same raw table answers both a per-minute and a per-5-minute rollup, each a
-plain GROUP BY:
+The same raw table answers both a per-minute and a per-5-minute rollup, each computed
+with a single `GROUP BY`:
 
 ```sql
 SELECT symbol,

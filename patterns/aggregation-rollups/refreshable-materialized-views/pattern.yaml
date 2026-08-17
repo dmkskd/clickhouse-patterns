@@ -25,7 +25,7 @@ graph: |-
     {mergetree:trades, mergetree:prices} -[REFRESH EVERY 5s]-> refreshable-mv:position_pnl(label=demo.position_pnl,note=**Scheduled recompute**\n- dedup trades with FINAL\n- value each position at the latest price\n- replaces the whole result each refresh)
 
   query:
-    refreshable-mv:position_pnl -[plain numbers on read]-> client:readers(label=P&L readers)
+    refreshable-mv:position_pnl -[finished numbers on read]-> client:readers(label=P&L readers)
 category: aggregation
 flow: transform
 topology: single
