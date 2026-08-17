@@ -4,7 +4,9 @@ title: "Query-time aggregation (rollups computed on read)"
 description: |-
   The rollup is computed at read time, directly from the raw rows with a `GROUP BY`.
 
-  For a market-data feed, the same raw table answers both per-minute and per-5-minute candles (`open`, `high`, `low`, `close`, `volume`) on demand, with the bucket size and the metrics set in the query. Each row is written once. The cost is that every query rescans every raw row in its time range.
+  For a market-data feed, the same raw table answers both per-minute and per-5-minute candles (open, high, low, close, volume) on demand, with the bucket size and the metrics set in the query.
+
+  Each row is written once, with no write amplification from derived tables. The cost is that every query rescans every raw row in its time range.
 tradeoffs:
   benefits:
     - The raw table is the only object to create and maintain, with no derived tables and no write amplification on insert.
