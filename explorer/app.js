@@ -525,14 +525,14 @@
   function renderTradeoffs(pattern) {
     const section = $("tradeoffs");
     const values = pattern.tradeoffs;
-    if (!values || (!values.benefits?.length && !values.drawbacks?.length)) { section.hidden = true; return; }
+    if (!values || (!values.benefits?.length && !values.limitations?.length)) { section.hidden = true; return; }
     section.hidden = false;
     const fill = (element, items) => {
       element.replaceChildren(...(items || []).map((item) => {
         const li = document.createElement("li"); li.textContent = item; return li;
       }));
     };
-    fill($("benefits"), values.benefits); fill($("drawbacks"), values.drawbacks);
+    fill($("benefits"), values.benefits); fill($("limitations"), values.limitations);
   }
 
   // The Definition strip under the diagram shows the pattern's source files in

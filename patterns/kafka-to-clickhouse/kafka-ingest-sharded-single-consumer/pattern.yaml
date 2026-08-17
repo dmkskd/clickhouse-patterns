@@ -11,7 +11,7 @@ tradeoffs:
   benefits:
     - Each Kafka message is read and decoded once, and each event is stored once.
     - The Distributed table applies the normal sharding key to every inserted row.
-  drawbacks:
+  limitations:
     - Shard 1 is the single ingestion point; if it is unavailable, ingestion pauses.
     - Rows assigned to another shard require an inter-shard network hop.
     - The Kafka table and materialized view exist only on shard 1, creating asymmetric DDL.

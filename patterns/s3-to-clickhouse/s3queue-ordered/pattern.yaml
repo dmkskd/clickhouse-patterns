@@ -12,7 +12,7 @@ tradeoffs:
     - ClickHouse owns the loop and the bookkeeping, so no orchestrator is needed to trigger loads or track which files were done.
     - Only a watermark is stored in Keeper, so the state stays tiny no matter how many files are processed.
     - New files are picked up as they land, so ingestion is continuous rather than a one-off.
-  drawbacks:
+  limitations:
     - A file that lands out of lexical order, after the watermark has passed its name, is skipped for good; a writer with key-order jitter loses those files.
     - There is no clean way to recover skipped files; re-reading a range re-ingests files already loaded in it, so recovery leans on a deduplicating target or on using unordered mode from the start.
     - It requires Keeper, and control is inside ClickHouse, so an external orchestrator cannot decide what or when to load.

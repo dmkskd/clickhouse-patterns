@@ -71,7 +71,7 @@ tradeoffs:
     - "A step that fails retries on its own, with its own backoff, rather than stalling the pipeline until someone restarts it. This and the two points above all follow from running replication as Temporal workflows, whose durable execution model records each completed step."
     - "Reading the WAL and writing to ClickHouse are separate steps joined by a staging table, so a slow ClickHouse merge does not back up into the Postgres replication slot."
     - "Workers hold no state, so capacity is added by running more of them."
-  drawbacks:
+  limitations:
     - "Nine services beyond ClickHouse and the source database, where the Altinity sink needs one."
     - "PeerDB needs a store of its own. A second Postgres holds its mirror configuration and Temporal's workflow history, so there is another database to run, secure, and back up, entirely separate from the one being replicated."
     - "No in-flight transformation, because PeerDB has no per-message transform hook on the CDC path, so records land as produced and all shaping happens in ClickHouse."

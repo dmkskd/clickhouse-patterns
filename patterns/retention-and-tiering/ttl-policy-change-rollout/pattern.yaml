@@ -62,6 +62,6 @@ tradeoffs:
   benefits:
     - The ALTER changes only the table definition; no background work starts until you ask for it.
     - Each step targets a chosen partition, so the rollout can be paused and resumed.
-  drawbacks:
+  limitations:
     - Until a partition is materialized, the new policy does not apply to it. An unfinished rollout leaves the table under two policies at once.
     - "ClickHouse does not drive the rollout: every remaining partition needs an explicit `MATERIALIZE TTL`, tracked for example through `system.mutations`."

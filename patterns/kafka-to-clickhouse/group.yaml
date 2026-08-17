@@ -1,5 +1,5 @@
 title: Kafka → ClickHouse
-description: Bring Kafka topics into ClickHouse with the Kafka engine or an external consumer
+description: Bring Kafka topics into ClickHouse with the Kafka engine or an external ingestion service
 icon: kafka-in
 order: 3
 intro: |-

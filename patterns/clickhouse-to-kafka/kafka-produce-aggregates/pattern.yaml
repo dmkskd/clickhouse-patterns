@@ -8,7 +8,7 @@ tradeoffs:
     - ClickHouse consumes and incrementally aggregates the input stream before publishing a compact snapshot back to Kafka.
     - SummingMergeTree safely combines per-block partial counts while preserving a simple GROUP BY query surface.
     - INSERT INTO the Kafka-engine table makes the ClickHouse-to-Kafka write direction explicit and independently testable.
-  drawbacks:
+  limitations:
     - Emitting a snapshot is an explicit operation; this pattern does not continuously publish every change to the aggregate table.
     - Consumers must define whether successive aggregate snapshots replace or accumulate prior values.
     - Kafka-engine input remains at-least-once, so a retry can over-count unless the upstream data or aggregation design is idempotent.

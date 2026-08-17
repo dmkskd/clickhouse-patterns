@@ -94,7 +94,7 @@ def _browser_pattern(pattern) -> dict:
         "tradeoffs": (
             {
                 "benefits": pattern.tradeoffs.benefits,
-                "drawbacks": pattern.tradeoffs.drawbacks,
+                "limitations": pattern.tradeoffs.limitations,
             }
             if pattern.tradeoffs
             else None

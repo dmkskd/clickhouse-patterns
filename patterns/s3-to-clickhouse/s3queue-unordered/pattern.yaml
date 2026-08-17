@@ -12,7 +12,7 @@ tradeoffs:
     - It ingests files regardless of arrival order, so a writer with key-order jitter loses nothing.
     - ClickHouse owns the loop and the exactly-once bookkeeping, so no orchestrator is needed.
     - New files are picked up as they land, so ingestion is continuous.
-  drawbacks:
+  limitations:
     - The processed-file set grows and must be bounded by s3queue_tracked_files_limit and a TTL, where ordered mode kept only a tiny watermark.
     - It requires Keeper, and control is inside ClickHouse, so an external orchestrator cannot decide what or when to load.
     - A file that was already ingested and then edited is not re-read; only new keys are processed.

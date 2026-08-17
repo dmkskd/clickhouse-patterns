@@ -8,7 +8,7 @@ tradeoffs:
     - ClickHouse evaluates the rolling p90 and persists the prior status, so no external stream processor is needed for hysteresis.
     - Separate status and alerts topics expose both the current level and only the FIRING or RESOLVED transitions.
     - The firing and recovery thresholds are ordinary SQL and can be reviewed with the stored state history.
-  drawbacks:
+  limitations:
     - The five-second refresh schedule is a lower bound on detection and recovery latency.
     - APPEND retains one status row per service per evaluation and publishes the level repeatedly even when it does not change.
     - Stateful hysteresis makes status_history operational state; retention and replay semantics need deliberate handling.

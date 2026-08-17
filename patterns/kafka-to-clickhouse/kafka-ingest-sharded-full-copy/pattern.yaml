@@ -12,7 +12,7 @@ tradeoffs:
     - Ingestion is symmetric and simple; every shard independently stores the full stream.
     - No partition-routing filter or inter-shard insert path is required.
     - Each shard retains a complete local copy of the dataset.
-  drawbacks:
+  limitations:
     - Kafka reads, decoding, and storage are multiplied by the number of shards.
     - Distributed queries see cross-shard duplicates and must deduplicate explicitly.
     - Query CPU and network work increase with every additional full copy.

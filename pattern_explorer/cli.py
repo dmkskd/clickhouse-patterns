@@ -297,7 +297,7 @@ def _cmd_describe(_args) -> int:
                 console.print(Padding(Text("TRADE-OFFS", style="bold cyan"), (1, 0, 0, 4)))
                 for heading, values in (
                     ("Benefits", pattern.tradeoffs.benefits),
-                    ("Drawbacks", pattern.tradeoffs.drawbacks),
+                    ("Limitations", pattern.tradeoffs.limitations),
                 ):
                     console.print(Padding(Text(heading, style="bold"), (0, 0, 0, 4)))
                     for value in values:
@@ -321,11 +321,11 @@ def _cmd_show(args) -> int:
     tradeoffs_section = ""
     if p.tradeoffs:
         benefits = "\n".join(f"  + {value}" for value in p.tradeoffs.benefits)
-        drawbacks = "\n".join(f"  - {value}" for value in p.tradeoffs.drawbacks)
+        limitations = "\n".join(f"  - {value}" for value in p.tradeoffs.limitations)
         tradeoffs_section = (
             f"[bold cyan]TRADE-OFFS[/bold cyan]\n"
             f"[bold]Benefits[/bold]\n{benefits}\n"
-            f"[bold]Drawbacks[/bold]\n{drawbacks}\n\n"
+            f"[bold]Limitations[/bold]\n{limitations}\n\n"
         )
     workspace = read_clone_info(p.dir) if p.location in {"workspace", "clone"} else None
     if p.location in {"workspace", "clone"}:
@@ -550,7 +550,7 @@ def _print_pattern_plan(pattern, action: str) -> None:
         blocks.extend([Text(), Text("TRADE-OFFS", style="bold cyan")])
         for heading, values in (
             ("Benefits", pattern.tradeoffs.benefits),
-            ("Drawbacks", pattern.tradeoffs.drawbacks),
+            ("Limitations", pattern.tradeoffs.limitations),
         ):
             blocks.append(Text(heading, style="bold"))
             blocks.extend(Text(f"• {value}") for value in values)

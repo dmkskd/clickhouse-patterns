@@ -71,8 +71,8 @@ graph: |-
 tradeoffs:
   benefits:
     - One concrete benefit.
-  drawbacks:
-    - One concrete cost.
+  limitations:
+    - One concrete limitation.
 ```
 
 ## Compact graph grammar
@@ -184,6 +184,6 @@ link already puts it in the reader's path.
 - Resource labels match actual databases, tables, engines, topics, or services.
 - Snapshot and ongoing-change paths are distinct when their mechanics differ.
 - A client/query lane exists only when the query surface is part of the decision.
-- Benefits and drawbacks describe selection criteria, not generic marketing.
+- Benefits and limitations describe selection criteria, not generic marketing.
 - Live resource inspection is possible only for the currently running pattern.
 - `just diagram` renders without overlap severe enough to hide labels or edges.

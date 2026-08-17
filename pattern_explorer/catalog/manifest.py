@@ -137,12 +137,12 @@ class GroupAdvisory(BaseModel):
 
 
 class Tradeoffs(BaseModel):
-    """Concrete benefits and drawbacks of choosing a pattern."""
+    """Concrete benefits and limitations of choosing a pattern."""
 
     model_config = ConfigDict(extra="forbid")
 
     benefits: list[str] = Field(default_factory=list)
-    drawbacks: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
 
 
 class Verify(BaseModel):

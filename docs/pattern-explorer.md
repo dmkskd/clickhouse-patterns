@@ -377,7 +377,7 @@ use, `just test` reports it as a port conflict rather than a raw trace.
 
 1. `patterns/<slug>/pattern.yaml`: a compact `title`, a structured `graph` that
    drives the Explorer diagram, a detailed `description`, optional `tradeoffs` split into concrete
-   `benefits` and `drawbacks`, optional external `references`,
+   `benefits` and `limitations`, optional external `references`,
    `category`, `flow`, `topology`, descriptive `tags`, runtime `profiles`,
    `driver_node`, and `ready_when` checks. Use one `schema_sql` file; cluster-wide
    objects belong in `ON CLUSTER` statements and node identity belongs in

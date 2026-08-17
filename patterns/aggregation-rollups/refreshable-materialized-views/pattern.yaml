@@ -10,7 +10,7 @@ tradeoffs:
     - A full query runs on each refresh, so FINAL dedup, joins, and window functions are available, none of which an insert-triggered view can do.
     - The result reflects the current raw data, so corrections, cancellations, and moved marks appear on the next refresh with no reconciliation.
     - One recompute serves many readers from a small finished table, instead of every reader rerunning the aggregation.
-  drawbacks:
+  limitations:
     - The summary is stale between refreshes, up to the refresh interval.
     - Each refresh is a full recompute over its scope, so an unbounded query gets more expensive as data grows; bound it to a recent window.
     - The refresh runs on a schedule outside the insert path, so it lags live inserts and adds a background job to operate.

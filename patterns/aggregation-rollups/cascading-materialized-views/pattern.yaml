@@ -10,7 +10,7 @@ tradeoffs:
     - Each coarser level is built from the level below, not the raw data, so every insert is aggregated once per level.
     - Cheapest write path when several levels are kept (1 minute, 5 minute, 1 hour, 1 day).
     - Correct across parts, because the 1 minute level combines partials from each insert and the 5 minute level combines those.
-  drawbacks:
+  limitations:
     - The levels are coupled, so the 5 minute view depends on the 1 minute table and rebuilds have to run in order.
     - Totals, highs and lows stack up trivially, but opening and closing prices need a special combine step, and using the wrong one is a silent error.
     - A late or corrected raw row has to flow through every level, so deeper chains add latency and more to rebuild.

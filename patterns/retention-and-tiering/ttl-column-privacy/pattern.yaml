@@ -48,6 +48,6 @@ references:
 tradeoffs:
   benefits:
     - Reduces the lifetime and storage of sensitive or rarely needed detail without deleting the analytical event.
-  drawbacks:
+  limitations:
     - Expired values become type defaults, so consumers must distinguish a default from a genuine value.
     - Like other TTL actions, physical change waits for background maintenance rather than occurring at an exact instant.

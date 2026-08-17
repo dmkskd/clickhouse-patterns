@@ -25,7 +25,7 @@ tradeoffs:
   benefits:
     - "Keeps the usual two-replica availability model while moving cold capacity off local disks."
     - "Either replica retains a complete cold part and can serve reads when its peer is unavailable."
-  drawbacks:
+  limitations:
     - "The replication factor applies in S3 too: two replicas create two cold object sets."
     - "Cold reads and moves take on object-storage latency, throughput, caching, and egress considerations."
 graph: |-

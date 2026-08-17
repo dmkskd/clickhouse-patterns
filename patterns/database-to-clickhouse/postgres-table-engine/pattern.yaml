@@ -54,7 +54,7 @@ tradeoffs:
     - Reads are always current, so there is no staleness window, no snapshot to bootstrap, and no reconciliation after a source correction.
     - Deletes and updates need no ReplacingMergeTree, no version column, and no FINAL, because ClickHouse stores no history to collapse.
     - The database engine exposes the whole Postgres schema, so a new source table becomes queryable with no ClickHouse DDL at all.
-  drawbacks:
+  limitations:
     - Every query is a fresh round trip to the OLTP database, so a dashboard or a scheduled report puts analytical load directly on production Postgres.
     - Rows arrive row-oriented over the wire and are not stored, so ClickHouse's compression, primary index, skip indexes, and projections are not used here.
     - Only the filters and projections ClickHouse can translate reach Postgres; anything else means transferring the rows and filtering afterwards.

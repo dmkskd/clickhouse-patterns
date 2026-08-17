@@ -12,7 +12,7 @@ tradeoffs:
     - The raw table is the only object to create and maintain, with no derived tables and no write amplification on insert.
     - Any time bucket or metric is available on read without deciding on it up front.
     - Always exact and consistent, with no backfill or derived state to keep in sync.
-  drawbacks:
+  limitations:
     - Every query rescans every raw row in its time range, so cost grows with the volume retained and the frequency of the queries.
     - Interactive dashboards read the raw table on every refresh, so response time grows with the retention window.
     - Non-additive aggregates such as `argMin`/`argMax` over wide ranges can be CPU and memory heavy under load.

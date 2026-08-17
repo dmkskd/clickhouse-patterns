@@ -10,7 +10,7 @@ tradeoffs:
     - One INSERT reads a single file or a whole set through a glob, with no extra engine or service to run.
     - The function infers the schema and reads the common formats, including Parquet, CSV, JSONEachRow, and compressed files.
     - Reads parallelize across the matched files, and s3Cluster spreads them across a cluster for large loads.
-  drawbacks:
+  limitations:
     - Nothing records which files were loaded, so re-running the same INSERT appends the rows again.
     - There is no deduplication or update handling; correcting a row needs a key and ReplacingMergeTree, or reloading a clean table.
     - It is a one-shot pull, so files that arrive later are not picked up; the S3Queue engine loads new files as they land.

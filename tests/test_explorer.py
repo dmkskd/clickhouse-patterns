@@ -236,7 +236,7 @@ def test_catalog_error_is_reported_once_while_it_repeats(monkeypatch, capsys):
     from pattern_explorer.server import explorer as server
 
     monkeypatch.setattr(server, "_last_catalog_error", None)
-    failure = ValueError("patterns/g/broken/pattern.yaml: tradeoffs.drawbacks.1 bad")
+    failure = ValueError("patterns/g/broken/pattern.yaml: tradeoffs.limitations.1 bad")
 
     server._report_catalog_error(failure)
     server._report_catalog_error(failure)
@@ -255,7 +255,7 @@ def test_broken_manifest_returns_an_error_not_a_traceback(explorer_server, monke
     monkeypatch.setattr(server, "_revision_cache", None)
 
     def broken():
-        raise ValueError("patterns/g/broken/pattern.yaml: tradeoffs.drawbacks.1 bad")
+        raise ValueError("patterns/g/broken/pattern.yaml: tradeoffs.limitations.1 bad")
 
     monkeypatch.setattr(server, "explorer_catalog_json", broken)
 

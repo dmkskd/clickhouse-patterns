@@ -142,7 +142,7 @@ fault exposes, and both are in the repository now:
   recovery requires deciding whether to reassign ownership or wait for the node.
 
 Running the same `shard-loss-during-ingest` scenario against both produces the
-argument for choosing between them, which no amount of prose in `drawbacks`
+argument for choosing between them, which no amount of prose in `limitations`
 does as well. That comparison is the deliverable; the fault injection is the
 easy part.
 

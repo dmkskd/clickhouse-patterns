@@ -55,7 +55,7 @@ tradeoffs:
   benefits:
     - Moves whole eligible parts to lower-cost storage rather than rewriting individual rows.
     - Keeps table and query semantics intact while making recent and historical placement explicit.
-  drawbacks:
+  limitations:
     - Needs server storage configuration and careful S3 operational design, rather than SQL alone.
     - Older reads may be slower or cost more, so a cache and workload measurement are often necessary.
 

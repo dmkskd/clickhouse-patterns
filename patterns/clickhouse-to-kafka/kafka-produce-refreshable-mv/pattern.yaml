@@ -8,7 +8,7 @@ tradeoffs:
     - ClickHouse keeps the rolling window and evaluates p90 without an external stream processor.
     - The refreshable materialized view publishes directly to Kafka on a declared schedule.
     - The threshold is ordinary SQL and remains close to the stored analytical state.
-  drawbacks:
+  limitations:
     - The five-second refresh interval is a hard lower bound on alert latency, and slow refreshes delay the next run.
     - APPEND emits the breaching level again on every refresh rather than only on state transitions.
     - The rolling-window query and retained raw samples consume ClickHouse compute and storage.

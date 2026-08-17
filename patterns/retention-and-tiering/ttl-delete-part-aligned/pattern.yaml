@@ -62,6 +62,6 @@ tradeoffs:
   benefits:
     - Removes fully expired parts without a row-level rewrite, greatly reducing TTL write amplification.
     - Makes retention work predictable when partitioning, batch boundaries, and the expiry expression agree.
-  drawbacks:
+  limitations:
     - A part containing one newer row cannot be dropped, so actual deletion may lag the row-level deadline.
     - Requires deliberate partition and ingest design; it cannot rescue mixed-retention data already spread across parts.

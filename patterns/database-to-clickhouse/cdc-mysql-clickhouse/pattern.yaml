@@ -75,7 +75,7 @@ tradeoffs:
     - Cost tracks change volume rather than table size, so a large table with few edits stays cheap where a scheduled full re-read would not.
     - Auto-create supports a connector-owned target while the same stream can land in a deliberately pre-created ClickHouse schema.
     - ReplacingMergeTree versions and delete markers preserve current-state semantics for inserts, updates, and deletes.
-  drawbacks:
+  limitations:
     - Correctness now costs something on every read - a ReplacingMergeTree, a version column, a tombstone, and FINAL - none of which a scheduled full replace needs.
     - No in-flight transformation, because without a broker there is no Kafka Connect single-message transform stage, so records land as Debezium produces them and all shaping happens in ClickHouse.
     - The initial snapshot is a single embedded Debezium process, so large tables load serially and a failure restarts the snapshot rather than resuming it.

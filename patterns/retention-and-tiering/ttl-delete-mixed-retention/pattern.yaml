@@ -46,5 +46,5 @@ tradeoffs:
   benefits:
     - Expresses value-dependent retention in one table-level TTL policy.
     - Gives each row a visible, queryable expiry timestamp.
-  drawbacks:
+  limitations:
     - The calculated expiry must be deterministic and based on row values.

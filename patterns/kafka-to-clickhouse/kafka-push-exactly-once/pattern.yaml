@@ -12,7 +12,7 @@ tradeoffs:
     - KeeperMap records topic-partition offset ranges and insert state so confirmed replayed batches can be skipped.
     - The connector owns consumption, batching, replay handling, and HTTP delivery outside ClickHouse.
     - ReplicatedMergeTree copies accepted rows to a peer replica while either ClickHouse node can serve reads.
-  drawbacks:
+  limitations:
     - Exactly-once adds durable KeeperMap state whose lifecycle must remain aligned with Kafka offsets and the target table.
     - Kafka Connect, the sink plugin, ClickHouse Keeper, and replicated storage all require deployment and monitoring.
     - Ambiguous failures recorded before an insert is confirmed may reinsert a batch and rely on ClickHouse block deduplication.

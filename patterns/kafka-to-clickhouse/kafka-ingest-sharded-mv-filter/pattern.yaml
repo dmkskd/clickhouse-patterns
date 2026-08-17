@@ -12,7 +12,7 @@ tradeoffs:
     - Each event is stored once, with deterministic partition ownership per shard.
     - One symmetric ON CLUSTER schema creates the same Kafka table and view everywhere.
     - Accepted rows are written locally, so ingestion avoids inter-shard inserts.
-  drawbacks:
+  limitations:
     - Every shard reads and decodes every Kafka message using a separate consumer group.
     - The filter statically couples Kafka partition ranges to the shard count.
     - Changing partitions or shards requires an intentional mapping update.

@@ -12,7 +12,7 @@ tradeoffs:
     - ReplicatedMergeTree copies durable data parts to a second ClickHouse node, and either replica can serve reads.
     - One consumer group makes the second replica a hot standby, so if the active consumer fails Kafka reassigns the partition to it.
     - Symmetric ON CLUSTER DDL creates the same ingestion path on both nodes.
-  drawbacks:
+  limitations:
     - Kafka-engine delivery is at-least-once, so retries can insert duplicate rows.
     - With one Kafka partition, only one replica consumes at a time; the second consumer is failover rather than parallelism.
     - Keeper and ReplicatedMergeTree add coordination and replication operations.

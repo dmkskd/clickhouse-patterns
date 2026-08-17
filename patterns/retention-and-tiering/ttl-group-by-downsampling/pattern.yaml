@@ -54,6 +54,6 @@ tradeoffs:
   benefits:
     - Keeps recent detail while shrinking older data to the resolution users need.
     - Avoids maintaining a second historical aggregate table.
-  drawbacks:
+  limitations:
     - Rewrites parts and competes with ordinary merges for resources.
     - Old detail is irrecoverable, and the primary key must accommodate the TTL grouping keys.

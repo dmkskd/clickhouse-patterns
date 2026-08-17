@@ -12,7 +12,7 @@ tradeoffs:
     - Each shard consumes only its own partitions, so there is no N-times Kafka read and no filter that reads then discards rows.
     - Ingestion scales across shards with no single ingestion point, and each shard writes locally.
     - Partition ownership is deterministic, so recovery can reset offsets for just the affected shard's partitions.
-  drawbacks:
+  limitations:
     - StorageKafka2 is experimental and not production ready, and it requires a nightly build plus the allow_experimental_kafka_offsets_storage_in_keeper flag.
     - Assignment is modulo only, so the partition-to-shard map is fixed by the shard count rather than chosen per shard.
     - Dedup holds only if the producer keys each logical event to one partition; the same event split across two partitions still lands on two shards.

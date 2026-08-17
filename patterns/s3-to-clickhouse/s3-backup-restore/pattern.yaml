@@ -14,7 +14,7 @@ tradeoffs:
     - The parts are built offline by a separate worker, so the cost of parsing and compressing an INSERT stream stays off the target ClickHouse cluster.
     - Data moves through S3 with no filesystem access to the cluster, so RESTORE also loads into ClickHouse Cloud, unlike attaching parts from the detached directory.
     - BACKUP and RESTORE can target specific partitions, and ClickHouse verifies each part's checksum on restore.
-  drawbacks:
+  limitations:
     - RESTORE unpacks parts into the target's own storage, so it is a copy through S3, not a zero-copy attach.
     - A surge of small parts on restore can trigger too-many-parts pressure; run OPTIMIZE FINAL before backup and consider stopping merges during a large restore.
     - Both sides need the same table structure, and it is a one-off bulk operation, not a streaming loader.

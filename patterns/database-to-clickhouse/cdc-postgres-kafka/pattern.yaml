@@ -60,7 +60,7 @@ tradeoffs:
     - The SMT chain runs between source and sink, so records can be flattened, filtered, renamed, or routed before any consumer sees them.
     - Topic retention decouples producer from consumer, so a ClickHouse outage is absorbed by the broker instead of stalling the WAL reader.
     - Both halves are replaceable on their own; the sink can be swapped for the Kafka table engine, or the source pointed at MySQL, without touching the other.
-  drawbacks:
+  limitations:
     - Two services to run beyond ClickHouse and the source, where a direct connector needs one.
     - Retention, partition count, and consumer offsets become operational concerns, and a topic that ages out before a consumer catches up loses data.
     - The record shape on the topic is a contract shared by every consumer, so an SMT or schema change has to account for all of them.

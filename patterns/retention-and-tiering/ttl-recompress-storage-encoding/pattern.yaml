@@ -60,6 +60,6 @@ tradeoffs:
   benefits:
     - Reduces historical storage while retaining the same schema and detail.
     - Uses a table-local lifecycle rule instead of a separate rewrite pipeline.
-  drawbacks:
+  limitations:
     - Recompression rewrites every column in each eligible part, and must compete with ordinary merges for resources.
     - Older reads may trade storage savings for additional decompression CPU.
