@@ -2,10 +2,10 @@ manifest_version: 1
 status: wip
 title: "Changing TTL on existing data"
 description: |-
-  By default, `ALTER TABLE ... MODIFY TTL` does two things: it changes the
-  table definition, and it immediately starts applying the new TTL policy to
-  all data the table already holds. On a large table, applying it to every
-  existing part may consume considerable resources.
+  By default, `ALTER TABLE ... MODIFY TTL` both changes the table definition
+  and immediately starts applying the new TTL policy to all data the table
+  already holds. On a large table, applying it to every existing part may
+  consume considerable resources.
 
   To defer that work and decide when it happens:
 
