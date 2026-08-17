@@ -4,15 +4,17 @@ title: "Changing TTL on existing data"
 description: |-
   By default, `ALTER TABLE ... MODIFY TTL` both changes the table definition
   and immediately starts applying the new TTL policy to all data the table
-  already holds. On a large table, applying it to every existing part may
-  consume considerable resources.
+  already holds. On a large table, applying the new policy may unexpectedly
+  consume considerable resources as soon as the command is issued, because
+  it applies to every existing part.
 
-  To defer that work and decide when it happens:
+  To defer work on existing data:
 
   - Run `ALTER TABLE ... MODIFY TTL ...` with `materialize_ttl_after_modify = 0`
     to change only the table definition. Existing parts keep the TTL metadata
     of the previous policy, so background merges do not treat them as expired.
-  - Later, apply the new rule to selected existing data with
+  - New data is written under the new policy from that point on.
+  - Later, apply the new policy to selected existing data with
     `MATERIALIZE TTL IN PARTITION ...`. That is a mutation: it rewrites the
     partition's parts and enforces the new policy on them.
 
