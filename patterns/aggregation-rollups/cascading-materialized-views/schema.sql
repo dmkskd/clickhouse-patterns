@@ -1,9 +1,10 @@
--- Cascading materialized views: the 1m view reads RAW trades, but the 5m view
--- reads the 1m STATES table and re-aggregates them with the -MergeState
--- combinator. Each raw insert is aggregated once per level, not once per grain.
+-- Cascading materialized views: the 1m view triggers on raw tick inserts, but
+-- the 5m view triggers on the 1m STATES table and re-aggregates them with the
+-- -MergeState combinator. A raw insert is aggregated once, at the 1-minute
+-- level; coarser levels never see raw rows.
 CREATE DATABASE IF NOT EXISTS demo;
 
-CREATE TABLE demo.trades
+CREATE TABLE demo.ticks
 (
     symbol LowCardinality(String),
     price  Float64,
@@ -36,7 +37,7 @@ SELECT
     min(price)             AS low,
     argMaxState(price, ts) AS close,
     sum(volume)            AS volume
-FROM demo.trades
+FROM demo.ticks
 GROUP BY symbol, bucket;
 
 -- 5-minute candle states, built from the 1m STATES (this is the cascade).
@@ -53,7 +54,7 @@ CREATE TABLE demo.candles_5m
 ENGINE = AggregatingMergeTree
 ORDER BY (symbol, bucket);
 
--- Fires when mv_1m inserts rows into candles_1m. open/close are already
+-- Triggers when mv_1m inserts rows into candles_1m. open/close are already
 -- AggregateFunction states, so we cannot use argMinState(price) here; we merge
 -- the incoming states into coarser states with the -MergeState combinator.
 -- high/low/volume are plain SimpleAggregateFunction values, so they combine with

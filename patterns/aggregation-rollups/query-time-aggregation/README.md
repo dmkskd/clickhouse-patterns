@@ -3,10 +3,10 @@
 Profiles: `single`. Driver: `ch`.
 
 Level 1 of this group. The rollup is not stored at all; ClickHouse keeps the raw
-trades and computes the summary rows at query time.
+ticks and computes the summary rows at query time.
 
 ```
-loader --INSERT (3 batches)--> demo.trades (MergeTree)
+loader --INSERT (3 batches)--> demo.ticks (MergeTree)
                                    |
         GROUP BY toStartOfMinute(ts) / toStartOfFiveMinutes(ts) on read
                                    v
@@ -26,7 +26,7 @@ SELECT symbol,
        min(price)          AS low,
        argMax(price, ts)   AS close,    -- last price in the bucket, by time
        sum(volume)         AS volume
-FROM demo.trades
+FROM demo.ticks
 GROUP BY symbol, bucket;
 ```
 
@@ -36,8 +36,8 @@ pre-aggregated data.
 
 ## Parts do not matter here
 
-`load.py` inserts the trades in three separate batches, so a single bucket's
-trades are spread across three parts. Because this pattern reads the raw table
+`load.py` inserts the ticks in three separate batches, so a single bucket's
+ticks are split across three parts. Because this pattern reads the raw table
 directly, that split is irrelevant, because the GROUP BY sees every row. The split
 becomes the point in the materialized-view patterns, where the rollup is
 assembled from pre-aggregated pieces stored in those parts.

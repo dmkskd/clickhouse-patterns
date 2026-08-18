@@ -2,9 +2,9 @@ manifest_version: 1
 status: under-review
 title: "Refreshable materialized view (scheduled recompute from raw)"
 description: |-
-  Recomputes a summary on a schedule by rerunning a full query over the raw tables, rather than maintaining it incrementally on each insert. Each run reads the current raw data, so the result reflects corrections, cancellations, and joins to other tables that an insert-triggered view cannot.
+  A refreshable materialized view recomputes a summary on a schedule by rerunning its full query over the raw tables, rather than maintaining it incrementally on each insert. Each run reads the current raw data, so the result reflects corrections, cancellations, and joins to other tables that an insert-triggered view cannot.
 
-  Here it revalues a trading book. Positions from versioned trades are valued against a separately updating prices table, so the unrealized P&L moves when a price changes even though no trade was booked.
+  The example revalues a trading book: positions from versioned trades are valued against a separately updating prices table, so the unrealized P&L moves when a price changes even though no trade was booked.
 tradeoffs:
   benefits:
     - A full query runs on each refresh, so FINAL dedup, joins, and window functions are available, none of which an insert-triggered view can do.

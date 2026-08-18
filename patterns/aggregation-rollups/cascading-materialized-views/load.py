@@ -1,9 +1,9 @@
-"""Load raw trades in several separate INSERTs so a single one-minute bucket is
+"""Load raw ticks in several separate INSERTs so a single one-minute bucket is
 split across multiple parts.
 
-Each ch.insert() is one insert block: it becomes one part and fires mv_1m, whose
-insert into candles_1m in turn fires the cascaded mv_5m. The three batches are
-arranged so every minute's trades land in three different parts -- batch A the
+Each ch.insert() is one insert block: it becomes one part and triggers mv_1m, whose
+insert into candles_1m in turn triggers the cascaded mv_5m. The three batches are
+arranged so every minute's ticks land in three different parts -- batch A the
 opening prints, batch B the mid prints, batch C the closing prints.
 
 The 1m candle for each minute is therefore assembled from partial states in
@@ -46,6 +46,6 @@ BATCHES = [
 
 ch = connect("ch")
 for i, batch in enumerate(BATCHES, 1):
-    ch.insert("demo.trades", batch, column_names=COLUMNS)
-    print(f"insert {i}: {len(batch)} trades -> demo.trades (part -> mv_1m -> mv_5m)")
-print(f"loaded {sum(len(b) for b in BATCHES)} trades across {len(BATCHES)} parts")
+    ch.insert("demo.ticks", batch, column_names=COLUMNS)
+    print(f"insert {i}: {len(batch)} ticks -> demo.ticks (part -> mv_1m -> mv_5m)")
+print(f"loaded {sum(len(b) for b in BATCHES)} ticks across {len(BATCHES)} parts")

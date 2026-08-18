@@ -1,8 +1,8 @@
-"""Load raw trades in several separate INSERTs so a single one-minute bucket is
+"""Load raw ticks in several separate INSERTs so a single one-minute bucket is
 split across multiple parts.
 
-Each ch.insert() is one insert block: it becomes one part AND fires each
-materialized view once. The three batches are arranged so every minute's trades
+Each ch.insert() is one insert block: it becomes one part AND triggers each
+materialized view once. The three batches are arranged so every minute's ticks
 land in three different parts -- batch A carries the opening prints, batch B the
 mid prints, batch C the closing prints.
 
@@ -46,6 +46,6 @@ BATCHES = [
 
 ch = connect("ch")
 for i, batch in enumerate(BATCHES, 1):
-    ch.insert("demo.trades", batch, column_names=COLUMNS)
-    print(f"insert {i}: {len(batch)} trades -> demo.trades (new part, MVs fire)")
-print(f"loaded {sum(len(b) for b in BATCHES)} trades across {len(BATCHES)} parts")
+    ch.insert("demo.ticks", batch, column_names=COLUMNS)
+    print(f"insert {i}: {len(batch)} ticks -> demo.ticks (new part, MVs trigger)")
+print(f"loaded {sum(len(b) for b in BATCHES)} ticks across {len(BATCHES)} parts")

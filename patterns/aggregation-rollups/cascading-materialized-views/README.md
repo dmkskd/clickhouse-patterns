@@ -3,11 +3,12 @@
 Profiles: `single`. Driver: `ch`.
 
 Level 3 of this group. The 1-minute view
-reads the raw trades; the 5-minute view reads the 1-minute rows and combines
-them. ClickHouse never rereads raw to build the 5-minute rollup.
+triggers on inserts into the raw ticks; the 5-minute view triggers on the rows
+the 1-minute view writes and combines them. ClickHouse never rereads raw to
+build the 5-minute rollup.
 
 ```
-loader --INSERT--> demo.trades --MV--> candles_1m --MV--> candles_5m
+loader --INSERT--> demo.ticks --MV--> candles_1m --MV--> candles_5m
  (3 batches)
 ```
 
@@ -29,11 +30,11 @@ differently:
   with the `-MergeState` combinator (`argMinMergeState`/`argMaxMergeState`) rather
   than the `-State` used against raw.
 
-Getting that second case right across levels is what this pattern demonstrates.
+Combining the second case correctly across levels is what this pattern demonstrates.
 
 ## Spanning parts across levels
 
-`load.py` inserts the trades in three batches, so each 1-minute row is assembled
+`load.py` inserts the ticks in three batches, so each 1-minute row is assembled
 from three pieces in three parts (as in the fan-out pattern). The cascade then
 combines those 1-minute rows across three minutes into one 5-minute row:
 
@@ -48,8 +49,8 @@ same window computed directly from raw.
 
 ## When to choose it
 
-Cascade when several resolutions are kept and each insert should be aggregated once
-per level rather than rescanned per resolution. The cost is coupling, since levels
+Cascade when several time buckets are kept and each insert should be aggregated once
+per level rather than once per bucket. The cost is coupling, since levels
 depend on each other, rebuilds have to run in order, and a corrected raw row has
 to flow through every level.
 

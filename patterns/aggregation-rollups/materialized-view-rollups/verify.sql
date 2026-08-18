@@ -1,5 +1,5 @@
 -- Read the 1-minute candles back from the stored states. Each (symbol, minute)
--- was written by up to three separate MV firings (one per insert batch), so the
+-- was written by up to three separate MV runs (one per insert batch), so the
 -- states live in different parts; the -Merge combinators recombine them into one
 -- correct candle. The result must equal query-time-aggregation's ground truth.
 SELECT

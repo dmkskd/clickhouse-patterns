@@ -1,10 +1,12 @@
 manifest_version: 1
-status: under-review
+status: stable
 title: "Cascading materialized views (rollups built from rollups)"
 description: |-
-  Precomputes the per-minute summary rows from raw market data, then builds the per-5-minute rows from the per-minute rows instead of going back to the raw data. Each new row flows one step up the chain (raw to 1 minute to 5 minutes), so the raw market data is read once.
+  Builds each coarser rollup from the level below instead of raw. Each level is an incremental materialized view attached as a trigger to the level below: the 1-minute view runs its aggregation over each newly inserted block of raw ticks, and the 5-minute view triggers on the rows the 1-minute view writes, re-aggregating their states with the `-MergeState` combinator.
 
-  Running totals, highs and lows combine trivially when levels are stacked, but opening and closing prices do not. Getting those right across levels is what this pattern shows.
+  On read, queries group the stored states and combine them with the `-Merge` combinators, as in the fan-out pattern.
+
+  For a market-data feed, running totals, highs and lows combine trivially when levels are stacked, but opening and closing prices do not. This pattern shows how to combine them correctly across levels.
 tradeoffs:
   benefits:
     - Each coarser level is built from the level below, not the raw data, so every insert is aggregated once per level.
@@ -16,10 +18,10 @@ tradeoffs:
     - A late or corrected raw row has to flow through every level, so deeper chains add latency and more to rebuild.
 graph: |-
   ingest:
-    client:loader -[INSERT · 3 batches]-> mergetree:trades(label=demo.trades)
+    client:loader -[INSERT · 3 batches]-> mergetree:ticks(label=demo.ticks)
 
   cascade:
-    mergetree:trades -[MV · argMin/max/min/sumState · per block]-> mv:mv_1m -> mergetree:candles_1m(engine=AggregatingMergeTree,label=1m states) -[MV · argMin/max/min/sumMergeState]-> mv:mv_5m -> mergetree:candles_5m(engine=AggregatingMergeTree,label=5m states)
+    mergetree:ticks -[MV · argMin/max/min/sumState · per block]-> mv:mv_1m -> mergetree:candles_1m(engine=AggregatingMergeTree,label=1m states) -[MV · argMin/max/min/sumMergeState]-> mv:mv_5m -> mergetree:candles_5m(engine=AggregatingMergeTree,label=5m states)
 
   query:
     mergetree:candles_5m -[argMinMerge/maxMerge/... on read]-> client:rollup(label=5m rollup)
@@ -40,15 +42,15 @@ references:
     url: https://clickhouse.com/docs/engines/table-engines/mergetree-family/aggregatingmergetree
 
 schema_sql: schema.sql
-load: load.py          # insert raw trades in three parts; cascade fires per part
+load: load.py          # insert raw ticks in three parts; cascade triggers per part
 
-# 1. all nine trades landed.
+# 1. all nine ticks landed.
 # 2. the 1m level was populated from raw.
 # 3. the single 5m bucket exists.
 # 4. the 5m candle, built only from the 1m states via -MergeState, equals the 5m
 #    window computed directly from raw (zero mismatches) -- the cascade is correct.
 ready_when:
-  - query: "SELECT count() FROM demo.trades"
+  - query: "SELECT count() FROM demo.ticks"
     value: 9
     node: ch
     timeout: 30
@@ -71,7 +73,7 @@ ready_when:
         SELECT symbol, toStartOfFiveMinutes(ts) AS bucket,
                argMin(price, ts) o, max(price) h, min(price) l,
                argMax(price, ts) c, sum(volume) v
-        FROM demo.trades GROUP BY symbol, bucket
+        FROM demo.ticks GROUP BY symbol, bucket
       ) g USING (symbol, bucket)
       WHERE (r.o, r.h, r.l, r.c, r.v) != (g.o, g.h, g.l, g.c, g.v)
     value: 0

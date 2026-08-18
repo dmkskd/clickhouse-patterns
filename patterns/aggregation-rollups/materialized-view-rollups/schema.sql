@@ -1,9 +1,10 @@
--- Materialized view rollups (fan-out): each grain is its own incremental MV
--- reading RAW trades and writing aggregate-function states into an
--- AggregatingMergeTree. The 1m and 5m views both source demo.trades directly.
+-- Materialized view rollups (fan-out): each time bucket is its own incremental
+-- MV, a trigger on demo.ticks that aggregates each inserted block into
+-- aggregate-function states in an AggregatingMergeTree. The 1m and 5m views
+-- both trigger on demo.ticks directly.
 CREATE DATABASE IF NOT EXISTS demo;
 
-CREATE TABLE demo.trades
+CREATE TABLE demo.ticks
 (
     symbol LowCardinality(String),
     price  Float64,
@@ -29,7 +30,7 @@ CREATE TABLE demo.candles_1m
 ENGINE = AggregatingMergeTree
 ORDER BY (symbol, bucket);
 
--- Fires once per inserted block of raw trades; writes one partial state per
+-- Triggers once per inserted block of raw ticks; writes one partial state per
 -- (symbol, minute) present in that block. Different inserts -> different parts.
 CREATE MATERIALIZED VIEW demo.mv_1m TO demo.candles_1m AS
 SELECT
@@ -40,11 +41,12 @@ SELECT
     min(price)        AS low,
     argMaxState(price, ts) AS close,
     sum(volume)       AS volume
-FROM demo.trades
+FROM demo.ticks
 GROUP BY symbol, bucket;
 
--- 5-minute candle states, ALSO built from RAW trades (this is the fan-out:
--- the 5m view re-reads demo.trades rather than reading candles_1m).
+-- 5-minute candle states, ALSO triggered by raw tick inserts (this is the fan-out:
+-- the 5m view triggers on the same demo.ticks inserts rather than reading
+-- candles_1m).
 CREATE TABLE demo.candles_5m
 (
     symbol LowCardinality(String),
@@ -67,5 +69,5 @@ SELECT
     min(price)          AS low,
     argMaxState(price, ts)   AS close,
     sum(volume)         AS volume
-FROM demo.trades
+FROM demo.ticks
 GROUP BY symbol, bucket;

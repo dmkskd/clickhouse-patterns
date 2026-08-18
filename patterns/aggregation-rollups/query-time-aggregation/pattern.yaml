@@ -1,10 +1,10 @@
 manifest_version: 1
-status: under-review
+status: stable
 title: "Query-time aggregation (rollups computed on read)"
 description: |-
   The rollup is computed at read time, directly from the raw rows with a `GROUP BY`.
 
-  For a market-data feed, the same raw table answers both per-minute and per-5-minute candles (open, high, low, close, volume) on demand, with the bucket size and the metrics set in the query.
+  For a market-data feed, the same raw table answers both 1-minute and 5-minute candles (open, high, low, close, volume) on demand, with the time bucket and the metrics set in the query.
 
   Each row is written once, with no write amplification from derived tables. The cost is that every query rescans every raw row in its time range.
 tradeoffs:
@@ -15,16 +15,16 @@ tradeoffs:
   limitations:
     - Every query rescans every raw row in its time range, so cost grows with the volume retained and the frequency of the queries.
     - Interactive dashboards read the raw table on every refresh, so response time grows with the retention window.
-    - Non-additive aggregates such as `argMin`/`argMax` over wide ranges can be CPU and memory heavy under load.
+    - Aggregates that track a value by position, such as `argMin`/`argMax`, keep more state per group than a running total, so wide-range reads cost more CPU and memory.
 graph: |-
   ingest:
-    client:loader -[INSERT · 3 batches]-> mergetree:trades(label=demo.trades)
+    client:loader -[INSERT · 3 batches]-> mergetree:ticks(label=demo.ticks)
 
   query-1m:
-    mergetree:trades -[toStartOfMinute · argMin/argMax/min/max/sum]-> client:rollup_1m(label=1m rollup)
+    mergetree:ticks -[toStartOfMinute · argMin/argMax/min/max/sum]-> client:rollup_1m(label=1m rollup)
 
   query-5m:
-    mergetree:trades -[toStartOfFiveMinutes · same aggregates on read]-> client:rollup_5m(label=5m rollup)
+    mergetree:ticks -[toStartOfFiveMinutes · same aggregates on read]-> client:rollup_5m(label=5m rollup)
 category: aggregation
 flow: transform
 topology: single
@@ -40,11 +40,11 @@ references:
     url: https://clickhouse.com/docs/knowledgebase/materialized-view-rollup-timeseries
 
 schema_sql: schema.sql
-load: load.py          # insert raw trades in three separate parts
+load: load.py          # insert raw ticks in three separate parts
 
-# All nine trades landed; the candles themselves are checked by verify.sql.
+# All nine ticks landed; the candles themselves are checked by verify.sql.
 ready_when:
-  - query: "SELECT count() FROM demo.trades"
+  - query: "SELECT count() FROM demo.ticks"
     value: 9
     node: ch
     timeout: 30
