@@ -39,6 +39,23 @@ button, input { font: inherit; }
 .brand-mark { display: flex; align-items: center; width: 27px; height: 30px; color: var(--text); }
 .brand-mark svg { width: 24px; height: auto; display: block; }
 .sidebar-header sup { font-size: .58em; font-weight: 400; }
+/* Brand mark: a database cylinder and a table grid trade places on a slow
+   cycle (Escher's metamorphosis). Reduced motion rests on the cylinder. */
+.brand-morph-b { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .brand-morph-a { animation: brandMorphA 9s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+  .brand-morph-b { animation: brandMorphB 9s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+  @keyframes brandMorphA {
+    0%,38% { opacity: 1; transform: scale(1); }
+    50%,88% { opacity: 0; transform: scale(.86); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  @keyframes brandMorphB {
+    0%,38% { opacity: 0; transform: scale(.86); }
+    50%,88% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(.86); }
+  }
+}
 .catalog-hero h1 sup { font-size: .38em; font-weight: 500; }
 /* Trademark legend required by the ClickHouse trademark policy. */
 .site-legend { max-width: 1500px; margin: 26px auto 0; color: var(--dim); font-size: 11px; }
