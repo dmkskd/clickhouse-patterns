@@ -4,9 +4,9 @@ title: "Refreshable MV pull from Postgres (scheduled full replace)"
 description: |-
   A refreshable materialized view reruns a full `SELECT` against Postgres on a fixed schedule and atomically replaces a local MergeTree with the result.
 
-  Because `APPEND` is not used, each refresh replaces the table in full. A row deleted in Postgres is simply absent from the next result, so the target never holds two versions of a row to reconcile. Readers query a plain MergeTree without `FINAL`, trailing the source by at most one interval.
+  A refreshable materialized view has two write modes: replace the target with the result, or `APPEND` the result to it. This view uses replace: a row deleted in Postgres disappears with the next refresh, and no stale version is left to reconcile. Readers query a plain MergeTree without `FINAL`; the copy lags Postgres by at most one refresh interval.
 
-  The approach suits any table small enough to re-read in full, such as dimensions, configuration, and lookups. Cost scales with table size rather than change volume, so a large or fast-changing source belongs on CDC instead.
+  The approach suits any table small enough to re-read in full, such as dimensions, configuration, and lookups. Cost scales with table size rather than change volume, so a large or fast-changing source should use CDC instead.
 
   A second view keeps the history. An OLTP source overwrites rows in place, and a full replace discards the previous result on each refresh, so an earlier value cannot be recovered from either side. Reproducing last week's report or auditing a figure that moved overnight both require that record.
 
