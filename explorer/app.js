@@ -795,8 +795,8 @@
   const DIAGRAM_PLACE_KEY = "pe.diagramPlacement";
   const DIAGRAM_COLLAPSE_KEY = "pe.diagramCollapsed";
   const architecturePanel = document.querySelector(".architecture-panel");
-  // The two locations the page layout has used: after the lede (current) and
-  // below the whole description and its links (previous).
+  // The two locations the page layout has used: below the whole description
+  // and its links (current) and after the lede (previous).
   const DIAGRAM_PLACES = ["middle", "bottom"];
 
   function applyDiagramPlacement(place, persist = true) {
@@ -828,10 +828,10 @@
 
   try {
     const savedPlace = localStorage.getItem(DIAGRAM_PLACE_KEY);
-    applyDiagramPlacement(DIAGRAM_PLACES.includes(savedPlace) ? savedPlace : "middle", false);
+    applyDiagramPlacement(DIAGRAM_PLACES.includes(savedPlace) ? savedPlace : "bottom", false);
     applyDiagramCollapsed(localStorage.getItem(DIAGRAM_COLLAPSE_KEY) === "1", false);
   } catch (_error) {
-    applyDiagramPlacement("middle", false);
+    applyDiagramPlacement("bottom", false);
   }
 
   // ===================== ROUTING & PATTERN SELECTION (detail view) =====================

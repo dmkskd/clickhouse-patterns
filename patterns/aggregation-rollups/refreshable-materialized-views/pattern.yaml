@@ -1,5 +1,5 @@
 manifest_version: 1
-status: under-review
+status: stable
 title: "Refreshable materialized view (scheduled recompute from raw)"
 description: |-
   A refreshable materialized view recomputes a summary on a schedule by rerunning its full query over the raw tables, rather than maintaining it incrementally on each insert. Each run reads the current raw data, so the result reflects corrections, cancellations, and joins to other tables that an insert-triggered view cannot.
