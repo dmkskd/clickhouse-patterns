@@ -394,7 +394,7 @@ button, input { font: inherit; }
 .pattern-breadcrumb .topology-badge { margin-left: 2px; }
 .pattern-header { max-width: 1500px; margin: 0 auto 34px; padding: 4px 2px 0; }
 .pattern-title-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.kicker, .section-heading span { color: var(--dim); font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .15em; text-transform: uppercase; }
+.section-heading span { color: var(--dim); font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .15em; text-transform: uppercase; }
 .pattern-header h1 { margin: 8px 0 10px; font-size: clamp(20px, 2vw, 28px); letter-spacing: -.02em; }
 .pattern-status-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin: -2px 0 0; }
 .pattern-provenance { color: var(--dim); font: 700 10px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .07em; text-transform: uppercase; }
@@ -890,7 +890,7 @@ button, input { font: inherit; }
 [data-theme="soft"] .empty-state { color: var(--muted); }
 
 /* ---------- misc text mapping ---------- */
-[data-theme="soft"] .kicker, [data-theme="soft"] .section-heading span { color: var(--dim); }
+[data-theme="soft"] .section-heading span { color: var(--dim); }
 [data-theme="soft"] .session-progress ol { color: var(--muted); }
 [data-theme="soft"] .flow-legend { color: var(--muted); }
 [data-theme="soft"] .resource-inspector-header p { color: var(--muted); }
