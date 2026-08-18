@@ -167,6 +167,63 @@ References.
 [PostHog Snuffle Native import script](https://github.com/PostHog/snuffle/blob/main/scripts/ingest_metrics_parquet.sh),
 [June 2026 Altinity/OSA meetup](https://luma.com/q3jx5f55).
 
+### sync-distributed-insert-mv-local-target
+
+Status. **Outstanding.** Related: the
+[kafka-ingest-sharded-*](../../patterns/kafka-to-clickhouse/) patterns solve
+first-hop partition-to-shard mapping; none of them exercise synchronous
+`Distributed` inserts or a second-hop materialized view's write target.
+
+Background. From an Altinity field report: a Kafka to ClickHouse pipeline on a
+two-shard, two-replica cluster had ingestion lag stuck around 8.6 seconds with a
+healthy cluster and idle CPU. The cluster deliberately ran synchronous
+distributed inserts (`distributed_foreground_insert = 1`) because asynchronous
+mode's spool files outgrew the shared background sender pool
+(`background_distributed_schedule_pool_size`, shared across all `Distributed`
+tables on the server) and ran away to roughly 525K files and tens of GiB. The
+cost of that stability was a fixed cross-shard round-trip per insert: each hot
+materialized view writing to a `Distributed` table spent about 3.3 seconds per
+execution, almost all network wait (`net_ms` close to or above `wall_ms`,
+`cpu_ms` near zero), flat across a 60x throughput range — the signature of a
+fixed per-insert cost, not a row-processing problem. Repointing the second-hop
+(enrichment) view from the `Distributed` wrapper to its `_local`
+`ReplicatedMergeTree` table removed the second synchronous fan-out and halved
+end-to-end lag (8.13 s to 3.87 s average; p95/p99 roughly halved), while
+replication still handled durability.
+
+Boundary condition. Writing to `_local` keeps rows on the consuming node
+instead of routing them by the `Distributed` sharding key. This is safe only
+when placement is distribution-oriented — the blog's target was sharded by
+`cityHash64` on a high-cardinality id. Tables sharded by tenant or another
+locality-sensitive key, and `ReplacingMergeTree` targets whose dedup scope
+depends on the sharding key, need a redesign rather than this optimization.
+
+Demonstrates. A two-hop chain on a sharded, replicated cluster with
+`distributed_foreground_insert = 1`: a Kafka-engine consumer MV lands rows in a
+`Distributed` table (first fan-out), and an enrichment MV reads the local table
+and writes onward. Run the second hop twice — once targeting the `Distributed`
+wrapper, once targeting `_local` — and show the network wait disappearing from
+`system.query_views_log` for the changed view while row counts stay equal. Also
+show that the remaining first-hop round-trip becomes the bottleneck afterwards,
+so readers do not expect the cost to vanish entirely.
+
+Measurement. `system.query_views_log` per-view breakdown of `view_duration_ms`
+versus `ProfileEvents['NetworkReceiveElapsedMicroseconds']` and
+`ProfileEvents['OSCPUVirtualTimeMicroseconds']` (via
+`clusterAllReplicas('{cluster}', ...)`), plus an end-to-end lag KPI from a
+source timestamp and a `DEFAULT now()` ingest timestamp. The per-view query
+from the report doubles as the pattern's diagnostic: `net_ms` ≥ `wall_ms` with
+`cpu_ms` ≈ 0 identifies a view that is waiting, not working. See
+[measuring-metrics.md](measuring-metrics.md).
+
+Infra. `shards` + `kafka`. The sync-insert setting goes in a per-pattern
+`clickhouse_config` users.d fragment so it does not affect other patterns.
+
+References.
+[Pipeline optimization for ClickHouse distributed tables with synchronous inserts (Altinity)](https://altinity.com/blog/pipeline-optimization-for-clickhouse-distributed-tables-with-synchronous-inserts),
+[Distributed engine](https://clickhouse.com/docs/engines/table-engines/special/distributed),
+[query_views_log](https://clickhouse.com/docs/operations/system-tables/query_views_log).
+
 ## Backups and copies
 
 ### backup-restore-s3

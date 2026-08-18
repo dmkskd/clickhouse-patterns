@@ -434,6 +434,12 @@ button, input { font: inherit; }
   font: 600 .9em ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .pattern-description strong { color: var(--text); font-weight: 600; }
+.pattern-description a { color: #4cc3f7; text-decoration: none; }
+.pattern-description a:hover { text-decoration: underline; }
+/* On light schemes the bright blue reads badly; keep links in text color with
+   a quiet underline instead. */
+[data-scheme="light"] .pattern-description a { color: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--dim); }
+[data-scheme="light"] .pattern-description a:hover { color: var(--text); text-decoration-color: currentColor; }
 .pattern-references { display: flex; flex-wrap: wrap; gap: 7px 14px; max-width: 1100px; margin-top: 10px; }
 .pattern-references a { color: #8fa8df; font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-decoration: none; }
 .pattern-references a::before { content: "↗ "; color: #5f6c90; }

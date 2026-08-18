@@ -20,6 +20,12 @@ def test_plain_description_strips_inline_pattern_links():
     assert cli._plain_description(description) == "Companion to TTL move: hot/cold storage with S3."
 
 
+def test_plain_description_strips_external_markdown_links():
+    description = "One [Postgres Table Engine](https://clickhouse.com/docs/engines/table-engines/integrations/postgresql) table."
+
+    assert cli._plain_description(description) == "One Postgres Table Engine table."
+
+
 def test_show_renders_inline_pattern_link_label(capsys):
     assert cli._cmd_show(SimpleNamespace(pattern="ttl-move-to-s3-replicated")) == 0
 

@@ -1,4 +1,4 @@
--- All three access paths read the same live Postgres rows. No FINAL, no
+-- All three options read the same live Postgres rows. No FINAL, no
 -- version column, no tombstones: the deleted row is simply gone, because
 -- ClickHouse is reporting what Postgres currently holds.
 SELECT access_path, id, customer, amount

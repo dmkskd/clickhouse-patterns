@@ -89,9 +89,13 @@ def _ordered_key(value: str, preferred: list[str]):
 # renders the plain label, like the Explorer's plain form.
 _PATTERN_LINK_RE = re.compile(r"\[\[[a-z0-9-]+\|([^\]]+)\]\]")
 
+# External markdown links ([label](url)) are Explorer markup too; the terminal
+# keeps only the label.
+_MD_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)\s]+\)")
+
 
 def _plain_description(text: str) -> str:
-    return _PATTERN_LINK_RE.sub(r"\1", text)
+    return _MD_LINK_RE.sub(r"\1", _PATTERN_LINK_RE.sub(r"\1", text))
 
 
 def _schema_summary(pattern) -> str:

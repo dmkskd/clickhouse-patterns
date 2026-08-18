@@ -19,7 +19,7 @@ test.orders_table_engine` would write rows back into Postgres. That is
 deliberately outside this pattern and absent from the diagram, which covers the
 database-to-ClickHouse read path only.
 
-## The three access paths
+## The three options
 
 The difference between the first two is who defines the schema, and when:
 
@@ -63,7 +63,7 @@ first.
 
 The cost sits on the other side of the wire. Every ClickHouse query becomes a
 Postgres query. Rows arrive row-oriented and are discarded after the query, so
-compression, the primary index, skip indexes, and projections are not used here.
+compression, the primary index, skip indexes, and projections are not used.
 Only the filters and projections ClickHouse can translate are pushed down;
 anything else transfers rows and filters locally. A dashboard pointed at this is
 pointed at production Postgres.

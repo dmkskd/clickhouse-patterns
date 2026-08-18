@@ -147,6 +147,12 @@ window.PE.util = (() => {
   // cards) strips it back to prose.
   function formatDescInline(s) {
     return esc(s.replace(/\s*\n\s*/g, " "))
+      // Descriptions are trusted authoring, like group.yaml intros: inline
+      // [label](url) markdown renders as an external link.
+      .replace(
+        /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+      )
       .replace(/`([^`]+)`/g, "<code>$1</code>")
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
       .replace(
@@ -157,6 +163,7 @@ window.PE.util = (() => {
   function plainDesc(s) {
     return String(s ?? "")
       .replace(/\[\[[a-z0-9-]+\|([^\]]+)\]\]/g, "$1")
+      .replace(/\[([^\]]+)\]\([^)\s]+\)/g, "$1")
       .replace(/[`*]/g, "")
       .replace(/\s*\n\s*/g, " ")
       .trim();

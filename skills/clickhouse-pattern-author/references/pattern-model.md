@@ -157,6 +157,12 @@ description: |-
   move to an S3 volume]].
 ```
 
+External documentation can be linked inline the same way: `[label](url)` in a
+description renders as an external link in the Explorer and as the plain label
+in the CLI. Use it when a named term or bullet has its own primary doc, so the
+link sits where the reader meets the term; keep `references` for links that are
+not tied to one phrase.
+
 **Standing pointer — `related_patterns`** on a pattern. Use for a pattern the
 reader should know about even though the prose does not name it, such as guidance
 to read before changing this table. It renders as "Related guidance" buttons
