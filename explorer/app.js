@@ -556,7 +556,8 @@
     // Clicking the open tab collapses the strip back to just the tabs.
     const alreadyOpen = buttons.some((b) => b.dataset.def === key && b.classList.contains("active"));
     buttons.forEach((b) => b.classList.toggle("active", !alreadyOpen && b.dataset.def === key));
-    if (alreadyOpen) { body.hidden = true; body.innerHTML = ""; return; }
+    if (alreadyOpen) { body.hidden = true; body.innerHTML = ""; $("definition-strip").hidden = true; return; }
+    $("definition-strip").hidden = false;
     body.hidden = false;
     if (key === "verify") {
       const v = def.verify;
@@ -577,22 +578,24 @@
   }
 
   function renderDefinition(pattern) {
-    const strip = $("definition-strip");
     const def = pattern.definition || {};
     const tabs = [["manifest", "Definition", def.manifest], ["structure", "Structure", def.structure], ["load", "Loader", def.load], ["verify", "Verification", def.verify], ["config", "Configuration", def.config]]
       .filter(([, , data]) => data);
-    if (!tabs.length) { strip.hidden = true; return; }
-    strip.hidden = false;
     $("definition-tabs").replaceChildren(...tabs.map(([key, label]) => {
       const b = document.createElement("button");
       b.type = "button"; b.dataset.def = key; b.textContent = label;
       b.addEventListener("click", () => showDefinition(pattern, key));
       return b;
     }));
-    // Collapsed by default: tabs are shown, but no file is loaded until one is clicked.
+    // Collapsed by default: tabs are shown, but no file is loaded until one is
+    // clicked, so the strip holding the file body starts hidden.
     const body = $("definition-body");
     body.hidden = true;
     body.innerHTML = "";
+    $("definition-strip").hidden = true;
+    // The bottom row hides only when neither side has content (static mode and
+    // no definition files); session.js applies the same rule on its renders.
+    $("control-strip").hidden = $("session-panel").hidden && !tabs.length;
   }
 
   function updateZoomControl(hasDiagram = Boolean(canvas.querySelector("svg"))) {
@@ -784,6 +787,52 @@
   $("view-physical").addEventListener("click", () => setArchitectureView("physical"));
   $("modal-view-logical").addEventListener("click", () => setArchitectureView("logical"));
   $("modal-view-physical").addEventListener("click", () => setArchitectureView("physical"));
+
+  // ===================== DIAGRAM PLACEMENT & COLLAPSE =====================
+  // Both are browser-local viewer preferences (localStorage), not per-pattern
+  // settings: the reader keeps the diagram where they like it. The panel is a
+  // single self-contained section, so placement is one insertBefore move.
+  const DIAGRAM_PLACE_KEY = "pe.diagramPlacement";
+  const DIAGRAM_COLLAPSE_KEY = "pe.diagramCollapsed";
+  const architecturePanel = document.querySelector(".architecture-panel");
+  // The two locations the page layout has used: after the lede (current) and
+  // below the whole description and its links (previous).
+  const DIAGRAM_PLACES = ["middle", "bottom"];
+
+  function applyDiagramPlacement(place, persist = true) {
+    const lede = $("pattern-description-lede");
+    architecturePanel.classList.toggle("diagram-bottom", place === "bottom");
+    if (place === "bottom") $("pattern-related").after(architecturePanel);
+    else lede.after(architecturePanel);
+    if (persist) try { localStorage.setItem(DIAGRAM_PLACE_KEY, place); } catch (_error) { /* private mode */ }
+    DIAGRAM_PLACES.forEach((p) => {
+      const button = $(`place-${p}`);
+      button.classList.toggle("active", p === place);
+      button.setAttribute("aria-pressed", String(p === place));
+    });
+  }
+
+  function applyDiagramCollapsed(collapsed, persist = true) {
+    architecturePanel.classList.toggle("diagram-collapsed", collapsed);
+    const button = $("collapse-diagram");
+    button.setAttribute("aria-expanded", String(!collapsed));
+    button.title = collapsed ? "Expand diagram" : "Collapse diagram";
+    button.setAttribute("aria-label", button.title);
+    if (persist) try { localStorage.setItem(DIAGRAM_COLLAPSE_KEY, collapsed ? "1" : "0"); } catch (_error) { /* private mode */ }
+  }
+
+  DIAGRAM_PLACES.forEach((p) =>
+    $(`place-${p}`).addEventListener("click", () => applyDiagramPlacement(p)));
+  $("collapse-diagram").addEventListener("click", () =>
+    applyDiagramCollapsed(!architecturePanel.classList.contains("diagram-collapsed")));
+
+  try {
+    const savedPlace = localStorage.getItem(DIAGRAM_PLACE_KEY);
+    applyDiagramPlacement(DIAGRAM_PLACES.includes(savedPlace) ? savedPlace : "middle", false);
+    applyDiagramCollapsed(localStorage.getItem(DIAGRAM_COLLAPSE_KEY) === "1", false);
+  } catch (_error) {
+    applyDiagramPlacement("middle", false);
+  }
 
   // ===================== ROUTING & PATTERN SELECTION (detail view) =====================
   function updateRoute(slug, replace = false) {
@@ -998,11 +1047,18 @@
       }
       return list;
     });
-    el.replaceChildren(...nodes);
+    // The first block is the lede and renders above the architecture panel;
+    // the rest of the description follows it.
+    const lede = $("pattern-description-lede");
+    const [first, ...rest] = nodes;
+    lede.replaceChildren(...(first ? [first] : []));
+    el.replaceChildren(...rest);
     // [[slug|label]] in a description renders as a button, wired the same way
     // as a group advisory link so it opens the pattern in place.
-    el.querySelectorAll(".pattern-inline-link").forEach((btn) =>
-      btn.addEventListener("click", () => selectPattern(btn.dataset.pattern))
+    [lede, el].forEach((root) =>
+      root.querySelectorAll(".pattern-inline-link").forEach((btn) =>
+        btn.addEventListener("click", () => selectPattern(btn.dataset.pattern))
+      )
     );
   }
 

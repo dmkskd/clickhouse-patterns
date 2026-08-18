@@ -97,74 +97,94 @@
             <div id="pattern-requires" class="pattern-requires" hidden></div>
             <div id="pattern-superseded" class="pattern-superseded" hidden></div>
             <div id="pattern-tags" class="pattern-tags" aria-label="Pattern tags" hidden></div>
+            <div id="pattern-description-lede" class="pattern-description pattern-description-lede"></div>
+
+            <section class="architecture-panel" aria-labelledby="architecture-title">
+              <div class="section-heading">
+                <div><span>Architecture</span><h2 id="architecture-title">Resource flow</h2></div>
+                <div class="architecture-heading-tools">
+                  <!-- The legend sits left of the view switch: it is hidden in the
+                       physical view, and in a right-aligned row only items to its
+                       left would move. -->
+                  <div id="flow-legend" class="flow-legend"></div>
+                  <div id="architecture-view" class="architecture-view" role="group" aria-label="Diagram view" hidden>
+                    <button id="view-logical" type="button" class="active" aria-pressed="true" title="Logical view: data flow between the pattern's ClickHouse resources">
+                      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="3.2" cy="11" r="1.9"/><circle cx="8" cy="4.6" r="1.9"/><circle cx="12.8" cy="11" r="1.9"/><path d="M4.6 9.4 6.6 6.6M9.4 6.6l2 2.8"/></svg>
+                      <span class="visually-hidden">Logical view</span>
+                    </button>
+                    <button id="view-physical" type="button" aria-pressed="false" title="Physical view: containers, ports, and startup order behind the running pattern">
+                      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2.2" y="2.6" width="11.6" height="4.4" rx="1.2"/><rect x="2.2" y="9" width="11.6" height="4.4" rx="1.2"/><path d="M4.6 4.8h.01M4.6 11.2h.01"/></svg>
+                      <span class="visually-hidden">Physical view</span>
+                    </button>
+                  </div>
+                  <div class="zoom-control" role="group" aria-label="Diagram zoom">
+                    <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+                    <button id="zoom-reset" class="zoom-level" type="button" aria-label="Reset diagram zoom" title="Fit diagram">100%</button>
+                    <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+                  </div>
+                  <!-- Diagram position on the page; a browser-local viewer
+                       preference, applied by app.js. -->
+                  <div id="diagram-placement" class="architecture-view diagram-placement" role="group" aria-label="Diagram position">
+                    <button id="place-middle" type="button" aria-pressed="true" title="Diagram below the intro">
+                      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.2" y="2.2" width="11.6" height="11.6" rx="1.2"/><rect x="4.2" y="6.8" width="7.6" height="2.4" fill="currentColor" stroke="none"/></svg>
+                      <span class="visually-hidden">Diagram below the intro</span>
+                    </button>
+                    <button id="place-bottom" type="button" aria-pressed="false" title="Diagram below the description">
+                      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.2" y="2.2" width="11.6" height="11.6" rx="1.2"/><rect x="4.2" y="9.4" width="7.6" height="2.4" fill="currentColor" stroke="none"/></svg>
+                      <span class="visually-hidden">Diagram below the description</span>
+                    </button>
+                  </div>
+                  <button id="collapse-diagram" class="export-button icon-button" type="button" aria-expanded="true" title="Collapse diagram" aria-label="Collapse diagram">
+                    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4-4 4 4"/></svg>
+                  </button>
+                  <button id="download-svg" class="export-button icon-button" type="button" title="Download SVG" aria-label="Download SVG">
+                    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v7"/><path d="M5 6.5 8 9.5l3-3"/><path d="M3 11.5v1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div id="architecture-canvas" class="architecture-canvas expandable" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Architecture diagram. Click to expand; use the mouse wheel to zoom."></div>
+              <!-- The panel's bottom row hosts both the session controls (left)
+                   and the definition tabs (right), so no separate session bar
+                   takes vertical space. The session cluster hides in static
+                   mode; the whole row hides when both sides have no content. -->
+              <div class="definition-head" id="control-strip">
+                <div id="session-panel" class="session-panel" aria-live="polite" hidden>
+                  <div class="session-summary">
+                    <span id="session-indicator" class="session-indicator"></span>
+                    <div>
+                      <span id="session-eyebrow" class="session-eyebrow">Catalog mode</span>
+                      <strong id="session-title">Choose a pattern to explore its architecture</strong>
+                      <span id="session-detail">Start the interactive explorer to run patterns from this page.</span>
+                    </div>
+                  </div>
+                  <div id="session-links" class="session-links"></div>
+                  <div class="session-actions">
+                    <button id="toggle-session-logs" type="button" aria-controls="session-progress" aria-expanded="false" hidden>Show logs</button>
+                    <button id="view-running" type="button" hidden>View running</button>
+                    <button id="validate-session" type="button" hidden>Validate</button>
+                    <button id="stop-session" class="danger" type="button" hidden>Stop session</button>
+                    <button id="start-session" class="primary" type="button" hidden>Launch pattern</button>
+                    <span id="explorer-mode" class="explorer-mode static" title="Browsing a generated catalog. Running the patterns end to end needs the local explorer: just setup && just explore">
+                      <i aria-hidden="true"></i><span id="explorer-mode-label">Static catalog</span>
+                    </span>
+                  </div>
+                </div>
+                <div id="definition-tabs" class="definition-tabs" role="tablist"></div>
+              </div>
+              <div id="definition-strip" class="definition-strip" hidden>
+                <div id="definition-body" class="definition-body"></div>
+              </div>
+              <div id="session-progress" class="session-progress" hidden>
+                <div class="progress-heading"><span>Startup &amp; validation log</span><span id="operation-state"></span><div class="progress-actions"><button id="copy-session-logs" class="progress-icon" type="button" aria-label="Copy log" title="Copy log" hidden>⧉</button><button id="clear-session-logs" class="progress-icon" type="button" aria-label="Clear log" title="Clear log" hidden>⌫</button><button id="close-session-logs" class="progress-close" type="button" aria-label="Close log">×</button></div></div>
+                <ol id="progress-events"></ol>
+              </div>
+            </section>
+
             <div id="pattern-description" class="pattern-description"></div>
             <nav id="pattern-references" class="pattern-references" aria-label="Pattern sources" hidden></nav>
             <nav id="pattern-related" class="pattern-related" aria-label="Related guidance" hidden></nav>
           </div>
         </header>
-
-        <section id="session-panel" class="session-panel" aria-live="polite" hidden>
-          <div class="session-summary">
-            <span id="session-indicator" class="session-indicator"></span>
-            <div>
-              <span id="session-eyebrow" class="session-eyebrow">Catalog mode</span>
-              <strong id="session-title">Choose a pattern to explore its architecture</strong>
-              <span id="session-detail">Start the interactive explorer to run patterns from this page.</span>
-            </div>
-          </div>
-          <div id="session-links" class="session-links"></div>
-          <div class="session-actions">
-            <button id="toggle-session-logs" type="button" aria-controls="session-progress" aria-expanded="false" hidden>Show logs</button>
-            <button id="view-running" type="button" hidden>View running</button>
-            <button id="validate-session" type="button" hidden>Validate</button>
-            <button id="stop-session" class="danger" type="button" hidden>Stop session</button>
-            <button id="start-session" class="primary" type="button" hidden>Launch pattern</button>
-            <span id="explorer-mode" class="explorer-mode static" title="Browsing a generated catalog. Running the patterns end to end needs the local explorer: just setup && just explore">
-              <i aria-hidden="true"></i><span id="explorer-mode-label">Static catalog</span>
-            </span>
-          </div>
-          <div id="session-progress" class="session-progress" hidden>
-            <div class="progress-heading"><span>Startup &amp; validation log</span><span id="operation-state"></span><div class="progress-actions"><button id="copy-session-logs" class="progress-icon" type="button" aria-label="Copy log" title="Copy log" hidden>⧉</button><button id="clear-session-logs" class="progress-icon" type="button" aria-label="Clear log" title="Clear log" hidden>⌫</button><button id="close-session-logs" class="progress-close" type="button" aria-label="Close log">×</button></div></div>
-            <ol id="progress-events"></ol>
-          </div>
-        </section>
-
-        <section class="architecture-panel" aria-labelledby="architecture-title">
-          <div class="section-heading">
-            <div><span>Architecture</span><h2 id="architecture-title">Resource flow</h2></div>
-            <div class="architecture-heading-tools">
-              <!-- The legend sits left of the view switch: it is hidden in the
-                   physical view, and in a right-aligned row only items to its
-                   left would move. -->
-              <div id="flow-legend" class="flow-legend"></div>
-              <div id="architecture-view" class="architecture-view" role="group" aria-label="Diagram view" hidden>
-                <button id="view-logical" type="button" class="active" aria-pressed="true" title="Logical view: data flow between the pattern's ClickHouse resources">
-                  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="3.2" cy="11" r="1.9"/><circle cx="8" cy="4.6" r="1.9"/><circle cx="12.8" cy="11" r="1.9"/><path d="M4.6 9.4 6.6 6.6M9.4 6.6l2 2.8"/></svg>
-                  <span class="visually-hidden">Logical view</span>
-                </button>
-                <button id="view-physical" type="button" aria-pressed="false" title="Physical view: containers, ports, and startup order behind the running pattern">
-                  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2.2" y="2.6" width="11.6" height="4.4" rx="1.2"/><rect x="2.2" y="9" width="11.6" height="4.4" rx="1.2"/><path d="M4.6 4.8h.01M4.6 11.2h.01"/></svg>
-                  <span class="visually-hidden">Physical view</span>
-                </button>
-              </div>
-              <div class="zoom-control" role="group" aria-label="Diagram zoom">
-                <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
-                <button id="zoom-reset" class="zoom-level" type="button" aria-label="Reset diagram zoom" title="Fit diagram">100%</button>
-                <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
-              </div>
-              <button id="download-svg" class="export-button icon-button" type="button" title="Download SVG" aria-label="Download SVG">
-                <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v7"/><path d="M5 6.5 8 9.5l3-3"/><path d="M3 11.5v1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1"/></svg>
-              </button>
-            </div>
-          </div>
-          <div id="architecture-canvas" class="architecture-canvas expandable" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Architecture diagram. Click to expand; use the mouse wheel to zoom."></div>
-          <div id="definition-strip" class="definition-strip" hidden>
-            <div class="definition-head">
-              <div id="definition-tabs" class="definition-tabs" role="tablist"></div>
-            </div>
-            <div id="definition-body" class="definition-body"></div>
-          </div>
-        </section>
 
         <section id="tradeoffs" class="tradeoffs" aria-labelledby="tradeoffs-title" hidden>
           <div class="section-heading"><div><span>Decision guide</span><h2 id="tradeoffs-title">Trade-offs</h2></div></div>

@@ -45,6 +45,14 @@ window.PE.session = (() => {
       $(id).hidden = !visible;
     }
 
+    // The session cluster shares the diagram panel's bottom row with the
+    // definition tabs; the row hides only when neither side has content
+    // (static mode and a pattern without definition files). app.js applies
+    // the same rule when it renders the tabs.
+    function syncControlStrip() {
+      $("control-strip").hidden = $("session-panel").hidden && !$("definition-tabs").childElementCount;
+    }
+
     function renderExplorerMode() {
       const control = ctx.getControl();
       const isLocal = control.mode === "local" && control.interactive;
@@ -102,9 +110,9 @@ window.PE.session = (() => {
       return formatDuration(ended - eventStarted);
     }
 
-    // On the catalog home, a running pattern shows as a chip in the hero (top right)
-    // instead of the bar below. Reuses the real Stop/Open actions; the shared bar is
-    // hidden on the home while this is visible.
+    // On the catalog home, a running pattern shows as a chip in the hero (top right).
+    // Reuses the real Stop/Open actions; the session control row lives inside the
+    // pattern detail view, which the home never shows.
     function renderHeroSession() {
       const el = $("hero-session");
       if (!el) return;
@@ -119,7 +127,6 @@ window.PE.session = (() => {
       // Without a control plane the same slot explains how to get one, so the
       // hero's right column is never empty on the catalog home.
       const hint = home && !control.interactive;
-      shell.classList.toggle("hero-running", show || hint);
       el.hidden = !(show || hint);
       if (!show) {
         el.replaceChildren();
@@ -161,6 +168,7 @@ window.PE.session = (() => {
       const snapshot = control.snapshot;
       const isLocal = control.mode === "local" && control.interactive;
       panel.hidden = !isLocal;
+      syncControlStrip();
       if (!isLocal) return;
       renderExplorerMode();
       $("session-detail").hidden = false;
@@ -168,7 +176,6 @@ window.PE.session = (() => {
       panel.className = "session-panel";
       if (!control.interactive || !snapshot) {
         panel.classList.add("catalog-only");
-        if (selected) panel.classList.add("pattern-context");
         $("session-eyebrow").textContent = selected ? "Static preview" : "Static catalog";
         $("session-title").textContent = selected ? "Run or adapt this pattern locally" : "Browse architecture patterns";
         // Without a control plane the page can only describe patterns, so it names
@@ -194,9 +201,14 @@ window.PE.session = (() => {
 
       const selectedDiffers = Boolean(active && selected && active.slug !== selected.slug);
       // Whenever the page shown is not the running pattern (the catalog home, or a
-      // different pattern's page), the bar is compact: open the running one or stop
-      // it. Full controls (SQL console, schema, logs, validate) live on its page.
+      // different pattern's page), the control row is compact: open the running
+      // one or stop it. Full controls (SQL console, schema, logs, validate) live
+      // on its page.
       const compact = Boolean(active) && (!selected || selectedDiffers);
+      // On the running pattern's own page the breadcrumb already names it, so
+      // the status text collapses to the dot (CSS); the connection detail can
+      // still be revealed via the Local server pill.
+      panel.classList.toggle("own-page", Boolean(active && !busy && selected && !selectedDiffers));
       const messages = progressMessages(snapshot);
       const latestProgress = [...messages].reverse().find((event) => event.type === "progress");
       if (busy) {
@@ -346,6 +358,11 @@ window.PE.session = (() => {
       progress.scrollTop = progress.scrollHeight;
       $("clear-session-logs").hidden = messages.length === 0;
       $("copy-session-logs").hidden = messages.length === 0;
+      // Status text truncates with an ellipsis to keep the control row on one
+      // line; keep the full text one hover away.
+      const titleEl = $("session-title");
+      if (!titleEl.title) titleEl.title = titleEl.textContent;
+      $("session-detail").title = $("session-detail").textContent;
     }
 
     async function refreshSession() {

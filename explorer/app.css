@@ -94,7 +94,11 @@ button, input { font: inherit; }
 
 .pattern-main { min-width: 0; padding: 28px; }
 .session-panel[hidden] { display: none !important; }
-.session-panel { max-width: 1500px; margin: 0 auto 18px; display: grid; grid-template-columns: minmax(280px, 1fr) auto auto; align-items: center; gap: 18px; padding: 14px 16px; border: 1px solid #252c45; border-radius: 9px; background: #0c0f1c; }
+/* The session cluster is not a standalone bar: it sits inside the diagram
+   panel's bottom row (control-strip), left of the definition tabs. Nowrap so
+   long status text truncates (flex wrap would break the row before shrink
+   and the ellipsis could ever engage); narrow screens re-enable wrapping. */
+.session-panel { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px; flex: 1 1 auto; min-width: 0; }
 .session-panel.catalog-only { opacity: .78; }
 .session-summary.clickable { cursor: pointer; }
 .explorer-mode.local { cursor: pointer; }
@@ -104,27 +108,21 @@ button, input { font: inherit; }
 .session-summary #session-title { font-weight: 500; }
 /* Only the pattern link underlines; the "Running pattern:" label stays plain. */
 .session-summary.clickable:hover #session-title .title-link { text-decoration: underline; }
-.app-shell.home-view .session-panel.catalog-only { display: none; }
 .app-shell:not(.home-view) .catalog-hero { display: none; }
-.session-panel.catalog-only.pattern-context { margin-bottom: 14px; padding-block: 10px; }
-.session-panel.catalog-only.pattern-context .session-summary #session-detail { margin-top: 1px; }
-.session-panel.active { border-color: #2b403e; }
-.session-panel.failed { border-color: #51353e; }
-.session-panel.busy { border-color: #51462d; }
 
-/* The session bar sits above the diagram as a compact single row: the eyebrow is
-   dropped, and the explanatory sub-line is hidden except when it carries live
-   status (busy progress, or the driver info revealed by the Local server pill). */
-#pattern-detail #session-panel { margin: 0 auto 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+/* Inside the control row the eyebrow is dropped, and the explanatory sub-line
+   is hidden except when it carries live status (busy progress, or the driver
+   info revealed by the Local server pill). */
 #pattern-detail #session-panel #session-eyebrow { display: none; }
-/* Group the action next to the status text; keep the mode pill pinned right. */
 #pattern-detail #session-panel .session-summary { flex: 0 1 auto; }
-#pattern-detail #session-panel .session-actions { flex: 1 1 auto; }
 #pattern-detail #session-panel #explorer-mode { margin-left: auto; }
-#pattern-detail #session-panel .session-progress { flex-basis: 100%; }
 /* Idle: the green "Launch pattern" button is the label, so hide the
    redundant status text and keep only the status dot. */
 #pattern-detail #session-panel.idle-ready .session-summary > div { display: none; }
+/* On the running pattern's own page the breadcrumb already names it, so the
+   status collapses to the dot; the connection detail still appears when the
+   Local server pill is clicked. */
+#pattern-detail #session-panel.own-page #session-title { display: none; }
 /* Transient pass/fail cue after a validate/run. */
 .session-toast { position: fixed; right: 18px; bottom: 18px; z-index: 90; max-width: 400px; padding: 11px 15px; border-radius: 9px; font-size: 13px; font-weight: 600; line-height: 1.4; color: #eef2fb; background: #141a2b; border: 1px solid #2a3350; box-shadow: 0 14px 36px rgba(0,0,0,.55); opacity: 0; transform: translateY(10px); pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
 .session-toast.show { opacity: 1; transform: translateY(0); }
@@ -148,6 +146,9 @@ button, input { font: inherit; }
 .session-eyebrow { margin-bottom: 3px; color: var(--dim); font: 700 9px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .13em; text-transform: uppercase; }
 .session-summary strong { color: #e9edf8; font-size: 13px; }
 .session-summary #session-detail { margin-top: 3px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+/* The control row stays on one line: long status text truncates with an
+   ellipsis, and renderSession keeps the full text in the hover tooltip. */
+.session-summary #session-title, .session-summary #session-detail { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .session-actions, .session-links { display: flex; align-items: center; gap: 8px; }
 .session-actions button, .session-links a, .definition-tabs button { padding: 7px 10px; border: 1px solid #303955; border-radius: 7px; background: #111526; color: #c9d0e4; font-size: 11px; text-decoration: none; cursor: pointer; white-space: nowrap; }
 .session-actions button:hover, .session-links a:hover, .definition-tabs button:hover { border-color: #526086; color: white; }
@@ -158,7 +159,7 @@ button, input { font: inherit; }
 .vtick { color: var(--green); font-weight: 800; }
 .vcross { color: var(--danger, #f2a1a8); font-weight: 800; }
 .session-actions button:disabled { opacity: .45; cursor: wait; }
-.session-progress { grid-column: 1 / -1; padding-top: 11px; border-top: 1px solid #242b43; }
+.session-progress { padding: 11px 18px 14px; border-top: 1px solid #242b43; }
 .progress-heading { display: flex; align-items: center; gap: 10px; color: var(--dim); font: 700 9px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .11em; text-transform: uppercase; }
 #operation-state { margin-left: auto; }
 .progress-actions { display: flex; align-items: center; gap: 3px; }
@@ -235,8 +236,6 @@ button, input { font: inherit; }
 .hero-session-actions button:hover { border-color: #3a4569; }
 .hero-session-actions .hero-stop { color: #f0a9ad; border-color: #51353e; }
 .hero-session-actions .hero-stop:hover { background: #2a1a1f; border-color: #6a4650; }
-/* While the hero chip shows the running pattern, hide the shared bar below it. */
-.app-shell.home-view.hero-running .session-panel { display: none; }
 
 .why-link { padding: 0; border: 0; background: none; color: #cbd3e8; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: #626d8c; white-space: nowrap; }
 .why-link:hover { color: #ffffff; text-decoration-color: currentColor; }
@@ -400,6 +399,7 @@ button, input { font: inherit; }
 .pattern-tag, .catalog-card-tags > .more { padding: 3px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
 .catalog-card-tags > .more { color: var(--dim); }
 .pattern-description { max-width: none; margin: 15px 0 0; color: #b7bfd4; font-size: 15px; line-height: 1.7; }
+.pattern-description-lede { margin-bottom: 28px; }
 .pattern-description p { margin: 0; }
 .pattern-description p + p { margin-top: 12px; }
 .pattern-description ul { margin: 10px 0 12px; padding-left: 1.3em; }
@@ -459,6 +459,16 @@ button, input { font: inherit; }
 .architecture-view button:disabled { color: #444d68; cursor: default; }
 .architecture-view button:focus-visible { position: relative; z-index: 1; outline: 1px solid #7182b0; outline-offset: -2px; }
 .architecture-canvas { height: min(43vh, 480px); min-height: 320px; overflow: auto; padding: 16px 20px; background: radial-gradient(circle at 52% 46%, #11172b 0, #090b15 55%, #07080f 100%); scrollbar-color: #4b5572 #0a0d17; }
+/* Bottom placement sits right under the reference links; give it the same
+   breathing room the section has in its default spot. */
+.architecture-panel.diagram-bottom { margin-top: 24px; }
+/* Collapsed diagram: the panel shrinks to its header row. */
+.architecture-panel.diagram-collapsed .architecture-canvas,
+.architecture-panel.diagram-collapsed #control-strip,
+.architecture-panel.diagram-collapsed .definition-strip,
+.architecture-panel.diagram-collapsed .session-progress { display: none !important; }
+#collapse-diagram svg { transition: transform .18s ease; }
+.architecture-panel.diagram-collapsed #collapse-diagram svg { transform: rotate(180deg); }
 .architecture-canvas.expandable svg { cursor: zoom-in; }
 .architecture-canvas.expandable .resource { cursor: default; }
 .architecture-canvas:focus-visible { outline: 1px solid #526086; outline-offset: -1px; }
@@ -503,11 +513,14 @@ button, input { font: inherit; }
 .resource-table .empty-value { color: #59627e; font-style: italic; }
 .resource-sample-meta { margin: -4px 0 10px; color: #687392; font-size: 11px; }
 
-/* Definition strip: the pattern's source files under the diagram. */
-.definition-strip { border-top: 1px solid var(--line); }
-.definition-head { display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 12px 18px 0; }
+/* Control strip: session controls (left) and definition tabs (right) share the
+   diagram panel's bottom row; the strip below it holds the open file body.
+   Nowrap, so a long status truncates instead of pushing the tabs to a second
+   line; the mobile media query re-enables wrapping. */
+.definition-head { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px 16px; padding: 12px 18px; border-top: 1px solid var(--line); }
+.definition-head[hidden] { display: none; }
 .definition-head > span { color: var(--dim); font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .13em; text-transform: uppercase; }
-.definition-tabs { display: flex; gap: 4px; }
+.definition-tabs { display: flex; gap: 4px; margin-left: auto; }
 .definition-tabs button.active { color: var(--accent, #f6b73c) !important; border-color: var(--accent, #f6b73c) !important; font-weight: 700; }
 .definition-body { padding: 14px 18px 18px; }
 .definition-body.verify { display: grid; grid-template-columns: minmax(0, 1fr) minmax(140px, 320px); gap: 16px; align-items: start; }
@@ -528,8 +541,8 @@ button, input { font: inherit; }
   .app-shell { grid-template-columns: 1fr; }
   .pattern-sidebar { position: static; width: auto; height: auto; max-height: 370px; border-right: 0; border-bottom: 1px solid var(--line); }
   .pattern-main { padding: 20px 14px; }
-  .session-panel { grid-template-columns: 1fr; }
-  .session-progress { grid-column: 1; }
+  /* On narrow screens the control row may wrap again instead of truncating. */
+  .definition-head, #pattern-detail .session-panel { flex-wrap: wrap; }
   .catalog-hero { grid-template-columns: 1fr; gap: 24px; }
   .hero-session { min-width: 0; border-top: 1px solid #2b3450; border-left: 0; padding-left: 0; }
   .catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -658,8 +671,7 @@ button, input { font: inherit; }
   border: 0; box-shadow: var(--pressed-sm);
 }
 
-/* ---------- session bar ---------- */
-[data-theme="soft"] .session-panel { border: 0; background: var(--bg); box-shadow: var(--raised-sm); }
+/* ---------- session controls ---------- */
 [data-theme="soft"] .session-panel.catalog-only { opacity: 1; }
 [data-theme="soft"] .session-summary strong { color: var(--text); }
 [data-theme="soft"] .session-actions button, [data-theme="soft"] .session-links a, [data-theme="soft"] .definition-tabs button {
@@ -987,10 +999,6 @@ button, input { font: inherit; }
 [data-theme="flat"][data-scheme="light"] .pattern-option.active strong { color: var(--text); }
 [data-theme="flat"][data-scheme="light"] .pattern-option.pending strong { color: var(--dim); }
 
-[data-theme="flat"][data-scheme="light"] .session-panel { background: var(--panel); }
-[data-theme="flat"][data-scheme="light"] .session-panel.active { border-color: #a8c6b8; }
-[data-theme="flat"][data-scheme="light"] .session-panel.failed { border-color: #d9b8bd; }
-[data-theme="flat"][data-scheme="light"] .session-panel.busy { border-color: #d8c39f; }
 [data-theme="flat"][data-scheme="light"] .session-summary strong { color: var(--text); }
 [data-theme="flat"][data-scheme="light"] .session-summary .session-group,
 [data-theme="flat"][data-scheme="light"] .session-summary .running-label { color: var(--muted); }
@@ -1161,7 +1169,6 @@ button, input { font: inherit; }
 [data-theme="soft"][data-scheme="dark"] .group-card,
 [data-theme="soft"][data-scheme="dark"] .architecture-panel,
 [data-theme="soft"][data-scheme="dark"] .tradeoffs,
-[data-theme="soft"][data-scheme="dark"] .session-panel,
 [data-theme="soft"][data-scheme="dark"] .filter-group button,
 [data-theme="soft"][data-scheme="dark"] .session-actions button,
 [data-theme="soft"][data-scheme="dark"] .session-links a,
@@ -1275,9 +1282,8 @@ button, input { font: inherit; }
   border-color: var(--amber); background: var(--amber);
 }
 
-/* ---------- soft: definition strip spacing + physically pressed tabs ---------- */
-[data-theme="soft"] .definition-strip { border-top: 1px solid var(--groove); }
-[data-theme="soft"] .definition-head { padding: 14px 18px 14px; }
+/* ---------- soft: control strip spacing + physically pressed tabs ---------- */
+[data-theme="soft"] .definition-head { padding: 14px 18px 14px; border-top: 1px solid var(--groove); }
 [data-theme="soft"] .definition-tabs { gap: 8px; }
 [data-theme="soft"] .definition-tabs button.active {
   border: 0 !important;

@@ -173,7 +173,7 @@ def test_flat_light_reuses_soft_palette_with_flat_borders(tmp_path: Path):
     assert '[data-theme="flat"][data-scheme="light"] .tradeoff-card { background: var(--panel); }' in css
     assert ".tradeoff-card { border: 1px solid var(--line);" in css
     assert ".architecture-panel, .tradeoffs { overflow: hidden; }" in css
-    assert '[data-theme="flat"][data-scheme="light"] .session-panel.active { border-color: #a8c6b8; }' in css
+    assert '[data-theme="flat"][data-scheme="light"] .session-panel.active .session-indicator' in css
 
 
 def test_catalog_compiler_writes_data_without_ui_markup(tmp_path: Path):
