@@ -25,8 +25,13 @@
   <div class="app-shell">
     <aside class="pattern-sidebar">
       <button id="show-catalog-home" class="sidebar-header" type="button" aria-label="Open the Pattern Explorer home">
-        <div class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-        <div><strong>ClickHouse</strong><span>Pattern Explorer</span></div>
+        <!-- Neutral project mark (connected resources), not the ClickHouse
+             logomark: the trademark policy allows the word mark but not the
+             logo on third-party sites. -->
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="3.2" cy="11" r="1.9"/><circle cx="8" cy="4.6" r="1.9"/><circle cx="12.8" cy="11" r="1.9"/><path d="M4.6 9.4 6.6 6.6M9.4 6.6l2 2.8"/></svg>
+        </div>
+        <div><strong>ClickHouse<sup>®</sup></strong><span>Pattern Explorer</span></div>
       </button>
       <label class="pattern-search">
         <span>Find a pattern</span>
@@ -46,9 +51,9 @@
             <div class="kicker">Pattern catalog</div>
             <div class="catalog-hero-title-row">
               <span class="catalog-hero-logo" aria-hidden="true">
-                <svg viewBox="0 0 34 26" fill="currentColor"><rect width="4" height="26"/><rect x="7" width="4" height="26"/><rect x="14" width="4" height="26"/><rect x="21" width="4" height="26"/><rect x="28" y="9" width="4" height="8"/></svg>
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="3.2" cy="11" r="1.9"/><circle cx="8" cy="4.6" r="1.9"/><circle cx="12.8" cy="11" r="1.9"/><path d="M4.6 9.4 6.6 6.6M9.4 6.6l2 2.8"/></svg>
               </span>
-              <h1 id="catalog-home-title">Explore ClickHouse architectures</h1>
+              <h1 id="catalog-home-title">Explore ClickHouse<sup>®</sup> architectures</h1>
               <span class="status-chip">WIP</span>
             </div>
             <p>Compare runnable patterns, understand their trade-offs, and adapt them for your own systems. <button type="button" id="why-open" class="why-link" aria-controls="why-more" aria-expanded="false">Read more</button></p>
@@ -194,6 +199,8 @@
           </div>
         </section>
       </div>
+      <!-- Required by the ClickHouse trademark policy on pages using the mark. -->
+      <footer class="site-legend">ClickHouse is a registered trademark of ClickHouse, Inc. <a href="https://clickhouse.com/" target="_blank" rel="noopener noreferrer">https://clickhouse.com/</a></footer>
     </main>
   </div>
   <dialog id="diagram-modal" class="diagram-modal" aria-labelledby="diagram-modal-title">
