@@ -1,5 +1,5 @@
 title: Rollups
-description: Turn raw rows into pre-aggregated summaries
+description: Aggregate raw data into summary views
 icon: rollup
 order: 1
 intro: |-
