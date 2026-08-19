@@ -3,7 +3,7 @@
 Profiles: `single`, `postgres`. Driver: `ch`.
 
 Level 1 of this group. Nothing is replicated or stored and there is no pipeline
-to operate: ClickHouse holds a declaration of where the Postgres table is and
+to operate. ClickHouse holds a declaration of where the Postgres table is and
 resolves it on every read.
 
 ```text
@@ -13,7 +13,7 @@ public.orders --+-> test.orders_table_engine  (table engine)     -+
                 `-> postgresql(...)           (table function)   -'
 ```
 
-Data moves in one direction here, out of Postgres and into a ClickHouse query.
+Data moves in one direction, out of Postgres and into a ClickHouse query.
 The `PostgreSQL` table engine is also writable, so `INSERT INTO
 test.orders_table_engine` would write rows back into Postgres. That is
 deliberately outside this pattern and absent from the diagram, which covers the
@@ -28,45 +28,45 @@ The difference between the first two is who defines the schema, and when:
 | Statements | one `CREATE TABLE` per source table | one `CREATE DATABASE` for all of them |
 | Column types | declared locally, with the mapping chosen | inferred by ClickHouse at query time |
 | New table in Postgres | invisible until DDL is written for it | queryable immediately |
-| Source schema changes | the table breaks on the next read | followed automatically |
+| Source schema changes | a new column is ignored, a declared one that is dropped or renamed breaks the next read | followed automatically |
 
 **Table engine.** `CREATE TABLE ... ENGINE = PostgreSQL(host, db, table, user,
-password)`. One ClickHouse table bound to one Postgres table, with the column
-types declared on the ClickHouse side. Because that declaration is local, a type
-can be widened or a `LowCardinality` pinned, and the object is stable enough to
-grant on. Use it for a table queried often and presented on deliberate terms.
+password)`. Use it for a table queried often, where a type is worth widening or a
+`LowCardinality` worth pinning, and where a stable object is needed to grant on.
 
-**Database engine.** `CREATE DATABASE pg_schema ENGINE = PostgreSQL(...)` maps
-the whole schema in one statement. Nothing is declared per table, so names and
-types resolve when a query runs, so the mapping tracks the source and a table added in
-Postgres needs no ClickHouse DDL. Use it for exploration and for schemas that
-change often. The cost is that the types are no longer a local choice, and a
-source change reaches the queries unannounced.
+**Database engine.** `CREATE DATABASE pg_schema ENGINE = PostgreSQL(...)`. Use it
+for exploration and for schemas that change often, accepting that the column
+types cannot be declared and that a schema change in Postgres takes effect in
+queries as soon as it is made.
 
-**Table function.** `postgresql('postgres:5432', 'test', 'orders', ...)` inline in
-the query, creating no object and needing no DDL or grant. Use it for one-off reads
-and inside `INSERT INTO ... SELECT` when seeding a local table by hand.
+**Table function.** `postgresql('postgres:5432', 'test', 'orders', ...)`. Use it
+for one-off reads and inside `INSERT INTO ... SELECT` when seeding a local table
+by hand.
 
-`verify.sql` reads all three and returns identical rows, because all three do the
-same thing.
+`verify.sql` reads all three and returns identical rows.
+
+## Types
+
+The two type systems do not line up exactly, so the mapping is worth checking
+for each column. Nothing is validated when the table is created, and a
+nullable column declared without `Nullable` reads its NULLs as empty strings
+rather than failing.
 
 ## What it costs
 
 `load.py` applies an `INSERT`, an `UPDATE`, and a `DELETE` directly to
 `public.orders`, then reads ClickHouse again. The new row is present, the updated
-amount is 250, and the deleted row is gone on the very next `SELECT`.
+amount is 250, and the deleted row is gone on the next `SELECT`.
 
 The CDC patterns in this group reach the same three results only by adding a
 `ReplacingMergeTree`, a version column, a tombstone, and `FINAL` on every read.
-None of that applies here, because no second copy exists to disagree with the
-first.
+None of that applies here, because there is no second copy to reconcile with the
+source.
 
-The cost sits on the other side of the wire. Every ClickHouse query becomes a
-Postgres query. Rows arrive row-oriented and are discarded after the query, so
-compression, the primary index, skip indexes, and projections are not used.
-Only the filters and projections ClickHouse can translate are pushed down;
-anything else transfers rows and filters locally. A dashboard pointed at this is
-pointed at production Postgres.
+What the trade-offs cannot show is how little is pushed down. Only the filters
+and projections ClickHouse can translate reach Postgres, and anything else
+transfers rows and filters them locally, so a `GROUP BY` over a large source
+table moves the rows before aggregating them.
 
 ## The same shape with MySQL
 

@@ -2,17 +2,15 @@ manifest_version: 1
 status: under-review
 title: "Postgres table engine (query in place, no copy)"
 description: |-
-  Reads Postgres tables directly from ClickHouse without copying any data.
+  ClickHouse queries Postgres tables directly, without keeping a copy.
 
-  Three options are compared:
+  ClickHouse offers three ways to do this:
 
-  - **[Postgres Table Engine](https://clickhouse.com/docs/engines/table-engines/integrations/postgresql):** one ClickHouse table declared locally, bound to one Postgres table, with the column types chosen at declaration time.
+  - **[Postgres Table Engine](https://clickhouse.com/docs/engines/table-engines/integrations/postgresql):** binds one locally declared ClickHouse table to one Postgres table, with the column types chosen at declaration time.
   - **[Postgres Database Engine](https://clickhouse.com/docs/engines/database-engines/postgresql):** maps an entire schema in a single statement and requires no per-table DDL. Its tables and types are discovered when queried, so a table added in Postgres becomes queryable without any change in ClickHouse.
   - **[postgresql() table function](https://clickhouse.com/docs/sql-reference/table-functions/postgresql):** carries the connection inline and creates no ClickHouse object.
 
-  Every read in ClickHouse sends a fresh query to Postgres, so the results always reflect the current state in Postgres.
-
-  The corresponding limitation is that every ClickHouse query becomes a Postgres query, so the analytical load lands on the operational database.
+  In all three cases, every read in ClickHouse issues a query to the Postgres server, and as Postgres executes that query, results always reflect the current state of the source table.
 graph: |-
   query:
     postgres:orders(label=public.orders,note=**Live OLTP source**\nThe application writes here directly; ClickHouse only reads it.\n- every read sees the current state\n- no stale rows on a change)
@@ -42,15 +40,17 @@ references:
 
 tradeoffs:
   benefits:
-    - The setup is one DDL statement, or none with the table function, and there is no connector to run and no replication state to preserve.
+    - Setup is limited to ClickHouse DDL, with no connector to run and no replication state to preserve.
     - Reads are always current, so there is no staleness window, no snapshot to bootstrap, and no reconciliation after a source correction.
-    - Deletes and updates need no ReplacingMergeTree, no version column, and no FINAL, as ClickHouse stores no history to collapse.
+    - Deletes and updates in Postgres appear on the next read, without a ReplacingMergeTree, a version column, or FINAL, because ClickHouse stores no history to collapse.
     - The database engine exposes the whole Postgres schema, so a new source table becomes queryable with no ClickHouse DDL.
   limitations:
-    - Every query is a fresh round trip to the OLTP database, so a dashboard or a scheduled report puts analytical load directly on production Postgres.
+    - Every ClickHouse query against these tables is executed by the Postgres server, adding to its load.
     - As the query is executed by the Postgres server, ClickHouse's columnar optimizations (compression, primary index, skip indexes, projections) do not apply.
-    - Joining a Postgres table to a large local ClickHouse table re-reads the remote side on every query.
-    - Postgres credentials live in the DDL or the query, so access control and secret rotation become a ClickHouse concern.
+    - Every query is issued to the Postgres server, so it carries round-trip latency and data transfer costs.
+    - Query completion depends on the availability of the Postgres server, a system outside ClickHouse's control.
+    - Postgres and ClickHouse have different type systems, so a Postgres column type does not always have an exact ClickHouse equivalent.
+    - No connection to Postgres is opened when the table is created, so a wrong host, a missing table, or an unusable column type is only reported on the first read.
 
 schema_sql: schema.sql
 load: load.py
