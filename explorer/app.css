@@ -328,9 +328,9 @@ button, input { font: inherit; }
 .group-intro-footer { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px 32px; }
 .group-intro-footer .group-related, .group-intro-footer .group-links { margin-top: 0; }
 .group-related { margin-top: 18px; }
-.group-related > span, .group-links > span { display: block; margin-bottom: 5px; color: #6f7b98; font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em; text-transform: uppercase; }
+.group-related > span, .group-links > span { display: block; margin-bottom: 5px; color: #6f7b98; font: 700 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em; text-transform: uppercase; }
 .group-related ul, .group-links ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
-.group-related li, .group-links li { position: relative; padding-left: 14px; color: #8a94ad; font-size: 12.5px; line-height: 1.5; }
+.group-related li, .group-links li { position: relative; padding-left: 14px; color: #8a94ad; font-size: 15px; line-height: 1.5; }
 .group-related li::before, .group-links li::before { content: "•"; position: absolute; left: 2px; color: var(--dim); }
 .group-link { padding: 0; border: 0; background: none; color: var(--muted); font: inherit; cursor: pointer; }
 .group-link:hover { color: var(--blue); text-decoration: underline; }
@@ -446,8 +446,8 @@ button, input { font: inherit; }
 [data-scheme="light"] .pattern-description a { color: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--dim); }
 [data-scheme="light"] .pattern-description a:hover { color: var(--text); text-decoration-color: currentColor; }
 .pattern-references { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 32px; max-width: 1100px; margin: 18px 0 16px; }
-.references-head { grid-column: 1 / -1; display: block; margin-bottom: 5px; color: #6f7b98; font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em; text-transform: uppercase; }
-.pattern-references a { color: var(--muted); font-size: 12.5px; line-height: 1.5; text-decoration: none; }
+.references-head { grid-column: 1 / -1; display: block; margin-bottom: 5px; color: #6f7b98; font: 700 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em; text-transform: uppercase; }
+.pattern-references a { color: var(--muted); font-size: 15px; line-height: 1.5; text-decoration: none; }
 .pattern-references a::before { content: "•"; display: inline-block; margin-right: 7px; color: var(--dim); }
 .pattern-references a:hover { color: var(--blue); text-decoration: underline; }
 .pattern-related { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; max-width: 1100px; margin-top: 10px; }
