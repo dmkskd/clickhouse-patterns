@@ -24,8 +24,8 @@ name; a pattern belongs to the group folder it lives in.
 ```yaml
 title: Rollups                       # full family title
 label: Rollups                       # short filter-chip label (defaults to title)
-description: Turn raw rows into pre-aggregated summaries   # one line, card-fit
-icon: transform                      # transform | database | kafka-in | kafka-out | clone
+description: Aggregate raw data into summary views   # one line, card-fit
+icon: rollup                         # database | s3 | kafka-in | kafka-out | clock | rollup | clone
 order: 1                             # display order across groups
 intro: |-
   First paragraph, shown on the group landing.
@@ -34,6 +34,10 @@ intro: |-
 related:                             # optional cross-links to sibling groups
   - group: kafka-to-clickhouse
     note: To stream the raw events into ClickHouse first
+links:                               # optional curated external reading
+  - label: "Performance impact of materialized views in ClickHouse (Altinity)"
+    url: https://altinity.com/blog/performance-impact-of-materialized-views-in-clickhouse
+    note: One line saying why this is worth reading (hover tooltip)
 ```
 
 `category` and `flow` stay on each pattern as plain taxonomy; grouping is the
@@ -174,12 +178,14 @@ related_patterns:
     note: Read before changing this table's TTL on existing data.
 ```
 
-**Group advisory — `advisories[].link_pattern`** in `group.yaml`. Use when a
-caution applies across the whole family and one pattern explains it. It appears
-on the group landing page, before the reader has chosen a pattern.
-
 **Group cross-reference — `related`** in `group.yaml`, linking group to group.
 Use for a neighbouring family, not for an individual pattern.
+
+**Group external reading — `links`** in `group.yaml`. Use for curated external
+articles that apply across the whole family; the `note` says why the link is
+worth reading. They render as a "Further reading" list on the group landing.
+An article about one pattern's specific mechanism belongs in that pattern's
+`references` instead.
 
 Do not point at the same slug both inline and in `related_patterns`; the inline
 link already puts it in the reader's path.

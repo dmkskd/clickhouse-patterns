@@ -16,18 +16,6 @@ intro: |-
   TTL policies have different write, CPU, and storage costs. Check each pattern
   for its trade-offs and what to monitor.
 
-advisories:
-  - title: "Changing a TTL policy"
-    summary: "On a populated table, a TTL change is an operational change."
-    body: |-
-      `ALTER TABLE ... MODIFY TTL` materializes the new policy for existing
-      parts by default. DELETE, RECOMPRESS, and GROUP BY can therefore start
-      broad background removal or rewrite work; MOVE re-evaluates existing
-      parts for relocation. Set `materialize_ttl_after_modify = 0` to stage the
-      rollout, then materialize selected partitions deliberately.
-    link_label: "Read the rollout guidance"
-    link_pattern: ttl-policy-change-rollout
-
 related:
   - group: aggregation-rollups
     note: For materialized-view rollups maintained at ingest rather than as data expires

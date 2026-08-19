@@ -34,7 +34,7 @@ driver_node: ch
 profiles: [single]
 
 references:
-  - label: "ObsessionDB: feeding OHLC candles to TradingView from ClickHouse (cascaded AggregatingMergeTree, never touches raw)"
+  - label: "ObsessionDB: feeding OHLC candles to TradingView from ClickHouse"
     url: https://obsessiondb.com/blog/ohlc-candles-tradingview-clickhouse
   - label: "ClickHouse: Cascading materialized views"
     url: https://clickhouse.com/docs/guides/developer/cascading-materialized-views

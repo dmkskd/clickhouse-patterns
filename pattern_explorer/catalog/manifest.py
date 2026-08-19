@@ -123,19 +123,6 @@ class RelatedPattern(BaseModel):
     note: str = ""
 
 
-class GroupAdvisory(BaseModel):
-    """A compact, expandable operational notice on a group landing page."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    title: str
-    summary: str = ""
-    body: str = ""
-    link_label: str = "Read more"
-    link: str = ""
-    link_pattern: str = ""
-
-
 class Tradeoffs(BaseModel):
     """Concrete benefits and limitations of choosing a pattern."""
 
@@ -386,6 +373,17 @@ class GroupLink(BaseModel):
     note: str = ""
 
 
+class GroupExternalLink(BaseModel):
+    """A curated external reading link on a group landing page, with a
+    one-line note saying why it is worth reading."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    label: str
+    url: str
+    note: str = ""
+
+
 class Group(BaseModel):
     """A family of patterns, defined by a `group.yaml` in a group folder."""
 
@@ -397,8 +395,8 @@ class Group(BaseModel):
     icon: str = "database"
     order: int = 1000
     intro: str = ""
-    advisories: list[GroupAdvisory] = Field(default_factory=list)
     related: list[GroupLink] = Field(default_factory=list)
+    links: list[GroupExternalLink] = Field(default_factory=list)
     key: str = ""    # filled by the loader (the group folder name)
 
 

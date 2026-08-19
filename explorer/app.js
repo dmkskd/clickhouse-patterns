@@ -305,34 +305,10 @@
     return out.join("");
   }
 
-  function renderGroupAdvisories(advisories) {
-    return (advisories || []).map((advisory) => {
-      const title = esc(advisory.title || "Notice");
-      const summary = esc(advisory.summary || "");
-      const body = advisory.body ? `<p>${renderIntro(advisory.body)}</p>` : "";
-      const externalLink = advisory.link
-        ? `<a href="${esc(advisory.link)}" target="_blank" rel="noopener noreferrer">${esc(advisory.link_label || "Read more")}</a>`
-        : "";
-      const patternLink = advisory.link_pattern
-        ? `<button type="button" class="group-advisory-link" data-pattern="${esc(advisory.link_pattern)}">${esc(advisory.link_label || "Read more")}</button>`
-        : "";
-      return `<details class="group-advisory">` +
-        `<summary><span>Notice</span><strong>${title}</strong>${summary ? `<em>${summary}</em>` : ""}</summary>` +
-        `<div class="group-advisory-body">${body}${externalLink}${patternLink}</div>` +
-        `</details>`;
-    }).join("");
-  }
-
   function groupHeader(info, items) {
     const header = document.createElement("section");
     header.className = "catalog-group-intro";
     const paras = (info.intro || info.description || "").split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
-    const related = (info.related || []).map((link) => {
-      const target = PATTERN_GROUPS[link.group];
-      if (!target) return "";
-      return `<li>${esc(link.note)} <button type="button" class="group-link" data-group="${esc(link.group)}">${esc(target.title)}</button></li>`;
-    }).join("");
-    const advisories = renderGroupAdvisories(info.advisories);
     // First paragraph reads full width as a lead; the rest flow into two columns
     // so the summary uses the horizontal space instead of leaving it empty.
     const [lead, ...rest] = paras;
@@ -341,18 +317,37 @@
       `<span class="group-intro-count">${items.length} ${items.length === 1 ? "pattern" : "patterns"}${groupStatusRollup(items)}</span>` +
       `</div>` +
       (lead ? `<p class="group-intro-lead">${renderIntro(lead)}</p>` : "") +
-      (rest.length ? `<div class="group-intro-body">${renderIntroBody(rest)}</div>` : "") +
-      advisories +
-      (related ? `<div class="group-related"><span>Related</span><ul>${related}</ul></div>` : "");
-    header.querySelectorAll(".group-link").forEach((btn) => btn.addEventListener("click", () => {
+      (rest.length ? `<div class="group-intro-body">${renderIntroBody(rest)}</div>` : "");
+    return header;
+  }
+
+  // External reading and related groups render below the pattern cards, not
+  // between the intro and the grid — they are end-of-page material.
+  function groupFooter(info) {
+    const related = (info.related || []).map((link) => {
+      const target = PATTERN_GROUPS[link.group];
+      if (!target) return "";
+      return `<li><button type="button" class="group-link" data-group="${esc(link.group)}"` +
+        (link.note ? ` title="${esc(link.note)}"` : "") + `>${esc(target.title)}</button></li>`;
+    }).join("");
+    const reading = (info.links || []).map((link) =>
+      `<li><a class="reading-link" href="${esc(link.url)}" target="_blank" rel="noopener noreferrer"` +
+      (link.note ? ` title="${esc(link.note)}"` : "") + `>${esc(link.label)}</a></li>`
+    ).join("");
+    if (!reading && !related) return null;
+    const footer = document.createElement("section");
+    footer.className = "catalog-group-footer";
+    footer.innerHTML =
+      `<div class="group-intro-footer">` +
+      (related ? `<div class="group-related"><span>Related patterns</span><ul>${related}</ul></div>` : "") +
+      (reading ? `<div class="group-links"><span>Further reading</span><ul>${reading}</ul></div>` : "") +
+      `</div>`;
+    footer.querySelectorAll(".group-link").forEach((btn) => btn.addEventListener("click", () => {
       catalogFilters.group = btn.dataset.group;
       renderCatalogHome();
       $("catalog-home")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }));
-    header.querySelectorAll(".group-advisory-link").forEach((btn) => btn.addEventListener("click", () => {
-      selectPattern(btn.dataset.pattern);
-    }));
-    return header;
+    return footer;
   }
 
   function renderCatalogHome() {
@@ -385,11 +380,14 @@
         groupCard(key, items, PATTERN_GROUPS[key] || patternGroup(items[0])[1])));
       return;
     }
-    // Drill-in: the family's fuller intro, related links, then its pattern cards.
+    // Drill-in: the family's fuller intro, its pattern cards, then the
+    // further-reading footer below the grid.
     grid.classList.remove("as-groups");
     const [groupKey, groupItems] = [...byGroup][0];
     const info = PATTERN_GROUPS[groupKey] || patternGroup(groupItems[0])[1];
     grid.replaceChildren(groupHeader(info, groupItems), ...groupItems.map(patternCard));
+    const footer = groupFooter(info);
+    if (footer) grid.append(footer);
   }
 
   function renderList(filter = "") {
@@ -771,13 +769,13 @@
   const DIAGRAM_COLLAPSE_KEY = "pe.diagramCollapsed";
   const architecturePanel = document.querySelector(".architecture-panel");
   // The two locations the page layout has used: below the whole description
-  // and its links (current) and after the lede (previous).
+  // (current) and right after the lede (previous).
   const DIAGRAM_PLACES = ["middle", "bottom"];
 
   function applyDiagramPlacement(place, persist = true) {
     const lede = $("pattern-description-lede");
     architecturePanel.classList.toggle("diagram-bottom", place === "bottom");
-    if (place === "bottom") $("pattern-related").after(architecturePanel);
+    if (place === "bottom") $("pattern-description").after(architecturePanel);
     else lede.after(architecturePanel);
     if (persist) try { localStorage.setItem(DIAGRAM_PLACE_KEY, place); } catch (_error) { /* private mode */ }
     DIAGRAM_PLACES.forEach((p) => {
@@ -848,15 +846,19 @@
     renderExperimental(selected);
     renderSuperseded(selected);
     const references = $("pattern-references");
-    references.replaceChildren(...(selected.references || []).map((reference) => {
+    const entries = (selected.references || []).map((reference) => {
       const link = document.createElement("a");
       link.href = reference.url;
       link.target = "_blank";
       link.rel = "noreferrer";
       link.textContent = reference.label;
       return link;
-    }));
-    references.hidden = !selected.references?.length;
+    });
+    const referencesHead = document.createElement("span");
+    referencesHead.className = "references-head";
+    referencesHead.textContent = "References";
+    references.replaceChildren(...(entries.length ? [referencesHead, ...entries] : []));
+    references.hidden = !entries.length;
     const relatedPatterns = $("pattern-related");
     const related = (selected.related_patterns || [])
       .map((relation) => ({ relation, target: patterns.find((pattern) => pattern.slug === relation.slug) }))
@@ -876,6 +878,7 @@
       });
     }
     relatedPatterns.hidden = !related.length;
+    $("pattern-links").hidden = references.hidden && relatedPatterns.hidden;
     document.title = `${selected.title} — Pattern Explorer`;
     renderTradeoffs(selected);
     renderDefinition(selected);
@@ -1028,8 +1031,8 @@
     const [first, ...rest] = nodes;
     lede.replaceChildren(...(first ? [first] : []));
     el.replaceChildren(...rest);
-    // [[slug|label]] in a description renders as a button, wired the same way
-    // as a group advisory link so it opens the pattern in place.
+    // [[slug|label]] in a description renders as a button that opens the
+    // pattern in place.
     [lede, el].forEach((root) =>
       root.querySelectorAll(".pattern-inline-link").forEach((btn) =>
         btn.addEventListener("click", () => selectPattern(btn.dataset.pattern))

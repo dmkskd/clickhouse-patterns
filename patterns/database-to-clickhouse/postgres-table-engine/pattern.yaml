@@ -35,7 +35,7 @@ profiles: [single, postgres]
 driver_node: ch
 
 references:
-  - label: "ClickHouse: MySQL table engine (the same shape, MySQL source)"
+  - label: "ClickHouse: MySQL table engine"
     url: https://clickhouse.com/docs/engines/table-engines/integrations/mysql
 
 tradeoffs:

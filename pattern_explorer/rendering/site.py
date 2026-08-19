@@ -124,6 +124,10 @@ def _browser_group(group) -> dict:
         "order": group.order,
         "intro": group.intro,
         "related": [{"group": link.group, "note": link.note} for link in group.related],
+        "links": [
+            {"label": link.label, "url": link.url, "note": link.note}
+            for link in group.links
+        ],
     }
 
 
@@ -139,6 +143,7 @@ _WORKSPACES_GROUP = {
     "intro": "Company and team extensions derived from the shared library. These "
              "stay local to this repository and are not part of the curated catalog.",
     "related": [],
+    "links": [],
 }
 
 

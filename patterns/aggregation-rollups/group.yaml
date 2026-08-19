@@ -16,6 +16,16 @@ intro: |-
   data, so their results can be compared directly. The fourth revalues a
   trading book at the latest price, an answer that changes when no row has been
   inserted and that an insert-triggered view therefore has no way to produce.
+links:
+  - label: "Materialized views in ClickHouse — benefits, limitations, and alternatives (GlassFlow)"
+    url: https://www.glassflow.dev/blog/clickhouse-materialized-views
+    note: Readable overview of the insert-trigger mechanics and the operational gotchas
+  - label: "Seven common errors in ClickHouse materialized views (Alibaba Cloud)"
+    url: https://www.alibabacloud.com/blog/seven-common-errors-in-clickhouse-materialized-view_601482
+    note: Failure modes in depth — replication, POPULATE duplication, distributed tables
+  - label: "Performance impact of materialized views in ClickHouse (Altinity)"
+    url: https://altinity.com/blog/performance-impact-of-materialized-views-in-clickhouse
+    note: The insert-latency tax, measured
 related:
   - group: kafka-to-clickhouse
     note: To stream the raw events into ClickHouse first

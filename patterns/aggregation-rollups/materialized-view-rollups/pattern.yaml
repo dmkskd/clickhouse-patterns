@@ -37,7 +37,7 @@ driver_node: ch
 profiles: [single]
 
 references:
-  - label: "Benjamin Wootton: Real-time OHLC candlestick charts with ClickHouse (fan-out: every time bucket triggers on raw)"
+  - label: "Benjamin Wootton: Real-time OHLC candlestick charts with ClickHouse"
     url: https://benjaminwootton.com/insights/ohlc-candlestick-charts-clickhouse
   - label: "ClickHouse: AggregatingMergeTree table engine (-State/-Merge)"
     url: https://clickhouse.com/docs/engines/table-engines/mergetree-family/aggregatingmergetree

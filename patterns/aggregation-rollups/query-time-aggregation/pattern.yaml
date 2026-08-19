@@ -36,7 +36,7 @@ profiles: [single]
 references:
   - label: "roq-trading: OHLC candles computed at query time from raw ticks in ClickHouse"
     url: https://roq-trading.com/docs/tutorials/data/clickhouse/index.html
-  - label: "ClickHouse: Build a rollup with materialized views (contrast with pre-aggregation)"
+  - label: "ClickHouse: Build a rollup with materialized views"
     url: https://clickhouse.com/docs/knowledgebase/materialized-view-rollup-timeseries
 
 schema_sql: schema.sql
