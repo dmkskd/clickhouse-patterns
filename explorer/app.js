@@ -240,13 +240,6 @@
     card.className = "group-card";
     card.tabIndex = 0;
     card.setAttribute("role", "button");
-    const allTags = [...new Set(items.flatMap((pattern) => pattern.tags || []))];
-    const visibleTags = allTags.slice(0, 5);
-    const hiddenTagCount = allTags.length - visibleTags.length;
-    const chips = visibleTags.map((tag) => `<span class="group-intro-tag">${esc(tag)}</span>`).join("")
-      + (hiddenTagCount > 0
-        ? `<span class="group-intro-tag more" title="${hiddenTagCount} more tags">+ more</span>`
-        : "");
     // The tile shows one sentence only: the group's short description, or the
     // first sentence of the intro as a fallback. The full intro lives on the
     // group's own page. Links/bold are flattened since the whole card is clickable.
@@ -262,8 +255,7 @@
       `<div class="group-card-head">${patternGroupIcon(info.icon)}` +
       `<div class="group-card-titles"><strong>${esc(info.title)}</strong>` +
       `<div class="group-card-meta"><span class="group-card-count">${items.length} ${items.length === 1 ? "pattern" : "patterns"}</span>${groupStatusRollup(items)}</div></div></div>` +
-      (summary ? `<p class="group-card-intro">${esc(summary)}</p>` : "") +
-      (chips ? `<div class="group-intro-tags">${chips}</div>` : "");
+      (summary ? `<p class="group-card-intro">${esc(summary)}</p>` : "");
     const openGroup = () => { catalogFilters.group = key; renderCatalogHome(); };
     card.addEventListener("click", openGroup);
     card.addEventListener("keydown", (event) => {

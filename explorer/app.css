@@ -294,7 +294,7 @@ button, input { font: inherit; }
 .filter-group button.active small { color: #93a0c1; }
 .topology-filters { justify-content: flex-end; }
 .catalog-results-summary { padding: 16px 2px 11px; color: #687392; font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .09em; text-transform: uppercase; }
-.catalog-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; }
+.catalog-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; }
 .catalog-group-intro { grid-column: 1 / -1; margin-top: 12px; padding: 10px 2px 16px; border-top: 1px solid #1c2338; }
 .catalog-group-intro:first-child { margin-top: 0; border-top: 0; padding-top: 2px; }
 .group-intro-head { display: flex; align-items: baseline; gap: 11px; }
@@ -339,11 +339,8 @@ button, input { font: inherit; }
 .group-related li { color: #8a94ad; font-size: 12px; line-height: 1.5; }
 .group-link { padding: 0; border: 0; background: none; color: #4cc3f7; font: inherit; cursor: pointer; }
 .group-link:hover { text-decoration: underline; }
-.group-intro-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
-.group-intro-tag { padding: 3px 8px; border: 1px solid #232b43; border-radius: 999px; color: #93a0be; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
 .catalog-grid.as-groups { align-items: stretch; }
-.group-card { display: flex; flex-direction: column; gap: 11px; padding: 18px; height: 100%; border: 1px solid #252d45; border-radius: 13px; background: #090c16; cursor: pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
-.group-card .group-intro-tags { margin-top: auto; padding-top: 4px; }
+.group-card { display: flex; flex-direction: column; gap: 11px; padding: 22px; height: 100%; border: 1px solid #252d45; border-radius: 13px; background: #090c16; cursor: pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
 
 /* ClickHouse version requirement badge on the pattern page. */
 .pattern-requires { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 11px 0 0; }
@@ -364,18 +361,18 @@ button, input { font: inherit; }
 .group-card:focus-visible { outline: 1px solid #526086; outline-offset: 2px; }
 .group-card-head { display: flex; align-items: center; gap: 12px; }
 .group-card-titles { display: flex; flex-direction: column; gap: 2px; }
-.group-card-titles strong { color: #e6eaf5; font-size: 15px; }
+.group-card-titles strong { color: #e6eaf5; font-size: 16.5px; }
 .group-card-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.group-card-count { color: #7c88a6; font: 700 9.5px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .07em; text-transform: uppercase; }
-.group-status-rollup { color: var(--dim); font: 700 9.5px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+.group-card-count { color: #7c88a6; font: 700 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .07em; text-transform: uppercase; }
+.group-status-rollup { color: var(--dim); font: 700 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
 .group-status-rollup::before { margin-right: 6px; color: var(--dim); content: "·"; }
-.group-card-intro { margin: 0; color: #8a94ad; font-size: 12px; line-height: 1.5; }
+.group-card-intro { margin: 0; color: #8a94ad; font-size: 13.5px; line-height: 1.5; }
 .group-card-list { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
 .group-card-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 9px; border-radius: 7px; }
 .group-card-list li:hover { background: #131a2c; }
 .group-line-title { min-width: 0; color: #cdd4e8; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .group-line-topo { flex: none; color: #6f7b98; font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; text-transform: uppercase; }
-.catalog-card { min-height: 276px; display: flex; flex-direction: column; padding: 18px; overflow: hidden; border: 1px solid #252d45; border-radius: 13px; background: #090c16; color: inherit; text-align: left; cursor: pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+.catalog-card { min-height: 276px; display: flex; flex-direction: column; padding: 22px; overflow: hidden; border: 1px solid #252d45; border-radius: 13px; background: #090c16; color: inherit; text-align: left; cursor: pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
 .catalog-card:hover { border-color: #485779; background: #101526; transform: translateY(-2px); }
 .catalog-card:focus-visible { outline: 2px solid #667ba8; outline-offset: 2px; }
 .catalog-card.running { border-color: #2e6c58; box-shadow: inset 0 0 0 1px #3ed59818; }
@@ -765,7 +762,7 @@ button, input { font: inherit; }
 [data-theme="soft"] .catalog-card-description, [data-theme="soft"] .group-card-intro { color: var(--muted); }
 [data-theme="soft"] .catalog-card-context > span { color: var(--muted); }
 [data-theme="soft"] .catalog-card-context small { color: var(--dim); }
-[data-theme="soft"] .catalog-card-tags > span, [data-theme="soft"] .group-intro-tag, [data-theme="soft"] .pattern-tag {
+[data-theme="soft"] .catalog-card-tags > span, [data-theme="soft"] .pattern-tag {
   border: 0; background: var(--bg); box-shadow: var(--pressed-sm); color: var(--dim);
   padding: 4px 9px; border-radius: 999px;
 }
@@ -1086,7 +1083,6 @@ button, input { font: inherit; }
 [data-theme="flat"][data-scheme="light"] .group-related > span { color: var(--dim); }
 [data-theme="flat"][data-scheme="light"] .group-more-toggle { border-color: var(--line); color: var(--muted); }
 [data-theme="flat"][data-scheme="light"] .group-more-toggle:hover { border-color: #b8c2d8; color: var(--text); }
-[data-theme="flat"][data-scheme="light"] .group-intro-tag { border-color: var(--line); color: var(--muted); }
 [data-theme="flat"][data-scheme="light"] .group-card { border-color: var(--line); background: var(--panel); }
 [data-theme="flat"][data-scheme="light"] .group-card:hover { border-color: #aeb5c0; background: var(--panel); }
 [data-theme="flat"][data-scheme="light"] .group-card-titles strong { color: var(--text); }
@@ -1223,7 +1219,6 @@ button, input { font: inherit; }
 [data-theme="soft"][data-scheme="dark"] .experimental-badge,
 [data-theme="soft"][data-scheme="dark"] .superseded-label,
 [data-theme="soft"][data-scheme="dark"] .catalog-card-tags > span,
-[data-theme="soft"][data-scheme="dark"] .group-intro-tag,
 [data-theme="soft"][data-scheme="dark"] .explorer-mode,
 [data-theme="soft"][data-scheme="dark"] .pattern-count,
 [data-theme="soft"][data-scheme="dark"] .group-intro-count,
@@ -1250,7 +1245,6 @@ button, input { font: inherit; }
    them read as dark patches instead. Same recipe as light, retuned for the fact
    that a dark surface carries far less highlight. */
 [data-theme="soft"][data-scheme="dark"] .catalog-card-tags > span,
-[data-theme="soft"][data-scheme="dark"] .group-intro-tag,
 [data-theme="soft"][data-scheme="dark"] .pattern-tag {
   background: transparent;
   box-shadow:
