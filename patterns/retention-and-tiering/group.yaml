@@ -1,7 +1,7 @@
 title: TTL retention & tiering
 label: TTL
 description: Use TTL to delete, rewrite, roll up, recompress, or move expired data in MergeTree-family tables
-icon: database
+icon: clock
 order: 6
 intro: |-
   ClickHouse TTL applies lifecycle policies to MergeTree-family tables.

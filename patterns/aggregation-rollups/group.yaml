@@ -1,6 +1,6 @@
 title: Rollups
 description: Turn raw rows into pre-aggregated summaries
-icon: transform
+icon: rollup
 order: 1
 intro: |-
   A rollup is an aggregated summary of raw rows, grouped into defined buckets.

@@ -183,7 +183,22 @@ window.PE.util = (() => {
     return `<div class="resource-table-wrap"><table class="resource-table"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>`;
   }
 
-  function patternGroupIcon(kind) {
+  function patternGroupIcon(kind, compact = false) {
+    if (compact) {
+      // Square source-only mark for the catalog group tiles, where the flow
+      // arrow is redundant next to titles like "Kafka → ClickHouse".
+      const kafkaGlyph = '<g class="source kafka"><circle cx="11" cy="8" r="2.2"/><circle cx="11" cy="16" r="2.7"/><circle cx="11" cy="24" r="2.2"/><circle cx="21" cy="12" r="2.2"/><circle cx="21" cy="21" r="2.2"/><path d="M11 10.5v3m0 5v3m2.8-6.6 4.7-2.4m-4.7 6 4.7 2.5"/></g>';
+      const glyphs = {
+        database: '<g class="source"><ellipse cx="16" cy="9" rx="7" ry="3.5"/><path d="M9 9v14c0 1.9 3.1 3.5 7 3.5s7-1.6 7-3.5V9M9 16c0 1.9 3.1 3.5 7 3.5s7-1.6 7-3.5"/></g>',
+        s3: '<g class="source"><ellipse cx="16" cy="8.5" rx="8" ry="3"/><path d="M8 8.5 11 25q5 2.5 10 0l3-16.5"/></g>',
+        clock: '<g class="source"><circle cx="16" cy="16" r="9"/><path d="M16 10v6l4 2.5"/></g>',
+        rollup: '<g class="source"><path d="M8 26V8M16 26V15M24 26v-6"/></g>',
+        clone: '<rect x="6" y="6" width="14" height="14" rx="2.5"/><rect x="12" y="12" width="14" height="14" rx="2.5"/>',
+        "kafka-in": kafkaGlyph,
+        "kafka-out": kafkaGlyph,
+      };
+      return `<svg class="pattern-group-icon compact" viewBox="0 0 32 32" aria-hidden="true">${glyphs[kind] || kafkaGlyph}</svg>`;
+    }
     const clickhouse = '<g class="destination"><path d="M35 8v16M39 8v16M43 8v16M47 8v16M51 14v5"/></g>';
     const arrow = '<path class="group-arrow" d="M20 16h10m-3-3 3 3-3 3"/>';
     if (kind === "database") {
@@ -197,11 +212,15 @@ window.PE.util = (() => {
     if (kind === "clone") {
       return '<svg class="pattern-group-icon" viewBox="0 0 58 32" aria-hidden="true"><rect x="12" y="7" width="18" height="18" rx="3"/><rect x="24" y="11" width="18" height="18" rx="3"/></svg>';
     }
-    if (kind === "transform") {
-      // ClickHouse -> ClickHouse: the transform happens inside the database,
-      // so there is no external source cylinder.
-      const source = '<g class="destination"><path d="M5 8v16M9 8v16M13 8v16M17 8v16M21 14v5"/></g>';
-      return `<svg class="pattern-group-icon" viewBox="0 0 58 32" aria-hidden="true">${source}${arrow}${clickhouse}</svg>`;
+    if (kind === "clock") {
+      // Retention and tiering: time acting on the data inside ClickHouse.
+      const clock = '<g class="source"><circle cx="10" cy="16" r="7"/><path d="M10 11.5V16l3 2"/></g>';
+      return `<svg class="pattern-group-icon" viewBox="0 0 58 32" aria-hidden="true">${clock}${arrow}${clickhouse}</svg>`;
+    }
+    if (kind === "rollup") {
+      // Rollups: tall raw bars collapsing into compact summaries.
+      const bars = '<g class="source"><path d="M4.5 26V10M10 26v-11M15.5 26v-6"/></g>';
+      return `<svg class="pattern-group-icon" viewBox="0 0 58 32" aria-hidden="true">${bars}${arrow}${clickhouse}</svg>`;
     }
     const kafka = '<g class="source kafka"><circle cx="9" cy="8" r="2"/><circle cx="9" cy="16" r="2.5"/><circle cx="9" cy="24" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="16" cy="21" r="2"/><path d="M9 10v3.5m0 5v3.5m2-7 3-2m-3 5 3 2"/></g>';
     if (kind === "kafka-out") {

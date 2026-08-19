@@ -159,7 +159,7 @@
     header.className = "catalog-card-header";
     const mark = document.createElement("span");
     mark.className = `pattern-group-mark ${key}`;
-    mark.innerHTML = patternGroupIcon(info.icon);
+    mark.innerHTML = patternGroupIcon(info.icon, true);
     const context = document.createElement("span");
     context.className = "catalog-card-context";
     context.innerHTML = `<span>${esc(info.title)}</span><small>${pattern.location === "workspace" ? "Workspace" : "Curated"}</small>`;
@@ -190,23 +190,6 @@
     description.className = "catalog-card-description";
     description.textContent = plainDesc(pattern.description);
 
-    const tags = document.createElement("span");
-    tags.className = "catalog-card-tags";
-    const visibleTags = (pattern.tags || []).slice(0, 4);
-    visibleTags.forEach((tag) => {
-      const item = document.createElement("span");
-      item.textContent = tag;
-      tags.append(item);
-    });
-    const hiddenTagCount = (pattern.tags || []).length - visibleTags.length;
-    if (hiddenTagCount > 0) {
-      const more = document.createElement("span");
-      more.className = "more";
-      more.textContent = "+" + hiddenTagCount;
-      more.title = hiddenTagCount + " more tags";
-      tags.append(more);
-    }
-
     const footer = document.createElement("span");
     footer.className = "catalog-card-footer";
     const flow = document.createElement("span");
@@ -218,7 +201,7 @@
     action.className = "catalog-card-action";
     action.textContent = running ? "Live now ●" : "Explore →";
     footer.append(flow, action);
-    card.append(header, title, description, tags, footer);
+    card.append(header, title, description, footer);
     return card;
   }
 
@@ -252,7 +235,7 @@
       .replace(/\[([^\]]+)\]\([^)\s]+\)/g, "$1")
       .replace(/\*\*([^*]+)\*\*/g, "$1");
     card.innerHTML =
-      `<div class="group-card-head">${patternGroupIcon(info.icon)}` +
+      `<div class="group-card-head">${patternGroupIcon(info.icon, true)}` +
       `<div class="group-card-titles"><strong>${esc(info.title)}</strong>` +
       `<div class="group-card-meta"><span class="group-card-count">${items.length} ${items.length === 1 ? "pattern" : "patterns"}</span>${groupStatusRollup(items)}</div></div></div>` +
       (summary ? `<p class="group-card-intro">${esc(summary)}</p>` : "");
