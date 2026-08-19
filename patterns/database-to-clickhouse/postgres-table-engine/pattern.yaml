@@ -1,5 +1,5 @@
 manifest_version: 1
-status: under-review
+status: stable
 title: "Postgres table engine (query in place, no copy)"
 description: |-
   ClickHouse queries Postgres tables directly, without keeping a copy.
