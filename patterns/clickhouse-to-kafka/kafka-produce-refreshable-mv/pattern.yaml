@@ -16,8 +16,6 @@ metadata:
         -> kafka-table:alerts_out
         -> topic:alerts
   status: wip
-  category: kafka
-  flow: output
   topology: single
   order: 2
   tags: [kafka, kafka-engine, refreshable-mv, alerts]

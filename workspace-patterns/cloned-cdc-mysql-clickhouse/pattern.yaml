@@ -36,8 +36,6 @@ metadata:
       mergetree:orders
         -> mv:orders_transform_mv(reads=orders only)
         -> mergetree:orders_transformed@mv-transformed(source=orders MV)
-  category: cdc
-  flow: ingestion
   topology: single
   tags: [cdc, mysql]
   references:

@@ -17,8 +17,6 @@ metadata:
       client:reader(label=query client)
         -[SELECT rows + distinct ids]-> mergetree:events
   status: wip
-  category: kafka
-  flow: ingestion
   topology: single
   order: 6
   tags: [kafka, push, kafka-connect]

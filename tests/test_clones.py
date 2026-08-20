@@ -35,8 +35,6 @@ metadata:
   description: A complete pattern used to test local cloning.
   graph: "ingestion:\n  client:source -> mergetree:ch"
   status: stable
-  category: demo
-  flow: ingestion
   topology: single
   tags: [demo]
 spec:

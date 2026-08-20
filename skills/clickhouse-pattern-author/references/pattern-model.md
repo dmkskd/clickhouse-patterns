@@ -40,8 +40,7 @@ links:                               # optional curated external reading
     note: One line saying why this is worth reading (hover tooltip)
 ```
 
-`category` and `flow` stay on each pattern as plain taxonomy; grouping is the
-folder, not those fields.
+Grouping is the folder; patterns carry no separate category field.
 
 Pattern readiness is declared in `pattern.yaml`, independently of whether it is
 runnable or reference-only:
@@ -73,8 +72,6 @@ metadata:
   title: Postgres orders to ClickHouse
   description: Explains the real data movement and the decision it represents.
   status: wip
-  category: cdc
-  flow: ingestion
   topology: single
   tags: [postgres, cdc]
   graph: |-

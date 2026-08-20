@@ -34,8 +34,6 @@ metadata:
       mergetree:orders
         -[FINAL · filter __deleted]-> client:readers(label=query clients)
   status: under-review
-  category: cdc
-  flow: ingestion
   topology: single
   order: 5
   tags: [cdc, postgres, kafka, debezium, kafka-connect]

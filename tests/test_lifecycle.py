@@ -29,8 +29,6 @@ def pattern(tmp_path):
         title="Demo",
         description="Demonstrates a small pattern for lifecycle tests.",
         graph="ingestion:\n  client:source -> mergetree:demo",
-        category="demo",
-        flow="ingestion",
         topology="single",
         tags=["demo"],
         profiles=["single"],

@@ -18,8 +18,6 @@ metadata:
       client(protocol=HTTP/native,target=either-replica)
         -> replicated-mergetree:events@replicas
   status: wip
-  category: kafka
-  flow: ingestion
   topology: replicated
   order: 1
   tags: [kafka, pull, kafka-engine]

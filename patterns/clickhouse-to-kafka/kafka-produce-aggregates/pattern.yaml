@@ -21,8 +21,6 @@ metadata:
         -> mv:mv_store
         -> mergetree:agg_store(role=verification copy)
   status: wip
-  category: kafka
-  flow: output
   topology: single
   order: 1
   tags: [kafka, kafka-engine, aggregates]

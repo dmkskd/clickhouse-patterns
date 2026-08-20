@@ -286,8 +286,6 @@ class Pattern(BaseModel):
     graph: str | None = None
     mode: Literal["runnable", "reference"] = "runnable"
     status: Literal["wip", "under-review", "stable"] = "wip"
-    category: str
-    flow: str
     topology: str
     order: int = 1000    # sort position within a group; lower shows first
     experimental: bool = False   # newer/less-proven pattern; shown with an Experimental badge
@@ -469,7 +467,7 @@ def discover_groups() -> list[Group]:
 # Pattern model is flat, so _normalize_manifest flattens the sections before
 # validation — pydantic's extra="forbid" then still catches misspelled leaf keys.
 _METADATA_KEYS = frozenset({
-    "title", "description", "graph", "status", "category", "flow", "topology",
+    "title", "description", "graph", "status", "topology",
     "order", "experimental", "tags", "references", "related_patterns",
     "superseded_by", "superseded_since", "tradeoffs",
 })

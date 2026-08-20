@@ -14,8 +14,6 @@ metadata:
     query:
       mergetree:events -[read]-> client:reader(label=reader)
   status: under-review
-  category: ingestion
-  flow: ingestion
   topology: single
   order: 3
   tags: [s3, s3queue, ordered, incremental, exactly-once, keeper]

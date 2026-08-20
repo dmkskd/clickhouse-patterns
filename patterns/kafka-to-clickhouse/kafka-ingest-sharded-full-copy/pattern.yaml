@@ -19,8 +19,6 @@ metadata:
         -[count + uniqExact(id)]-> distributed:events_all(label=demo.events_all)
         -[read both shards]-> mergetree:events@shards
   status: wip
-  category: kafka
-  flow: ingestion
   topology: sharded
   order: 3
   tags: [kafka, pull, kafka-engine, workaround, query-dedup]

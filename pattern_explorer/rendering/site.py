@@ -83,8 +83,6 @@ def _browser_pattern(pattern) -> dict:
         "title": pattern.title,
         "description": pattern.description,
         "status": pattern.status,
-        "category": pattern.category,
-        "flow": pattern.flow,
         "topology": pattern.topology,
         "order": pattern.order,
         "experimental": pattern.experimental,

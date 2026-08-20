@@ -74,7 +74,7 @@ session status. Follow its file fields rather than assuming standard filenames.
 Manifest keys are grouped: catalog fields under `metadata:`, runtime fields
 under `spec:` (with the lifecycle under `spec.steps:`). Read the files that exist:
 
-1. `metadata.category`, `metadata.flow`, `metadata.topology`, and `metadata.tags` for the declared taxonomy.
+1. `metadata.topology` and `metadata.tags` for the declared shape and keywords.
 2. `metadata.graph` for the declared data paths and topology (the resource-flow DSL).
 3. `metadata.references` for relevant upstream documentation and issue context.
 4. `README.md` for the technique and known constraints.

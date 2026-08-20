@@ -386,7 +386,7 @@ use, `just test` reports it as a port conflict rather than a raw trace.
 1. `patterns/<slug>/pattern.yaml`: a compact `metadata.title`, a structured `metadata.graph` that
    drives the Explorer diagram, a detailed `metadata.description`, optional `metadata.tradeoffs` split into concrete
    `benefits` and `limitations`, optional external `metadata.references`,
-   `metadata.category`, `flow`, `topology`, descriptive `tags`, runtime `spec.profiles`,
+   `metadata.topology`, descriptive `tags`, runtime `spec.profiles`,
    `spec.driver_node`, and `spec.steps.ready_when` checks. Use one `spec.steps.schema` file; cluster-wide
    objects belong in `ON CLUSTER` statements and node identity belongs in
    server macros. Label every end-to-end boundary path by direction. Ingestion

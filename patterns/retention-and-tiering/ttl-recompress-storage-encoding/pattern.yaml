@@ -22,8 +22,6 @@ metadata:
       mergetree:recompressed_metrics -[reads the active part after recompression]-> client:analyst
 
   status: wip
-  category: retention
-  flow: transform
   topology: single
   order: 5
   tags: [ttl, recompress, codec, rewrite]

@@ -12,8 +12,6 @@ metadata:
     query:
       mergetree:events -[read]-> client:reader(label=reader)
   status: under-review
-  category: ingestion
-  flow: ingestion
   topology: single
   order: 1
   tags: [s3, bulk-load, s3-function, glob]

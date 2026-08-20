@@ -35,8 +35,6 @@ metadata:
       replicated-mergetree:events_ch02
         -[MOVE TTL · copies old part]-> minio:cold_copy_02(bucket=clickhouse,prefix=ttl-replicated/ch-02/,label=S3 prefix · ttl-replicated/ch-02/)
   status: wip
-  category: retention
-  flow: transform
   topology: replicated
   order: 8
   tags: [ttl, tiering, s3, storage-policy, volume, move, replication, minio]

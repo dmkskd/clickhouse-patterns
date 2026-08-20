@@ -18,8 +18,6 @@ metadata:
     query:
       refreshable-mv:position_pnl -[finished numbers on read]-> client:readers(label=P&L readers)
   status: stable
-  category: aggregation
-  flow: transform
   topology: single
   order: 4
   tags: [aggregation, rollup, refreshable-mv, revaluation, mark-to-market]

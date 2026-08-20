@@ -18,8 +18,6 @@ metadata:
     query:
       client -> distributed:events_all -> mergetree:events@shards
   status: wip
-  category: kafka
-  flow: ingestion
   topology: sharded
   order: 4
   tags: [kafka, pull, kafka-engine, workaround, distributed-fanout]

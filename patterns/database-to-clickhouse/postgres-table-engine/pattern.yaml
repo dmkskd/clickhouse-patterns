@@ -27,8 +27,6 @@ metadata:
         -[rows returned per SELECT]-> remote-table:postgresql_fn@table-function(label=postgresql(...),note=**Postgres table function**\nThe connection lives in the query text.\n- creates no object\n- suits one-off reads and INSERT ... SELECT)
         -> client:analyst
   status: stable
-  category: federation
-  flow: query
   topology: single
   order: 1
   tags: [postgres, federation, table-engine, no-copy]

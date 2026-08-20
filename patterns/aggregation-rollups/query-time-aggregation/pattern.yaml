@@ -17,8 +17,6 @@ metadata:
     query-5m:
       mergetree:ticks -[toStartOfFiveMinutes · same aggregates on read]-> client:rollup_5m(label=5m rollup)
   status: stable
-  category: aggregation
-  flow: transform
   topology: single
   order: 1
   tags: [aggregation, rollup, query-time]

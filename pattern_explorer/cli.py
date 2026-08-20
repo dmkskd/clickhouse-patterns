@@ -54,16 +54,14 @@ from .orchestration.lifecycle import (
     stop_session,
     validate_session,
 )
-from .catalog.manifest import discover_patterns, discover_workspace_patterns, load_pattern
+from .catalog.manifest import discover_groups, discover_patterns, discover_workspace_patterns, load_pattern
 from .catalog.migrate import iter_manifest_paths, migrate_manifest
 from .orchestration.runner import run_pattern
 from .orchestration.stack import docker
 from .orchestration.wait import ConvergenceError
 from .logs import configure_logging
 
-# Preferred display orders; unknown values sort after these, alphabetically.
-_CATEGORY_ORDER = ["cdc", "kafka", "backup", "retention", "correctness", "modeling"]
-_FLOW_ORDER = ["ingestion", "output"]
+# Preferred display order; unknown values sort after these, alphabetically.
 _TOPOLOGY_ORDER = ["single", "replicated", "sharded"]
 
 _PROFILE_NAMES = {
@@ -117,10 +115,15 @@ def _validation_summary(pattern) -> str:
     return f"{checks}; {verify}"
 
 
-def _pattern_sort_key(pattern):
+def _group_order() -> dict[str, int]:
+    """Group folder -> display position, from each group.yaml's order."""
+    return {group.key: index for index, group in enumerate(discover_groups())}
+
+
+def _pattern_sort_key(pattern, groups: dict[str, int]):
     return (
-        _ordered_key(pattern.category, _CATEGORY_ORDER),
-        _ordered_key(pattern.flow, _FLOW_ORDER),
+        groups.get(pattern.group, len(groups)),
+        pattern.order,
         _ordered_key(pattern.topology, _TOPOLOGY_ORDER),
         pattern.slug,
     )
@@ -142,14 +145,16 @@ def _cmd_list(_args) -> int:
     from rich.console import Console
     from rich.table import Table
 
-    patterns = sorted(discover_patterns(), key=_pattern_sort_key)
+    groups = discover_groups()
+    group_labels = {group.key: group.label or group.title for group in groups}
+    order = _group_order()
+    patterns = sorted(discover_patterns(), key=lambda p: _pattern_sort_key(p, order))
 
     console = Console()
     console.print(f"\n[bold]ClickHouse Patterns[/bold] ({len(patterns)})\n")
 
     table = Table(show_edge=False, pad_edge=False, box=None, header_style="dim")
-    table.add_column("category", style="bold cyan", min_width=8, no_wrap=True)
-    table.add_column("flow", style="green", min_width=9, no_wrap=True)
+    table.add_column("group", style="bold cyan", min_width=8, no_wrap=True)
     table.add_column("topology", style="dim", min_width=10, no_wrap=True)
     table.add_column(
         "pattern",
@@ -161,24 +166,20 @@ def _cmd_list(_args) -> int:
     )
     table.add_column("description", min_width=24, ratio=2, overflow="fold")
 
-    previous_category = None
-    previous_flow = None
+    previous_group = None
     previous_topology = None
     for pattern_index, p in enumerate(patterns):
-        category_changed = p.category != previous_category
-        flow_changed = category_changed or p.flow != previous_flow
-        topology_changed = flow_changed or p.topology != previous_topology
-        if pattern_index and category_changed:
+        group_changed = p.group != previous_group
+        topology_changed = group_changed or p.topology != previous_topology
+        if pattern_index and group_changed:
             table.add_section()
         table.add_row(
-            p.category if category_changed else "",
-            p.flow if flow_changed else "",
+            group_labels.get(p.group, p.group) if group_changed else "",
             p.topology if topology_changed else "",
             p.slug,
             p.title,
         )
-        previous_category = p.category
-        previous_flow = p.flow
+        previous_group = p.group
         previous_topology = p.topology
     console.print(table)
 
@@ -257,31 +258,18 @@ def _cmd_describe(_args) -> int:
 
     # Keep prose at a readable measure even on very wide terminals.
     reading_width = max(24, min(104, console.width - 4))
-    groups: dict[tuple[str, str, str], list] = {}
+    groups: dict[str, list] = {}
     for pattern in patterns:
-        key = (pattern.category, pattern.flow, pattern.topology)
-        groups.setdefault(key, []).append(pattern)
+        groups.setdefault(pattern.group, []).append(pattern)
 
-    ordered_groups = sorted(
-        groups,
-        key=lambda group: (
-            _ordered_key(group[0], _CATEGORY_ORDER),
-            _ordered_key(group[1], _FLOW_ORDER),
-            _ordered_key(group[2], _TOPOLOGY_ORDER),
-        ),
-    )
-    for group_index, (category, flow, topology) in enumerate(ordered_groups):
+    group_titles = {group.key: group.title for group in discover_groups()}
+    order = _group_order()
+    for group_index, group_key in enumerate(sorted(groups, key=lambda key: order.get(key, len(order)))):
         if group_index:
             console.print()
-        group = sorted(
-            groups[(category, flow, topology)],
-            key=lambda pattern: pattern.slug,
-        )
+        group = sorted(groups[group_key], key=lambda pattern: (pattern.order, pattern.slug))
         noun = "pattern" if len(group) == 1 else "patterns"
-        heading = (
-            f"{category.upper()} / {flow.upper()} / {topology.upper()}"
-            f"  ({len(group)} {noun})"
-        )
+        heading = f"{group_titles.get(group_key, group_key).upper()}  ({len(group)} {noun})"
         console.print(Text(heading, style="bold cyan"))
 
         for pattern in group:
@@ -346,8 +334,6 @@ def _cmd_show(args) -> int:
         f"{_plain_description(p.description)}\n\n"
         f"{tradeoffs_section}"
         f"{references_section}"
-        f"category   {p.category}\n"
-        f"flow       {p.flow}\n"
         f"topology   {p.topology}\n"
         f"tags       {', '.join(p.tags)}\n"
         f"mode       {p.mode}\n"
@@ -484,7 +470,7 @@ def _human_join(values: list[str]) -> str:
 def _prepare_steps(pattern) -> list[str]:
     if pattern.schema_sql:
         schema_step = f"Apply {pattern.schema_sql} from {pattern.driver_node}."
-    elif pattern.category == "cdc" and "existing" in (pattern.graph or ""):
+    elif "existing" in (pattern.graph or ""):
         schema_step = "Prepare the CDC-created and existing ClickHouse targets."
     else:
         schema_step = "Let the connector create and manage the ClickHouse schema."

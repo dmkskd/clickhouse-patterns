@@ -22,12 +22,14 @@ from .manifest import (
 # lifecycle moves under spec.steps (schema_sql loses the suffix); runtime wiring
 # stays flat under spec:.
 _METADATA_KEYS = (
-    "title", "description", "graph", "status", "category", "flow", "topology",
+    "title", "description", "graph", "status", "topology",
     "order", "experimental", "tags", "references", "related_patterns",
     "superseded_by", "superseded_since", "tradeoffs",
 )
 _SPEC_KEYS = ("mode", "profiles", "driver_node", "requires")
 _STEP_KEYS = {"schema_sql": "schema", "load": "load", "ready_when": "ready_when", "verify": "verify"}
+# v1 taxonomy keys that v2 removed; migration discards them (and their comments).
+_DROPPED_KEYS = ("category", "flow")
 
 
 def _move(src: CommentedMap, key: str, dst: CommentedMap, dst_key: str | None = None) -> None:
@@ -109,6 +111,8 @@ def migrate_manifest(path: Path) -> bool:
         services["clickhouse"] = clickhouse
     for old_key, new_key in _STEP_KEYS.items():
         _move(data, old_key, steps, new_key)
+    for key in _DROPPED_KEYS:
+        data.pop(key, None)
     if services:
         spec["services"] = services
     if steps:

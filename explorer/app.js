@@ -11,7 +11,7 @@
   const PATTERN_GROUPS = Object.fromEntries(GROUPS.map((group) => [group.key, group]));
   const GROUP_ORDER = Object.fromEntries(GROUPS.map((group, index) => [group.key, group.order ?? index]));
   function fallbackGroup(pattern) {
-    const key = pattern.group || `${pattern.category}-${pattern.flow}`;
+    const key = pattern.group || "patterns";
     return { key, label: key, title: key, description: "Related patterns", icon: "database", intro: "", related: [] };
   }
   const sortKey = (p) =>
@@ -108,8 +108,8 @@
 
   function matchesCatalogFilters(pattern) {
     const haystack = [
-      pattern.slug, pattern.title, pattern.description, pattern.category,
-      pattern.flow, pattern.topology, ...(pattern.tags || [])
+      pattern.slug, pattern.title, pattern.description,
+      pattern.topology, ...(pattern.tags || [])
     ].join(" ").toLowerCase();
     return (!catalogFilters.search || haystack.includes(catalogFilters.search))
       && (catalogFilters.group === "all" || patternGroupKey(pattern) === catalogFilters.group)
@@ -393,7 +393,7 @@
   function renderList(filter = "") {
     const needle = filter.trim().toLowerCase();
     const visible = patterns.filter((pattern) =>
-      [pattern.slug, pattern.title, pattern.description, pattern.category, pattern.flow, pattern.topology, ...(pattern.tags || [])]
+      [pattern.slug, pattern.title, pattern.description, pattern.topology, ...(pattern.tags || [])]
         .join(" ").toLowerCase().includes(needle)
     );
     list.replaceChildren();
@@ -1078,7 +1078,7 @@
   function renderBreadcrumb(selected) {
     const nav = $("pattern-breadcrumb");
     const groupKey = patternGroupKey(selected);
-    const groupLabel = PATTERN_GROUPS[selected.group]?.label || selected.category;
+    const groupLabel = PATTERN_GROUPS[selected.group]?.label || selected.group;
 
     const all = document.createElement("button");
     all.type = "button";

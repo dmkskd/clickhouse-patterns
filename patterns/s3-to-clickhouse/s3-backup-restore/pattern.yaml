@@ -19,8 +19,6 @@ metadata:
     query:
       mergetree:events -[read]-> client:reader(label=reader)
   status: under-review
-  category: ingestion
-  flow: ingestion
   topology: single
   order: 5
   experimental: true

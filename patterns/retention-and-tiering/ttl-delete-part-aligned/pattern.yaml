@@ -29,8 +29,6 @@ metadata:
     ingest:
       client:writer -[expiry-aligned batches]-> mergetree:events(note=**Table layout**\n- Partition: event month\n- TTL: event_time + 30 days DELETE\n- Whole expired parts are dropped\n- ttl_only_drop_parts = 1)
   status: wip
-  category: retention
-  flow: transform
   topology: single
   order: 1
   tags: [ttl, delete, retention, partitions, parts, ttl-only-drop-parts]

@@ -44,7 +44,7 @@ def test_describe_explains_pattern_without_execution_details(capsys):
     normalized = " ".join(output.split())
     assert " ".join(pattern.description.split()) in normalized
     assert " ".join(cli._flow_summary(pattern).split()) in normalized
-    assert "CDC / INGESTION / SINGLE  (3 patterns)" in output
+    assert "DATABASES → CLICKHOUSE  (5 patterns)" in output
     assert "\n    profiles" not in output
     assert "\n    driver" not in output
     assert "\n    schema" not in output
@@ -314,8 +314,6 @@ def test_invalid_manifest_names_its_file_and_field(tmp_path):
         "metadata:\n"
         "  title: Broken\n"
         "  description: A manifest with a colon that YAML reads as a mapping.\n"
-        "  category: retention\n"
-        "  flow: transform\n"
         "  topology: single\n"
         "  graph: |-\n"
         "    lane:\n"

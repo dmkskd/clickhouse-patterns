@@ -20,8 +20,6 @@ metadata:
     query:
       {mergetree:candles_1m, mergetree:candles_5m} -[argMinMerge/maxMerge/... on read]-> client:rollup(label=rollup query)
   status: stable
-  category: aggregation
-  flow: transform
   topology: single
   order: 2
   tags: [aggregation, rollup, materialized-view, aggregatingmergetree, fan-out]

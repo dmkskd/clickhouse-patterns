@@ -16,8 +16,6 @@ metadata:
         -[INSERT]-> remote-table:writer(engine=S3,label=demo.exports_write,note=**Write surface**\nBound to one concrete key, because a glob cannot name the object an INSERT would create.\n- inserts only ever create objects\n- repeating one needs s3_truncate_on_insert or s3_create_new_file_on_insert)
         -[creates the object]-> minio:appended(bucket=clickhouse,prefix=exports/,format=Parquet,label=exports/appended.parquet,note=**Written from ClickHouse**\nLands in the same prefix the read surface covers, so the next SELECT returns it alongside the original objects.)
   status: under-review
-  category: ingestion
-  flow: ingestion
   topology: single
   order: 2
   tags: [s3, s3-engine, query-in-place, export, glob]

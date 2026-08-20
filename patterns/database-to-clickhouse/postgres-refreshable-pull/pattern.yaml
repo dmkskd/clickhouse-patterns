@@ -31,8 +31,6 @@ metadata:
       {refreshable-mv:orders, mv:orders_latest}
         -[plain SELECT · no FINAL]-> client:readers(label=analytics readers,note=**Plain reads**\nA plain MergeTree read.\n- stale by up to one interval)
   status: under-review
-  category: ingestion
-  flow: ingestion
   topology: single
   order: 2
   tags: [postgres, refreshable-mv, scheduled-pull, dimension-table]

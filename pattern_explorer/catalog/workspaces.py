@@ -122,8 +122,6 @@ def create_workspace_pattern(slug: str) -> CloneInfo:
                     "    -> mergetree:destination(label=replace with the real destination)\n"
                 ),
                 "status": "wip",
-                "category": "custom",
-                "flow": "ingestion",
                 "topology": "single",
                 "tags": ["workspace"],
             },

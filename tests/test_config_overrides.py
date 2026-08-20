@@ -11,8 +11,8 @@ def _pattern(tmp_path: Path, config: list[dict]) -> Pattern:
     (tmp_path / "config" / "tiered.xml").write_text("<clickhouse/>\n")
     return Pattern(
         title="Config overlay", description="Test pattern.",
-        graph="test:\n  client:x -> mergetree:y", category="test",
-        flow="test", topology="single", profiles=["single"], driver_node="ch",
+        graph="test:\n  client:x -> mergetree:y",
+        topology="single", profiles=["single"], driver_node="ch",
         slug="config-overlay", dir=tmp_path, schema_sql=None, clickhouse_config=config,
     )
 
@@ -44,8 +44,8 @@ def _pattern_with_init(tmp_path: Path, init: list[dict]) -> Pattern:
     (tmp_path / "seed.sql").write_text("CREATE TABLE t (id Int32);\n")
     return Pattern(
         title="Init overlay", description="Test pattern.",
-        graph="test:\n  client:x -> mergetree:y", category="test",
-        flow="test", topology="single", profiles=["single", "postgres"], driver_node="ch",
+        graph="test:\n  client:x -> mergetree:y",
+        topology="single", profiles=["single", "postgres"], driver_node="ch",
         slug="init-overlay", dir=tmp_path, schema_sql=None, service_init=init,
     )
 

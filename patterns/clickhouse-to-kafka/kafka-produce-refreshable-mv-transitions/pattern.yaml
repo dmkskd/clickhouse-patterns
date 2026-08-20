@@ -27,8 +27,6 @@ metadata:
         -> kafka-table:alerts_out
         -> topic:alerts(stream=FIRING + RESOLVED)
   status: wip
-  category: kafka
-  flow: output
   topology: single
   order: 3
   tags: [kafka, kafka-engine, refreshable-mv, alerts, transitions]

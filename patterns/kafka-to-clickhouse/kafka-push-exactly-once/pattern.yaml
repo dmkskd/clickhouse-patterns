@@ -22,8 +22,6 @@ metadata:
       client:reader(label=query client)
         -[8000 rows · 8000 distinct]-> replicated-mergetree:events@replicas
   status: wip
-  category: kafka
-  flow: ingestion
   topology: replicated
   order: 7
   tags: [kafka, push, kafka-connect, exactly-once]
