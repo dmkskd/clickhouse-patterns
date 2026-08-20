@@ -71,16 +71,17 @@ run or detached session is active.
 
 Open `<pattern_dir>/pattern.yaml` first, using the exact directory reported by
 session status. Follow its file fields rather than assuming standard filenames.
-Read the files that exist:
+Manifest keys are grouped: catalog fields under `metadata:`, runtime fields
+under `spec:` (with the lifecycle under `spec.steps:`). Read the files that exist:
 
-1. `category`, `flow`, `topology`, and `tags` for the declared taxonomy.
-2. `graph` for the declared data paths and topology (the resource-flow DSL).
-3. `references` for relevant upstream documentation and issue context.
+1. `metadata.category`, `metadata.flow`, `metadata.topology`, and `metadata.tags` for the declared taxonomy.
+2. `metadata.graph` for the declared data paths and topology (the resource-flow DSL).
+3. `metadata.references` for relevant upstream documentation and issue context.
 4. `README.md` for the technique and known constraints.
-5. `schema_sql` for the concrete topology and data flow.
-6. `load` for the input data and operational sequence.
+5. `spec.steps.schema` for the concrete topology and data flow.
+6. `spec.steps.load` for the input data and operational sequence.
 7. `verify.sql` and `verify.expected` for deterministic output.
-8. `ready_when` for convergence checks, nodes, values, and timeouts.
+8. `spec.steps.ready_when` for convergence checks, nodes, values, and timeouts.
 
 Use the `graph` as the initial topology claim, then verify it against the SQL,
 load code, and runtime objects. Each top-level lane (a name ending in `:`, such

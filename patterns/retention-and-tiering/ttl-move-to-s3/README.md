@@ -5,7 +5,7 @@ parts whose `event_time` is older than 30 days to `cold_s3`, an S3 disk backed
 by the stack's MinIO service.
 
 `config/tiered-storage.xml` is mounted only for this pattern through
-`clickhouse_config` in `pattern.yaml`. It adds the `cold_s3` disk and `tiered`
+`spec.services.clickhouse.config` in `pattern.yaml`. It adds the `cold_s3` disk and `tiered`
 storage policy under ClickHouse `config.d`; it does not replace the shared
 server configuration. The table opts into that policy in `schema.sql`.
 

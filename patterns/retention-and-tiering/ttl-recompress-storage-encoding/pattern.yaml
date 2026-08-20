@@ -1,65 +1,68 @@
-manifest_version: 1
-status: wip
-title: "TTL recompression: change the storage encoding"
-description: |-
-  Use RECOMPRESS TTL when older data should use a different compression policy
-  from recently written data. Once all rows in a MergeTree part reach the age
-  condition, ClickHouse rewrites that part. The data remains columnar: the TTL
-  recompression codec applies to columns using `Default`, while a fixed
-  per-column `CODEC(...)` takes precedence. Codec combinations can be subtle;
-  read the codec reference below before combining per-column codecs with TTL
-  recompression.
+manifest_version: 2
+metadata:
+  title: 'TTL recompression: change the storage encoding'
+  description: |-
+    Use RECOMPRESS TTL when older data should use a different compression policy
+    from recently written data. Once all rows in a MergeTree part reach the age
+    condition, ClickHouse rewrites that part. The data remains columnar: the TTL
+    recompression codec applies to columns using `Default`, while a fixed
+    per-column `CODEC(...)` takes precedence. Codec combinations can be subtle;
+    read the codec reference below before combining per-column codecs with TTL
+    recompression.
 
-  Select the expiry threshold for recompression from query needs, then
-  compare compression ratio, merge CPU, and historical-query latency. This is rewrite work paced by
-  `merge_with_recompression_ttl_timeout` (four hours by default); inspect
-  `TTLRecompressMerge` entries in `system.part_log` alongside bytes on disk.
-graph: |-
-  ingest:
-    client:writer -> mergetree:recompressed_metrics(engine=MergeTree,note=**RECOMPRESS TTL**\n- Eligible parts are rewritten\n- New part uses the chosen codec\n- Rows remain unchanged)
+    Select the expiry threshold for recompression from query needs, then
+    compare compression ratio, merge CPU, and historical-query latency. This is rewrite work paced by
+    `merge_with_recompression_ttl_timeout` (four hours by default); inspect
+    `TTLRecompressMerge` entries in `system.part_log` alongside bytes on disk.
+  graph: |-
+    ingest:
+      client:writer -> mergetree:recompressed_metrics(engine=MergeTree,note=**RECOMPRESS TTL**\n- Eligible parts are rewritten\n- New part uses the chosen codec\n- Rows remain unchanged)
 
-  query:
-    mergetree:recompressed_metrics -[reads the active part after recompression]-> client:analyst
+    query:
+      mergetree:recompressed_metrics -[reads the active part after recompression]-> client:analyst
 
-category: retention
-flow: transform
-topology: single
-order: 5
-tags: [ttl, recompress, codec, rewrite]
-related_patterns:
-  - slug: ttl-policy-change-rollout
-    note: Read before changing this table's TTL on existing data.
-profiles: [single]
-driver_node: ch
-schema_sql: schema.sql
-load: load.py
-ready_when:
-  - query: >-
-      SELECT count() FROM demo.recompressed_metrics
-    value: 2
-    timeout: 60
+  status: wip
+  category: retention
+  flow: transform
+  topology: single
+  order: 5
+  tags: [ttl, recompress, codec, rewrite]
+  references:
+    - label: 'ClickHouse: Manage data with TTL'
+      url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
+    - label: 'Altinity: TTL recompression and CODEC(Default)'
+      url: https://kb.altinity.com/altinity-kb-queries-and-syntax/ttl/ttl-recompress-example/
+    - label: 'Altinity: modifying and materializing TTL'
+      url: https://kb.altinity.com/altinity-kb-queries-and-syntax/ttl/modify-ttl/
+  related_patterns:
+    - slug: ttl-policy-change-rollout
+      note: Read before changing this table's TTL on existing data.
+  tradeoffs:
+    benefits:
+      - Reduces historical storage while retaining the same schema and detail.
+      - Uses a table-local lifecycle rule instead of a separate rewrite pipeline.
+    limitations:
+      - Recompression rewrites every column in each eligible part, and must compete with ordinary merges for resources.
+      - Older reads may trade storage savings for additional decompression CPU.
+spec:
+  profiles: [single]
+  driver_node: ch
+  steps:
+    schema: schema.sql
+    load: load.py
+    ready_when:
+      - query: >-
+          SELECT count() FROM demo.recompressed_metrics
+        value: 2
+        timeout: 60
   # A recompression merge can be selected more than once while the demo runs,
   # so assert that at least one happened rather than an exact count.
-  - query: >-
-      SELECT count() >= 1 FROM system.part_log
-      WHERE database = 'demo' AND table = 'recompressed_metrics'
-        AND merge_reason = 'TTLRecompressMerge'
-    value: 1
-    timeout: 60
-verify:
-  sql: verify.sql
-  expected: expected.txt
-references:
-  - label: "ClickHouse: Manage data with TTL"
-    url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
-  - label: "Altinity: TTL recompression and CODEC(Default)"
-    url: https://kb.altinity.com/altinity-kb-queries-and-syntax/ttl/ttl-recompress-example/
-  - label: "Altinity: modifying and materializing TTL"
-    url: https://kb.altinity.com/altinity-kb-queries-and-syntax/ttl/modify-ttl/
-tradeoffs:
-  benefits:
-    - Reduces historical storage while retaining the same schema and detail.
-    - Uses a table-local lifecycle rule instead of a separate rewrite pipeline.
-  limitations:
-    - Recompression rewrites every column in each eligible part, and must compete with ordinary merges for resources.
-    - Older reads may trade storage savings for additional decompression CPU.
+      - query: >-
+          SELECT count() >= 1 FROM system.part_log
+          WHERE database = 'demo' AND table = 'recompressed_metrics'
+            AND merge_reason = 'TTLRecompressMerge'
+        value: 1
+        timeout: 60
+    verify:
+      sql: verify.sql
+      expected: expected.txt

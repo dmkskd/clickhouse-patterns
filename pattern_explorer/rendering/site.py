@@ -53,6 +53,16 @@ def _definition(pattern) -> dict:
             "dependsOn": item.depends_on,
         }
         for item in pattern.clickhouse_config
+    ] + [
+        {
+            "file": item.file,
+            "code": _read_pattern_file(pattern, item.file),
+            "lang": "sql",
+            "node": item.service,
+            "mountPath": f"/docker-entrypoint-initdb.d/zz-pattern-{item.destination_name}",
+            "dependsOn": [],
+        }
+        for item in pattern.service_init
     ]
     return {
         "manifest": block("pattern.yaml", "yaml"),

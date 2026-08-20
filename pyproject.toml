@@ -9,6 +9,7 @@ dependencies = [
     "tenacity>=9.0",            # poll-until / convergence waiting
     "pydantic>=2.7",            # validate pattern.yaml manifests
     "pyyaml>=6.0",
+    "ruamel.yaml>=0.18",        # comment-preserving pattern.yaml migration (migrate command)
     "confluent-kafka>=2.5",     # Kafka producer for load steps
     "pymysql>=1.1",             # MySQL DML for CDC load steps
     "psycopg[binary]>=3.2",     # Postgres DML for CDC load steps

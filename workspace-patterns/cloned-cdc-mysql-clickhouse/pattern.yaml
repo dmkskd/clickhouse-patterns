@@ -1,83 +1,86 @@
-manifest_version: 1
-title: "CDC - MySQL → ClickHouse (Altinity lightweight sink)"
-description: >-
-  Compares three ways to land the same MySQL CDC stream in ClickHouse: let the
-  Altinity sink create the target, transform that target through a materialized
-  view, or write into an existing ClickHouse table with deliberate types and a
-  generated column. All three paths receive matching INSERT, UPDATE, and DELETE
-  operations and preserve versioned current-state semantics.
-graph: |-
-  snapshot:
-    mysql:source_tables(label=2 MySQL sources,tables=test.orders + test.orders_existing)
-      -[initial snapshot · Debezium]-> connector:altinity_sink(label=Altinity lightweight sink,system=Altinity CDC,state=offsets + schema history)
+manifest_version: 2
+metadata:
+  title: CDC - MySQL → ClickHouse (Altinity lightweight sink)
+  description: >-
+    Compares three ways to land the same MySQL CDC stream in ClickHouse: let the
+    Altinity sink create the target, transform that target through a materialized
+    view, or write into an existing ClickHouse table with deliberate types and a
+    generated column. All three paths receive matching INSERT, UPDATE, and DELETE
+    operations and preserve versioned current-state semantics.
+  graph: |-
+    snapshot:
+      mysql:source_tables(label=2 MySQL sources,tables=test.orders + test.orders_existing)
+        -[initial snapshot · Debezium]-> connector:altinity_sink(label=Altinity lightweight sink,system=Altinity CDC,state=offsets + schema history)
 
-  snapshot:
-    connector:altinity_sink
-      -[snapshot · create target]-> mergetree:orders(label=test.orders,owner=connector-created)
+    snapshot:
+      connector:altinity_sink
+        -[snapshot · create target]-> mergetree:orders(label=test.orders,owner=connector-created)
 
-  snapshot:
-    connector:altinity_sink
-      -[snapshot · existing target]-> mergetree:orders_existing(label=test.orders_existing,owner=pattern schema)
+    snapshot:
+      connector:altinity_sink
+        -[snapshot · existing target]-> mergetree:orders_existing(label=test.orders_existing,owner=pattern schema)
 
-  changes:
-    mysql:source_tables
-      -[row-based MySQL binlog]-> connector:altinity_sink
+    changes:
+      mysql:source_tables
+        -[row-based MySQL binlog]-> connector:altinity_sink
 
-  changes:
-    connector:altinity_sink
-      -[versions + tombstones]-> mergetree:orders
+    changes:
+      connector:altinity_sink
+        -[versions + tombstones]-> mergetree:orders
 
-  changes:
-    connector:altinity_sink
-      -[versions + tombstones]-> mergetree:orders_existing
+    changes:
+      connector:altinity_sink
+        -[versions + tombstones]-> mergetree:orders_existing
 
-  transformation:
-    mergetree:orders
-      -> mv:orders_transform_mv(reads=orders only)
-      -> mergetree:orders_transformed@mv-transformed(source=orders MV)
-profiles: [cdc-ch, mysql, cdc-mysql]
-category: cdc
-flow: ingestion
-topology: single
-tags: [cdc, mysql]
-driver_node: ch-cdc
+    transformation:
+      mergetree:orders
+        -> mv:orders_transform_mv(reads=orders only)
+        -> mergetree:orders_transformed@mv-transformed(source=orders MV)
+  category: cdc
+  flow: ingestion
+  topology: single
+  tags: [cdc, mysql]
+  references:
+    - label: Altinity ClickHouse Sink Connector
+      url: https://github.com/Altinity/clickhouse-sink-connector
 
-references:
-  - label: Altinity ClickHouse Sink Connector
-    url: https://github.com/Altinity/clickhouse-sink-connector
+spec:
+  profiles: [cdc-ch, mysql, cdc-mysql]
+  driver_node: ch-cdc
 
-# ch-cdc initialization provides orders_existing before the connector starts;
-# the connector still creates orders. load.py installs the transformation after
-# the initial snapshot because its source table must exist first.
-schema_sql: null
-load: load.py
+  steps:
+    # ch-cdc initialization provides orders_existing before the connector starts;
+    # the connector still creates orders. load.py installs the transformation after
+    # the initial snapshot because its source table must exist first.
+    schema:
+    load: load.py
 
-ready_when:
-  - query: "SELECT engine FROM system.tables WHERE database = 'test' AND name = 'orders'"
-    value: ReplacingMergeTree
-    node: ch-cdc
-    timeout: 60
-  - query: "SELECT type FROM system.columns WHERE database = 'test' AND table = 'orders_existing' AND name = 'amount'"
-    value: "Nullable(Int64)"
-    node: ch-cdc
-    timeout: 60
-  - query: "SELECT type FROM system.columns WHERE database = 'test' AND table = 'orders_transformed' AND name = 'amount'"
-    value: "Nullable(Decimal(12, 2))"
-    node: ch-cdc
-    timeout: 60
-  - query: "SELECT count() FROM test.orders FINAL WHERE id = 3 AND is_deleted = 0"
-    value: 0
-    node: ch-cdc
-    timeout: 60
-  - query: "SELECT count() FROM test.orders_transformed FINAL WHERE id = 3 AND is_deleted = 0"
-    value: 0
-    node: ch-cdc
-    timeout: 60
-  - query: "SELECT count() FROM test.orders_existing FINAL WHERE id = 3 AND is_deleted = 0"
-    value: 0
-    node: ch-cdc
-    timeout: 60
+    ready_when:
+      - query: SELECT engine FROM system.tables WHERE database = 'test' AND name = 'orders'
+        value: ReplacingMergeTree
+        node: ch-cdc
+        timeout: 60
+      - query: SELECT type FROM system.columns WHERE database = 'test' AND table = 'orders_existing' AND name = 'amount'
+        value: Nullable(Int64)
+        node: ch-cdc
+        timeout: 60
+      - query: SELECT type FROM system.columns WHERE database = 'test' AND table = 'orders_transformed' AND name = 'amount'
+        value: Nullable(Decimal(12, 2))
+        node: ch-cdc
+        timeout: 60
+      - query: SELECT count() FROM test.orders FINAL WHERE id = 3 AND is_deleted = 0
+        value: 0
+        node: ch-cdc
+        timeout: 60
+      - query: SELECT count() FROM test.orders_transformed FINAL WHERE id = 3 AND is_deleted = 0
+        value: 0
+        node: ch-cdc
+        timeout: 60
+      - query: SELECT count() FROM test.orders_existing FINAL WHERE id = 3 AND is_deleted = 0
+        value: 0
+        node: ch-cdc
+        timeout: 60
 
-verify:
-  sql: verify.sql
-  expected: expected.txt
+    verify:
+      sql: verify.sql
+      expected: expected.txt

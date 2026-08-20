@@ -29,20 +29,25 @@ def _write_pattern(root: Path, slug: str, group: str = "demo-group") -> Path:
     directory.mkdir(parents=True)
     (directory / "pattern.yaml").write_text(
         """\
-title: Demo pattern
-description: A complete pattern used to test local cloning.
-graph: "ingestion:\n  client:source -> mergetree:ch"
-category: demo
-flow: ingestion
-topology: single
-tags: [demo]
-profiles: [single]
-driver_node: ch
-schema_sql: null
-load: null
-verify:
-  sql: null
-  expected: null
+manifest_version: 2
+metadata:
+  title: Demo pattern
+  description: A complete pattern used to test local cloning.
+  graph: "ingestion:\n  client:source -> mergetree:ch"
+  status: stable
+  category: demo
+  flow: ingestion
+  topology: single
+  tags: [demo]
+spec:
+  profiles: [single]
+  driver_node: ch
+  steps:
+    schema: null
+    load: null
+    verify:
+      sql: null
+      expected: null
 """
     )
     (directory / "README.md").write_text("# Demo\n")
@@ -69,8 +74,8 @@ def test_clone_creates_complete_local_copy_outside_curated_discovery(
     destination = cloned / "my-demo"
     assert info.directory == destination.resolve()
     assert (destination / "pattern.yaml").read_text() == (
-        source / "pattern.yaml"
-    ).read_text() + "status: wip\n"
+        (source / "pattern.yaml").read_text().replace("  status: stable", "  status: wip")
+    )
     assert (destination / "README.md").read_text() == "# Demo\n"
     metadata = read_clone_info(destination)
     assert metadata is not None

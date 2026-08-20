@@ -1,58 +1,61 @@
-manifest_version: 1
-status: wip
-title: "Shared consumer group into a replicated table"
-description: |-
-  Two ClickHouse replicas each run the same `Kafka`-engine consumer in one consumer group. The topic has a single partition, so Kafka keeps one consumer active and the other on standby.
+manifest_version: 2
+metadata:
+  title: Shared consumer group into a replicated table
+  description: |-
+    Two ClickHouse replicas each run the same `Kafka`-engine consumer in one consumer group. The topic has a single partition, so Kafka keeps one consumer active and the other on standby.
 
-  The active consumer's materialized view inserts into the local `ReplicatedMergeTree`, and Keeper replicates the data parts to the other node. If the active node fails, Kafka hands the partition to the standby, which resumes from the last committed offset.
+    The active consumer's materialized view inserts into the local `ReplicatedMergeTree`, and Keeper replicates the data parts to the other node. If the active node fails, Kafka hands the partition to the standby, which resumes from the last committed offset.
 
-  Either replica serves reads; there is no `Distributed` table.
-tradeoffs:
-  benefits:
-    - ReplicatedMergeTree copies durable data parts to a second ClickHouse node, and either replica can serve reads.
-    - One consumer group makes the second replica a hot standby, so if the active consumer fails Kafka reassigns the partition to it.
-    - Symmetric ON CLUSTER DDL creates the same ingestion path on both nodes.
-  limitations:
-    - Kafka-engine delivery is at-least-once, so retries can insert duplicate rows.
-    - With one Kafka partition, only one replica consumes at a time; the second consumer is failover rather than parallelism.
-    - Keeper and ReplicatedMergeTree add coordination and replication operations.
-graph: |-
-  ingestion:
-    topic:events(partitions=1)
-      -[1 partition · group ch_events]-> consumer-group:events-consumers(label=events_queue,member1=PARTITION 0,member2=NO PARTITION,note=**Shared consumer group**\n- Two nodes define events_queue in the same group ch_events\n- Kafka's group coordinator assigns the one partition to a single node (consumer group rebalancing)\n- That node is active and the other stays passive as a hot standby\n- On failover the standby takes over the partition and resumes)
-      -> mv:events_mv
-      -[writes local replica]-> replicated-mergetree:events@replicas(mode=active-active,sync=Keeper,data=full-copy)
+    Either replica serves reads; there is no `Distributed` table.
+  graph: |-
+    ingestion:
+      topic:events(partitions=1)
+        -[1 partition · group ch_events]-> consumer-group:events-consumers(label=events_queue,member1=PARTITION 0,member2=NO PARTITION,note=**Shared consumer group**\n- Two nodes define events_queue in the same group ch_events\n- Kafka's group coordinator assigns the one partition to a single node (consumer group rebalancing)\n- That node is active and the other stays passive as a hot standby\n- On failover the standby takes over the partition and resumes)
+        -> mv:events_mv
+        -[writes local replica]-> replicated-mergetree:events@replicas(mode=active-active,sync=Keeper,data=full-copy)
 
-  query:
-    client(protocol=HTTP/native,target=either-replica)
-      -> replicated-mergetree:events@replicas
-profiles: [cluster, kafka]
-category: kafka
-flow: ingestion
-topology: replicated
-order: 1
-tags: [kafka, pull, kafka-engine]
-driver_node: ch-01
+    query:
+      client(protocol=HTTP/native,target=either-replica)
+        -> replicated-mergetree:events@replicas
+  status: wip
+  category: kafka
+  flow: ingestion
+  topology: replicated
+  order: 1
+  tags: [kafka, pull, kafka-engine]
+  tradeoffs:
+    benefits:
+      - ReplicatedMergeTree copies durable data parts to a second ClickHouse node, and either replica can serve reads.
+      - One consumer group makes the second replica a hot standby, so if the active consumer fails Kafka reassigns the partition to it.
+      - Symmetric ON CLUSTER DDL creates the same ingestion path on both nodes.
+    limitations:
+      - Kafka-engine delivery is at-least-once, so retries can insert duplicate rows.
+      - With one Kafka partition, only one replica consumes at a time; the second consumer is failover rather than parallelism.
+      - Keeper and ReplicatedMergeTree add coordination and replication operations.
+spec:
+  profiles: [cluster, kafka]
+  driver_node: ch-01
 
-schema_sql: schema.sql
-load: load.py
+  steps:
+    schema: schema.sql
+    load: load.py
 
-# Convergence checks - eventual consistency the healthcheck can't express.
-# Each replica must contain exactly the complete id range, not merely 20000 rows.
-ready_when:
-  - query: >-
-      SELECT toString(tuple(count(), uniqExact(id), min(id), max(id)))
-      FROM demo.events
-    value: "(20000,20000,0,19999)"
-    node: ch-01
-    timeout: 90
-  - query: >-
-      SELECT toString(tuple(count(), uniqExact(id), min(id), max(id)))
-      FROM demo.events
-    value: "(20000,20000,0,19999)"
-    node: ch-02
-    timeout: 30
+    # Convergence checks - eventual consistency the healthcheck can't express.
+    # Each replica must contain exactly the complete id range, not merely 20000 rows.
+    ready_when:
+      - query: >-
+          SELECT toString(tuple(count(), uniqExact(id), min(id), max(id)))
+          FROM demo.events
+        value: (20000,20000,0,19999)
+        node: ch-01
+        timeout: 90
+      - query: >-
+          SELECT toString(tuple(count(), uniqExact(id), min(id), max(id)))
+          FROM demo.events
+        value: (20000,20000,0,19999)
+        node: ch-02
+        timeout: 30
 
-verify:
-  sql: verify.sql
-  expected: expected.txt
+    verify:
+      sql: verify.sql
+      expected: expected.txt

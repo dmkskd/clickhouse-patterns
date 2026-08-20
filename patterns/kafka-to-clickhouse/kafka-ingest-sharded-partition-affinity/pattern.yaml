@@ -1,66 +1,69 @@
-manifest_version: 1
-status: wip
-title: "Each shard natively owns its partitions (experimental)"
-description: |-
-  Each shard runs a `StorageKafka2` consumer that reads only the partitions it owns, using the experimental `kafka_partition_shard_num` and `kafka_shard_count` settings. ClickHouse assigns partition p to the shard where `p % shard_count == shard_num - 1`, so with two shards, shard 1 consumes partitions 0 and 2 while shard 2 consumes 1 and 3.
+manifest_version: 2
+metadata:
+  title: Each shard natively owns its partitions (experimental)
+  description: |-
+    Each shard runs a `StorageKafka2` consumer that reads only the partitions it owns, using the experimental `kafka_partition_shard_num` and `kafka_shard_count` settings. ClickHouse assigns partition p to the shard where `p % shard_count == shard_num - 1`, so with two shards, shard 1 consumes partitions 0 and 2 while shard 2 consumes 1 and 3.
 
-  No shard reads a partition it does not own, so unlike the materialized-view filter there is no wasted read, and unlike the single-consumer route there is no single ingestion point. Offsets and partition locks live in Keeper.
+    No shard reads a partition it does not own, so unlike the materialized-view filter there is no wasted read, and unlike the single-consumer route there is no single ingestion point. Offsets and partition locks live in Keeper.
 
-  The engine is experimental and not production ready; it needs a nightly build and an opt-in flag.
-tradeoffs:
-  benefits:
-    - Each shard consumes only its own partitions, so there is no N-times Kafka read and no filter that reads then discards rows.
-    - Ingestion scales across shards with no single ingestion point, and each shard writes locally.
-    - Partition ownership is deterministic, so recovery can reset offsets for just the affected shard's partitions.
-  limitations:
-    - StorageKafka2 is experimental and not production ready, and it requires a nightly build plus the allow_experimental_kafka_offsets_storage_in_keeper flag.
-    - Assignment is modulo only, so the partition-to-shard map is fixed by the shard count rather than chosen per shard.
-    - Dedup holds only if the producer keys each logical event to one partition; the same event split across two partitions still lands on two shards.
-graph: |-
-  ingestion:
-    topic:events(partitions=4)
-      -[shard owns p % 2]-> kafka-table:events_queue@shards(engine=StorageKafka2)
-      -> mv:events_mv@shards
-      -> mergetree:events@shards
+    The engine is experimental and not production ready; it needs a nightly build and an opt-in flag.
+  graph: |-
+    ingestion:
+      topic:events(partitions=4)
+        -[shard owns p % 2]-> kafka-table:events_queue@shards(engine=StorageKafka2)
+        -> mv:events_mv@shards
+        -> mergetree:events@shards
 
-  query:
-    client -> distributed:events_all -> mergetree:events@shards
-profiles: [shards-v2, kafka]
-category: kafka
-flow: ingestion
-topology: sharded
-order: 5
-tags: [kafka, pull, kafka-engine, partition-affinity, storagekafka2, experimental]
-references:
-  - label: "ClickHouse Kafka table engine: static partition-to-shard affinity"
-    url: "https://clickhouse.com/docs/engines/table-engines/integrations/kafka#static-partition-to-shard-affinity"
-  - label: "GitHub RFC: sticky partition-to-shard assignment (the three workarounds this replaces)"
-    url: "https://github.com/ClickHouse/ClickHouse/issues/107832"
-  - label: "GitHub PR: add static partition-to-shard affinity for StorageKafka2"
-    url: "https://github.com/ClickHouse/ClickHouse/pull/108886"
-driver_node: ch-s1v2
+    query:
+      client -> distributed:events_all -> mergetree:events@shards
+  status: wip
+  category: kafka
+  flow: ingestion
+  topology: sharded
+  order: 5
+  tags: [kafka, pull, kafka-engine, partition-affinity, storagekafka2, experimental]
+  references:
+    - label: 'ClickHouse Kafka table engine: static partition-to-shard affinity'
+      url: https://clickhouse.com/docs/engines/table-engines/integrations/kafka#static-partition-to-shard-affinity
+    - label: 'GitHub RFC: sticky partition-to-shard assignment (the three workarounds this replaces)'
+      url: https://github.com/ClickHouse/ClickHouse/issues/107832
+    - label: 'GitHub PR: add static partition-to-shard affinity for StorageKafka2'
+      url: https://github.com/ClickHouse/ClickHouse/pull/108886
+  tradeoffs:
+    benefits:
+      - Each shard consumes only its own partitions, so there is no N-times Kafka read and no filter that reads then discards rows.
+      - Ingestion scales across shards with no single ingestion point, and each shard writes locally.
+      - Partition ownership is deterministic, so recovery can reset offsets for just the affected shard's partitions.
+    limitations:
+      - StorageKafka2 is experimental and not production ready, and it requires a nightly build plus the allow_experimental_kafka_offsets_storage_in_keeper flag.
+      - Assignment is modulo only, so the partition-to-shard map is fixed by the shard count rather than chosen per shard.
+      - Dedup holds only if the producer keys each logical event to one partition; the same event split across two partitions still lands on two shards.
+spec:
+  profiles: [shards-v2, kafka]
+  driver_node: ch-s1v2
 
-requires:
-  clickhouse_min: "26.8"
-  note: "StorageKafka2 static partition-to-shard affinity (kafka_partition_shard_num / kafka_shard_count) landed in ClickHouse 26.8 and is experimental."
+  requires:
+    clickhouse_min: '26.8'
+    note: StorageKafka2 static partition-to-shard affinity (kafka_partition_shard_num / kafka_shard_count) landed in ClickHouse 26.8 and is experimental.
 
-# One ON CLUSTER schema. The {shard} and {replica} server macros give each node
-# its shard number and replica name; the engine derives the partition set.
-schema_sql: schema.sql
+  # One ON CLUSTER schema. The {shard} and {replica} server macros give each node
+  # its shard number and replica name; the engine derives the partition set.
+  steps:
+    schema: schema.sql
 
-load: load.py
+    load: load.py
 
-# Convergence: each shard stored exactly its owned half (4000 of 8000).
-ready_when:
-  - query: "SELECT count() FROM demo.events"
-    value: 4000
-    node: ch-s1v2
-    timeout: 120
-  - query: "SELECT count() FROM demo.events"
-    value: 4000
-    node: ch-s2v2
-    timeout: 120
+    # Convergence: each shard stored exactly its owned half (4000 of 8000).
+    ready_when:
+      - query: SELECT count() FROM demo.events
+        value: 4000
+        node: ch-s1v2
+        timeout: 120
+      - query: SELECT count() FROM demo.events
+        value: 4000
+        node: ch-s2v2
+        timeout: 120
 
-verify:
-  sql: verify.sql
-  expected: expected.txt
+    verify:
+      sql: verify.sql
+      expected: expected.txt

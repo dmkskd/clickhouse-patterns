@@ -1,64 +1,67 @@
-manifest_version: 1
-status: wip
-title: "ClickHouse Sink + exactly-once"
-description: |-
-  Enables the official ClickHouse Kafka Connect Sink's `KeeperMap`-backed exactly-once mode.
+manifest_version: 2
+metadata:
+  title: ClickHouse Sink + exactly-once
+  description: |-
+    Enables the official ClickHouse Kafka Connect Sink's `KeeperMap`-backed exactly-once mode.
 
-  The test ingests a topic, deletes committed Kafka offsets to force complete reprocessing, and verifies that the durable replicated table remains at 8000 rows rather than duplicating replayed records.
+    The test ingests a topic, deletes committed Kafka offsets to force complete reprocessing, and verifies that the durable replicated table remains at 8000 rows rather than duplicating replayed records.
 
-  `exactlyOnce` is disabled by default. Before relying on this mode's delivery guarantees, read the linked connector documentation and design document carefully to avoid surprises during failure and recovery. They explain its configuration, state, and retry behaviour.
-tradeoffs:
-  benefits:
-    - KeeperMap records topic-partition offset ranges and insert state so confirmed replayed batches can be skipped.
-    - The connector owns consumption, batching, replay handling, and HTTP delivery outside ClickHouse.
-    - ReplicatedMergeTree copies accepted rows to a peer replica while either ClickHouse node can serve reads.
-  limitations:
-    - Exactly-once adds durable KeeperMap state whose lifecycle must remain aligned with Kafka offsets and the target table.
-    - Kafka Connect, the sink plugin, ClickHouse Keeper, and replicated storage all require deployment and monitoring.
-    - Ambiguous failures recorded before an insert is confirmed may reinsert a batch and rely on ClickHouse block deduplication.
-graph: |-
-  ingestion:
-    client:producer(label=event producer)
-      -[8000 JSON records]-> topic:events(partitions=1)
-      -[consume · test replays offset 0]-> connector:clickhouse_sink(label=ClickHouse Sink,system=Kafka Connect,exactlyOnce=true)
-      -[insert unseen batches]-> replicated-mergetree:events@replicas(label=demo.events,replication=Keeper)
+    `exactlyOnce` is disabled by default. Before relying on this mode's delivery guarantees, read the linked connector documentation and design document carefully to avoid surprises during failure and recovery. They explain its configuration, state, and retry behaviour.
+  graph: |-
+    ingestion:
+      client:producer(label=event producer)
+        -[8000 JSON records]-> topic:events(partitions=1)
+        -[consume · test replays offset 0]-> connector:clickhouse_sink(label=ClickHouse Sink,system=Kafka Connect,exactlyOnce=true)
+        -[insert unseen batches]-> replicated-mergetree:events@replicas(label=demo.events,replication=Keeper)
 
-  state:
-    connector:clickhouse_sink
-      -[offset range · BEFORE / AFTER]-> keepermap:connect_state(label=demo.connect_state,role=connector batch state)
+    state:
+      connector:clickhouse_sink
+        -[offset range · BEFORE / AFTER]-> keepermap:connect_state(label=demo.connect_state,role=connector batch state)
 
-  query:
-    client:reader(label=query client)
-      -[8000 rows · 8000 distinct]-> replicated-mergetree:events@replicas
-profiles: [cluster, kafka, connect]
-category: kafka
-flow: ingestion
-topology: replicated
-order: 7
-tags: [kafka, push, kafka-connect, exactly-once]
-driver_node: ch-01
+    query:
+      client:reader(label=query client)
+        -[8000 rows · 8000 distinct]-> replicated-mergetree:events@replicas
+  status: wip
+  category: kafka
+  flow: ingestion
+  topology: replicated
+  order: 7
+  tags: [kafka, push, kafka-connect, exactly-once]
+  references:
+    - label: Official sink features and exactlyOnce configuration
+      url: https://clickhouse.com/docs/integrations/kafka/clickhouse-kafka-connect-sink
+    - label: Exactly-once implementation design
+      url: https://github.com/ClickHouse/clickhouse-kafka-connect/blob/main/docs/DESIGN.md
 
-references:
-  - label: Official sink features and exactlyOnce configuration
-    url: https://clickhouse.com/docs/integrations/kafka/clickhouse-kafka-connect-sink
-  - label: Exactly-once implementation design
-    url: https://github.com/ClickHouse/clickhouse-kafka-connect/blob/main/docs/DESIGN.md
+  tradeoffs:
+    benefits:
+      - KeeperMap records topic-partition offset ranges and insert state so confirmed replayed batches can be skipped.
+      - The connector owns consumption, batching, replay handling, and HTTP delivery outside ClickHouse.
+      - ReplicatedMergeTree copies accepted rows to a peer replica while either ClickHouse node can serve reads.
+    limitations:
+      - Exactly-once adds durable KeeperMap state whose lifecycle must remain aligned with Kafka offsets and the target table.
+      - Kafka Connect, the sink plugin, ClickHouse Keeper, and replicated storage all require deployment and monitoring.
+      - Ambiguous failures recorded before an insert is confirmed may reinsert a batch and rely on ClickHouse block deduplication.
+spec:
+  profiles: [cluster, kafka, connect]
+  driver_node: ch-01
 
-schema_sql: schema.sql
-load: load.py          # ingest, then reset offsets & reprocess - dedup must hold
+  steps:
+    schema: schema.sql
+    load: load.py      # ingest, then reset offsets & reprocess - dedup must hold
 
-# After forced reprocessing of all 8000 records, still exactly 8000 rows -
-# the KeeperMap state store skipped the already-written offsets.
-ready_when:
-  - query: "SELECT count() FROM demo.events"
-    value: 8000
-    node: ch-01
-    timeout: 60
-  - query: "SELECT count() FROM demo.events"
-    value: 8000
-    node: ch-02        # replicated, so the peer agrees
-    timeout: 30
+    # After forced reprocessing of all 8000 records, still exactly 8000 rows -
+    # the KeeperMap state store skipped the already-written offsets.
+    ready_when:
+      - query: SELECT count() FROM demo.events
+        value: 8000
+        node: ch-01
+        timeout: 60
+      - query: SELECT count() FROM demo.events
+        value: 8000
+        node: ch-02    # replicated, so the peer agrees
+        timeout: 30
 
-verify:
-  sql: verify.sql
-  expected: expected.txt
+    verify:
+      sql: verify.sql
+      expected: expected.txt

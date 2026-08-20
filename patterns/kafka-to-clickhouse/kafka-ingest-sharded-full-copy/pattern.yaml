@@ -1,64 +1,67 @@
-manifest_version: 1
-status: wip
-title: "Each shard stores everything, dedup on read"
-description: |-
-  Every shard runs its own `Kafka`-engine consumer, a separate consumer group on `demo.events_queue`, reading every partition, because the Kafka engine cannot deterministically assign partitions to specific shards.
+manifest_version: 2
+metadata:
+  title: Each shard stores everything, dedup on read
+  description: |-
+    Every shard runs its own `Kafka`-engine consumer, a separate consumer group on `demo.events_queue`, reading every partition, because the Kafka engine cannot deterministically assign partitions to specific shards.
 
-  Each shard's `demo.events_mv` copies the rows into a local `demo.events` `ReplacingMergeTree`, so every shard holds the full stream. `ReplacingMergeTree` only collapses duplicates within a shard, so the `demo.events_all` distributed query must still deduplicate across shards.
+    Each shard's `demo.events_mv` copies the rows into a local `demo.events` `ReplacingMergeTree`, so every shard holds the full stream. `ReplacingMergeTree` only collapses duplicates within a shard, so the `demo.events_all` distributed query must still deduplicate across shards.
 
-  This keeps ingestion simple at the cost of N-times Kafka reads, storage, and query work.
-tradeoffs:
-  benefits:
-    - Ingestion is symmetric and simple; every shard independently stores the full stream.
-    - No partition-routing filter or inter-shard insert path is required.
-    - Each shard retains a complete local copy of the dataset.
-  limitations:
-    - Kafka reads, decoding, and storage are multiplied by the number of shards.
-    - Distributed queries see cross-shard duplicates and must deduplicate explicitly.
-    - Query CPU and network work increase with every additional full copy.
-graph: |-
-  ingestion:
-    topic:events(partitions=4)
-      -[2 groups · each reads all 4 partitions]-> kafka-table:events_queue@shards(groups=w2_s1 + w2_s2)
-      -> mv:events_mv@shards
-      -[complete copy per shard]-> mergetree:events@shards(copy=full topic)
+    This keeps ingestion simple at the cost of N-times Kafka reads, storage, and query work.
+  graph: |-
+    ingestion:
+      topic:events(partitions=4)
+        -[2 groups · each reads all 4 partitions]-> kafka-table:events_queue@shards(groups=w2_s1 + w2_s2)
+        -> mv:events_mv@shards
+        -[complete copy per shard]-> mergetree:events@shards(copy=full topic)
 
-  query:
-    client:reader(label=query client)
-      -[count + uniqExact(id)]-> distributed:events_all(label=demo.events_all)
-      -[read both shards]-> mergetree:events@shards
-profiles: [shards, kafka]
-category: kafka
-flow: ingestion
-topology: sharded
-order: 3
-tags: [kafka, pull, kafka-engine, workaround, query-dedup]
-references:
-  - label: "ClickHouse Kafka table engine"
-    url: "https://clickhouse.com/docs/engines/table-engines/integrations/kafka"
-  - label: "GitHub RFC: sticky partition-to-shard assignment"
-    url: "https://github.com/ClickHouse/ClickHouse/issues/107832"
-driver_node: ch-s1
-superseded_by: kafka-ingest-sharded-partition-affinity
-superseded_since: "26.8"
+    query:
+      client:reader(label=query client)
+        -[count + uniqExact(id)]-> distributed:events_all(label=demo.events_all)
+        -[read both shards]-> mergetree:events@shards
+  status: wip
+  category: kafka
+  flow: ingestion
+  topology: sharded
+  order: 3
+  tags: [kafka, pull, kafka-engine, workaround, query-dedup]
+  references:
+    - label: ClickHouse Kafka table engine
+      url: https://clickhouse.com/docs/engines/table-engines/integrations/kafka
+    - label: 'GitHub RFC: sticky partition-to-shard assignment'
+      url: https://github.com/ClickHouse/ClickHouse/issues/107832
+  superseded_by: kafka-ingest-sharded-partition-affinity
+  superseded_since: '26.8'
 
-# One ON CLUSTER schema. The {shard} server macro gives every shard a distinct
-# consumer group, so both groups read and store the complete topic.
-schema_sql: schema.sql
+  # One ON CLUSTER schema. The {shard} server macro gives every shard a distinct
+  # consumer group, so both groups read and store the complete topic.
+  tradeoffs:
+    benefits:
+      - Ingestion is symmetric and simple; every shard independently stores the full stream.
+      - No partition-routing filter or inter-shard insert path is required.
+      - Each shard retains a complete local copy of the dataset.
+    limitations:
+      - Kafka reads, decoding, and storage are multiplied by the number of shards.
+      - Distributed queries see cross-shard duplicates and must deduplicate explicitly.
+      - Query CPU and network work increase with every additional full copy.
+spec:
+  profiles: [shards, kafka]
+  driver_node: ch-s1
+  steps:
+    schema: schema.sql
 
-load: load.py
+    load: load.py
 
-# Convergence: every shard stored the full 8000 -> 16000 physical rows cluster-wide.
-ready_when:
-  - query: "SELECT count() FROM demo.events"
-    value: 8000
-    node: ch-s1
-    timeout: 90
-  - query: "SELECT count() FROM demo.events"
-    value: 8000
-    node: ch-s2
-    timeout: 60
+    # Convergence: every shard stored the full 8000 -> 16000 physical rows cluster-wide.
+    ready_when:
+      - query: SELECT count() FROM demo.events
+        value: 8000
+        node: ch-s1
+        timeout: 90
+      - query: SELECT count() FROM demo.events
+        value: 8000
+        node: ch-s2
+        timeout: 60
 
-verify:
-  sql: verify.sql
-  expected: expected.txt
+    verify:
+      sql: verify.sql
+      expected: expected.txt

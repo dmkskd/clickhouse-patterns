@@ -1,67 +1,70 @@
-manifest_version: 1
-status: wip
-title: "Changing TTL on existing data"
-description: |-
-  By default, `ALTER TABLE ... MODIFY TTL` both changes the table definition
-  and immediately starts applying the new TTL policy to all data the table
-  already holds. On a large table, applying the new policy may unexpectedly
-  consume considerable resources as soon as the command is issued, because
-  it applies to every existing part.
+manifest_version: 2
+metadata:
+  title: Changing TTL on existing data
+  description: |-
+    By default, `ALTER TABLE ... MODIFY TTL` both changes the table definition
+    and immediately starts applying the new TTL policy to all data the table
+    already holds. On a large table, applying the new policy may unexpectedly
+    consume considerable resources as soon as the command is issued, because
+    it applies to every existing part.
 
-  To defer work on existing data:
+    To defer work on existing data:
 
-  - Run `ALTER TABLE ... MODIFY TTL ...` with `materialize_ttl_after_modify = 0`
-    to change only the table definition. Existing parts keep the TTL metadata
-    of the previous policy, so background merges do not treat them as expired.
-  - New data is written under the new policy from that point on.
-  - Later, apply the new policy to selected existing data with
-    `MATERIALIZE TTL IN PARTITION ...`. That is a mutation: it rewrites the
-    partition's parts and enforces the new policy on them.
+    - Run `ALTER TABLE ... MODIFY TTL ...` with `materialize_ttl_after_modify = 0`
+      to change only the table definition. Existing parts keep the TTL metadata
+      of the previous policy, so background merges do not treat them as expired.
+    - New data is written under the new policy from that point on.
+    - Later, apply the new policy to selected existing data with
+      `MATERIALIZE TTL IN PARTITION ...`. That is a mutation: it rewrites the
+      partition's parts and enforces the new policy on them.
 
-  This example shortens the policy from one year to 30 days on a table
-  holding two older months. The change leaves existing data untouched
-  (`materialize_ttl_after_modify = 0`); a later `MATERIALIZE TTL` on one
-  month drops its expired rows, while the other month keeps its own.
-graph: |-
-  history:
-    client:writer -[monthly batches]-> mergetree:events(label=demo.events,note=**Table**\n- PARTITION BY toYYYYMM(event_time)\n- Starts at event_time + 1 year DELETE\n- Holds two months of history)
+    This example shortens the policy from one year to 30 days on a table
+    holding two older months. The change leaves existing data untouched
+    (`materialize_ttl_after_modify = 0`); a later `MATERIALIZE TTL` on one
+    month drops its expired rows, while the other month keeps its own.
+  graph: |-
+    history:
+      client:writer -[monthly batches]-> mergetree:events(label=demo.events,note=**Table**\n- PARTITION BY toYYYYMM(event_time)\n- Starts at event_time + 1 year DELETE\n- Holds two months of history)
 
-  policy_change:
-    client:operator -[MODIFY TTL · materialize_ttl_after_modify=0]-> mergetree:events
+    policy_change:
+      client:operator -[MODIFY TTL · materialize_ttl_after_modify=0]-> mergetree:events
 
-  staged_rollout:
-    mergetree:events -[MATERIALIZE TTL · one partition]-> part:earlier_month(label=earlier month,note=**Mutation rewrite**\n- Rows past 30 days are dropped under the new policy\n- The later month keeps its one-year deadline\n- Its rows are dropped only when it is materialized in turn)
-category: retention
-flow: transform
-topology: single
-order: 3
-tags: [ttl, operations, alter, materialize, rollout]
-profiles: [single]
-driver_node: ch
-schema_sql: schema.sql
-load: load.py
-ready_when:
-  - query: >-
-      SELECT count() FROM demo.events
-    value: 3
-    timeout: 60
-  - query: >-
-      SELECT countIf(is_done) FROM system.mutations
-      WHERE database = 'demo' AND table = 'events'
-    value: 1
-    timeout: 60
-verify:
-  sql: verify.sql
-  expected: expected.txt
-references:
-  - label: "Altinity: modifying and materializing TTL"
-    url: https://kb.altinity.com/altinity-kb-queries-and-syntax/ttl/modify-ttl/
-  - label: "ClickHouse: Manage data with TTL"
-    url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
-tradeoffs:
-  benefits:
-    - The ALTER changes only the table definition; no background work starts until you ask for it.
-    - Each step targets a chosen partition, so the rollout can be paused and resumed.
-  limitations:
-    - Until a partition is materialized, the new policy does not apply to it. An unfinished rollout leaves the table under two policies at once.
-    - "ClickHouse does not drive the rollout: every remaining partition needs an explicit `MATERIALIZE TTL`, tracked for example through `system.mutations`."
+    staged_rollout:
+      mergetree:events -[MATERIALIZE TTL · one partition]-> part:earlier_month(label=earlier month,note=**Mutation rewrite**\n- Rows past 30 days are dropped under the new policy\n- The later month keeps its one-year deadline\n- Its rows are dropped only when it is materialized in turn)
+  status: wip
+  category: retention
+  flow: transform
+  topology: single
+  order: 3
+  tags: [ttl, operations, alter, materialize, rollout]
+  references:
+    - label: 'Altinity: modifying and materializing TTL'
+      url: https://kb.altinity.com/altinity-kb-queries-and-syntax/ttl/modify-ttl/
+    - label: 'ClickHouse: Manage data with TTL'
+      url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
+  tradeoffs:
+    benefits:
+      - The ALTER changes only the table definition; no background work starts until you ask for it.
+      - Each step targets a chosen partition, so the rollout can be paused and resumed.
+    limitations:
+      - Until a partition is materialized, the new policy does not apply to it. An unfinished rollout leaves the table under two policies at once.
+      - 'ClickHouse does not drive the rollout: every remaining partition needs an explicit `MATERIALIZE TTL`, tracked for example through `system.mutations`.'
+spec:
+  profiles: [single]
+  driver_node: ch
+  steps:
+    schema: schema.sql
+    load: load.py
+    ready_when:
+      - query: >-
+          SELECT count() FROM demo.events
+        value: 3
+        timeout: 60
+      - query: >-
+          SELECT countIf(is_done) FROM system.mutations
+          WHERE database = 'demo' AND table = 'events'
+        value: 1
+        timeout: 60
+    verify:
+      sql: verify.sql
+      expected: expected.txt

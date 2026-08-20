@@ -1,53 +1,56 @@
-manifest_version: 1
-status: under-review
-title: "Reading and writing a bucket prefix with the S3 table engine"
-description: |-
-  The `S3` table engine binds a ClickHouse table name to a path in object storage. The table holds no data of its own, and every `SELECT` reads the objects in the bucket. A glob in the path makes one table cover a whole prefix, including files that were already there before the table existed.
+manifest_version: 2
+metadata:
+  title: Reading and writing a bucket prefix with the S3 table engine
+  description: |-
+    The `S3` table engine binds a ClickHouse table name to a path in object storage. The table holds no data of its own, and every `SELECT` reads the objects in the bucket. A glob in the path makes one table cover a whole prefix, including files that were already there before the table existed.
 
-  An `INSERT` into an `S3` engine table creates an object at the declared path, which makes the table an export route as well as an access route, subject to two constraints. A glob path is read-only, so a table covering a prefix cannot be inserted into, and a second `INSERT` into an existing key fails unless a setting says whether to replace the object or write alongside it.
-tradeoffs:
-  benefits:
-    - A table name stands in for a bucket path, so queries do not repeat credentials, format, and URL.
-    - Objects already in the bucket are visible as soon as the table is declared; there is no load step and nothing to keep in sync.
-    - An S3 engine table also writes, so exporting query results to S3 needs no external tool.
-  limitations:
-    - No indexes, no ALTER, no updates or deletes, and every query re-reads and re-parses the objects.
-    - A path with a glob is read-only, so covering a prefix and writing to it needs two table declarations.
-    - Inserts only ever create objects; repeating one requires s3_truncate_on_insert or s3_create_new_file_on_insert, and there are no merges to consolidate what accumulates.
-graph: |-
-  read:
-    minio:existing(bucket=clickhouse,prefix=exports/,format=Parquet,label=exports/*.parquet,note=**The prefix**\nObjects written upstream before any ClickHouse table exists, plus everything written back into it later.\n- visible as soon as the table is declared\n- no load step, nothing to keep in sync)
-      -[objects matched by the glob]-> remote-table:reader(engine=S3,label=demo.exports_s3,note=**Read surface**\nA declaration over the whole prefix. Holds no data; every SELECT reads the objects.\n- the glob is what covers the prefix\n- a glob path is read-only)
-      -> client:analyst(label=ClickHouse client)
+    An `INSERT` into an `S3` engine table creates an object at the declared path, which makes the table an export route as well as an access route, subject to two constraints. A glob path is read-only, so a table covering a prefix cannot be inserted into, and a second `INSERT` into an existing key fails unless a setting says whether to replace the object or write alongside it.
+  graph: |-
+    read:
+      minio:existing(bucket=clickhouse,prefix=exports/,format=Parquet,label=exports/*.parquet,note=**The prefix**\nObjects written upstream before any ClickHouse table exists, plus everything written back into it later.\n- visible as soon as the table is declared\n- no load step, nothing to keep in sync)
+        -[objects matched by the glob]-> remote-table:reader(engine=S3,label=demo.exports_s3,note=**Read surface**\nA declaration over the whole prefix. Holds no data; every SELECT reads the objects.\n- the glob is what covers the prefix\n- a glob path is read-only)
+        -> client:analyst(label=ClickHouse client)
 
-  write:
-    client:analyst
-      -[INSERT]-> remote-table:writer(engine=S3,label=demo.exports_write,note=**Write surface**\nBound to one concrete key, because a glob cannot name the object an INSERT would create.\n- inserts only ever create objects\n- repeating one needs s3_truncate_on_insert or s3_create_new_file_on_insert)
-      -[creates the object]-> minio:appended(bucket=clickhouse,prefix=exports/,format=Parquet,label=exports/appended.parquet,note=**Written from ClickHouse**\nLands in the same prefix the read surface covers, so the next SELECT returns it alongside the original objects.)
-category: ingestion
-flow: ingestion
-topology: single
-order: 2
-tags: [s3, s3-engine, query-in-place, export, glob]
-driver_node: ch
-profiles: [single, s3]
+    write:
+      client:analyst
+        -[INSERT]-> remote-table:writer(engine=S3,label=demo.exports_write,note=**Write surface**\nBound to one concrete key, because a glob cannot name the object an INSERT would create.\n- inserts only ever create objects\n- repeating one needs s3_truncate_on_insert or s3_create_new_file_on_insert)
+        -[creates the object]-> minio:appended(bucket=clickhouse,prefix=exports/,format=Parquet,label=exports/appended.parquet,note=**Written from ClickHouse**\nLands in the same prefix the read surface covers, so the next SELECT returns it alongside the original objects.)
+  status: under-review
+  category: ingestion
+  flow: ingestion
+  topology: single
+  order: 2
+  tags: [s3, s3-engine, query-in-place, export, glob]
 
-references:
-  - label: "ClickHouse: S3 table engine"
-    url: https://clickhouse.com/docs/engines/table-engines/integrations/s3
-  - label: "ClickHouse: Integrating S3 with ClickHouse"
-    url: https://clickhouse.com/docs/integrations/s3
+  references:
+    - label: 'ClickHouse: S3 table engine'
+      url: https://clickhouse.com/docs/engines/table-engines/integrations/s3
+    - label: 'ClickHouse: Integrating S3 with ClickHouse'
+      url: https://clickhouse.com/docs/integrations/s3
 
-schema_sql: schema.sql
-load: load.py          # stage two objects, read them, then write through the single-key table
+  tradeoffs:
+    benefits:
+      - A table name stands in for a bucket path, so queries do not repeat credentials, format, and URL.
+      - Objects already in the bucket are visible as soon as the table is declared; there is no load step and nothing to keep in sync.
+      - An S3 engine table also writes, so exporting query results to S3 needs no external tool.
+    limitations:
+      - No indexes, no ALTER, no updates or deletes, and every query re-reads and re-parses the objects.
+      - A path with a glob is read-only, so covering a prefix and writing to it needs two table declarations.
+      - Inserts only ever create objects; repeating one requires s3_truncate_on_insert or s3_create_new_file_on_insert, and there are no merges to consolidate what accumulates.
+spec:
+  profiles: [single, s3]
+  driver_node: ch
+  steps:
+    schema: schema.sql
+    load: load.py      # stage two objects, read them, then write through the single-key table
 
-# The glob reader sees the two pre-existing objects plus both written objects.
-ready_when:
-  - query: "SELECT count() FROM demo.exports_s3"
-    value: 3000
-    node: ch
-    timeout: 60
+    # The glob reader sees the two pre-existing objects plus both written objects.
+    ready_when:
+      - query: SELECT count() FROM demo.exports_s3
+        value: 3000
+        node: ch
+        timeout: 60
 
-verify:
-  sql: verify.sql
-  expected: expected.txt
+    verify:
+      sql: verify.sql
+      expected: expected.txt

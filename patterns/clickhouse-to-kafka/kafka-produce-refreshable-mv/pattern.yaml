@@ -1,52 +1,55 @@
-manifest_version: 1
-status: wip
-title: "Refreshable MV producing to Kafka on a timer (p90 alert example)"
-description: |-
-  Stores latency samples, evaluates service p90 every five seconds with a refreshable materialized view, and publishes breaching services to Kafka. It demonstrates `APPEND` refreshes into a Kafka target and the timer-imposed alert latency floor.
-tradeoffs:
-  benefits:
-    - ClickHouse keeps the rolling window and evaluates p90 without an external stream processor.
-    - The refreshable materialized view publishes directly to Kafka on a declared schedule.
-    - The threshold is ordinary SQL and remains close to the stored analytical state.
-  limitations:
-    - The five-second refresh interval is a hard lower bound on alert latency, and slow refreshes delay the next run.
-    - APPEND emits the breaching level again on every refresh rather than only on state transitions.
-    - The rolling-window query and retained raw samples consume ClickHouse compute and storage.
-graph: |-
-  input:
-    topic:latency
-      -> kafka-table:latency_in
-      -> mv:mv_store
-      -> mergetree:latency_raw(ttl=1h)
+manifest_version: 2
+metadata:
+  title: Refreshable MV producing to Kafka on a timer (p90 alert example)
+  description: |-
+    Stores latency samples, evaluates service p90 every five seconds with a refreshable materialized view, and publishes breaching services to Kafka. It demonstrates `APPEND` refreshes into a Kafka target and the timer-imposed alert latency floor.
+  graph: |-
+    input:
+      topic:latency
+        -> kafka-table:latency_in
+        -> mv:mv_store
+        -> mergetree:latency_raw(ttl=1h)
 
-  output:
-    mergetree:latency_raw
-      -[every 5s · p90 > 1000ms]-> refreshable-mv:mv_alerts
-      -> kafka-table:alerts_out
-      -> topic:alerts
-profiles: [single, kafka]
-category: kafka
-flow: output
-topology: single
-order: 2
-tags: [kafka, kafka-engine, refreshable-mv, alerts]
-driver_node: ch
+    output:
+      mergetree:latency_raw
+        -[every 5s · p90 > 1000ms]-> refreshable-mv:mv_alerts
+        -> kafka-table:alerts_out
+        -> topic:alerts
+  status: wip
+  category: kafka
+  flow: output
+  topology: single
+  order: 2
+  tags: [kafka, kafka-engine, refreshable-mv, alerts]
+  tradeoffs:
+    benefits:
+      - ClickHouse keeps the rolling window and evaluates p90 without an external stream processor.
+      - The refreshable materialized view publishes directly to Kafka on a declared schedule.
+      - The threshold is ordinary SQL and remains close to the stored analytical state.
+    limitations:
+      - The five-second refresh interval is a hard lower bound on alert latency, and slow refreshes delay the next run.
+      - APPEND emits the breaching level again on every refresh rather than only on state transitions.
+      - The rolling-window query and retained raw samples consume ClickHouse compute and storage.
+spec:
+  profiles: [single, kafka]
+  driver_node: ch
 
-schema_sql: schema.sql
-load: load.py          # produce latency samples for a breaching and a healthy service
+  steps:
+    schema: schema.sql
+    load: load.py      # produce latency samples for a breaching and a healthy service
 
-# Convergence: the refreshable MV evaluated p90, produced an alert for the
-# breaching service, and it was read back. (Alert latency floor is the 5s refresh.)
-ready_when:
-  - query: "SELECT count() FROM demo.alerts_store FINAL WHERE service = 'checkout'"
-    value: 1
-    node: ch
-    timeout: 60
-  - query: "SELECT count() FROM demo.alerts_store FINAL WHERE service = 'health'"
-    value: 0
-    node: ch
-    timeout: 60
+    # Convergence: the refreshable MV evaluated p90, produced an alert for the
+    # breaching service, and it was read back. (Alert latency floor is the 5s refresh.)
+    ready_when:
+      - query: SELECT count() FROM demo.alerts_store FINAL WHERE service = 'checkout'
+        value: 1
+        node: ch
+        timeout: 60
+      - query: SELECT count() FROM demo.alerts_store FINAL WHERE service = 'health'
+        value: 0
+        node: ch
+        timeout: 60
 
-verify:
-  sql: verify.sql
-  expected: expected.txt
+    verify:
+      sql: verify.sql
+      expected: expected.txt

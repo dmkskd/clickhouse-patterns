@@ -1,57 +1,60 @@
-manifest_version: 1
-status: wip
-title: "ClickHouse Sink"
-description: |-
-  An external Kafka Connect worker running the official ClickHouse Kafka Connect Sink consumes the topic and writes record batches over HTTP into a `MergeTree` table.
+manifest_version: 2
+metadata:
+  title: ClickHouse Sink
+  description: |-
+    An external Kafka Connect worker running the official ClickHouse Kafka Connect Sink consumes the topic and writes record batches over HTTP into a `MergeTree` table.
 
-  The consumer runs outside ClickHouse, which receives the batches as inserts. Delivery is at-least-once by default.
+    The consumer runs outside ClickHouse, which receives the batches as inserts. Delivery is at-least-once by default.
 
-graph: |-
-  ingestion:
-    client:producer(label=event producer)
-      -[JSON records]-> topic:events(partitions=1)
-      -[consumer task · earliest offsets]-> connector:clickhouse_sink(label=ClickHouse Sink,system=Kafka Connect,plugin=ClickHouseSinkConnector,tasks=1,delivery=at-least-once)
-      -[HTTP insert batches]-> mergetree:events(label=demo.events,owner=pattern schema)
+  graph: |-
+    ingestion:
+      client:producer(label=event producer)
+        -[JSON records]-> topic:events(partitions=1)
+        -[consumer task · earliest offsets]-> connector:clickhouse_sink(label=ClickHouse Sink,system=Kafka Connect,plugin=ClickHouseSinkConnector,tasks=1,delivery=at-least-once)
+        -[HTTP insert batches]-> mergetree:events(label=demo.events,owner=pattern schema)
 
-  query:
-    client:reader(label=query client)
-      -[SELECT rows + distinct ids]-> mergetree:events
-profiles: [single, kafka, connect]
-category: kafka
-flow: ingestion
-topology: single
-order: 6
-tags: [kafka, push, kafka-connect]
-driver_node: ch
+    query:
+      client:reader(label=query client)
+        -[SELECT rows + distinct ids]-> mergetree:events
+  status: wip
+  category: kafka
+  flow: ingestion
+  topology: single
+  order: 6
+  tags: [kafka, push, kafka-connect]
+  references:
+    - label: Official sink features and exactlyOnce configuration
+      url: https://clickhouse.com/docs/integrations/kafka/clickhouse-kafka-connect-sink
+    - label: Exactly-once implementation design
+      url: https://github.com/ClickHouse/clickhouse-kafka-connect/blob/main/docs/DESIGN.md
+    - label: ClickHouse Kafka integration options
+      url: https://clickhouse.com/docs/integrations/kafka
 
-references:
-  - label: Official sink features and exactlyOnce configuration
-    url: https://clickhouse.com/docs/integrations/kafka/clickhouse-kafka-connect-sink
-  - label: Exactly-once implementation design
-    url: https://github.com/ClickHouse/clickhouse-kafka-connect/blob/main/docs/DESIGN.md
-  - label: ClickHouse Kafka integration options
-    url: https://clickhouse.com/docs/integrations/kafka
+  tradeoffs:
+    benefits:
+      - ClickHouse remains a passive MergeTree sink; no Kafka-engine table or materialized view runs inside the server.
+      - Kafka Connect owns consumption, converters, batching, and connector lifecycle in a familiar external worker model.
+      - The official connector documents an optional KeeperMap-backed exactly-once mode enabled with exactlyOnce=true.
+    limitations:
+      - Kafka Connect and the sink plugin are additional infrastructure to deploy, observe, and upgrade.
+      - This pattern sets exactlyOnce=false, the documented default, so it deliberately does not exercise the connector's exactly-once mode.
+      - Topic names, record schemas, and ClickHouse table definitions must remain compatible with the connector mapping.
 
-tradeoffs:
-  benefits:
-    - ClickHouse remains a passive MergeTree sink; no Kafka-engine table or materialized view runs inside the server.
-    - Kafka Connect owns consumption, converters, batching, and connector lifecycle in a familiar external worker model.
-    - The official connector documents an optional KeeperMap-backed exactly-once mode enabled with exactlyOnce=true.
-  limitations:
-    - Kafka Connect and the sink plugin are additional infrastructure to deploy, observe, and upgrade.
-    - This pattern sets exactlyOnce=false, the documented default, so it deliberately does not exercise the connector's exactly-once mode.
-    - Topic names, record schemas, and ClickHouse table definitions must remain compatible with the connector mapping.
+spec:
+  profiles: [single, kafka, connect]
+  driver_node: ch
 
-schema_sql: schema.sql
-load: load.py          # registers the connector, then produces to the topic
+  steps:
+    schema: schema.sql
+    load: load.py      # registers the connector, then produces to the topic
 
-# Convergence: the connector pushes all 8000 rows into CH over HTTP.
-ready_when:
-  - query: "SELECT count() FROM demo.events"
-    value: 8000
-    node: ch
-    timeout: 120
+    # Convergence: the connector pushes all 8000 rows into CH over HTTP.
+    ready_when:
+      - query: SELECT count() FROM demo.events
+        value: 8000
+        node: ch
+        timeout: 120
 
-verify:
-  sql: verify.sql
-  expected: expected.txt
+    verify:
+      sql: verify.sql
+      expected: expected.txt

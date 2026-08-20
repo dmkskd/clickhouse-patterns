@@ -1,49 +1,52 @@
-manifest_version: 1
-status: under-review
-title: "Bulk load from S3 with the s3() table function"
-description: |-
-  ClickHouse loads one file or a whole set from S3 in a single `INSERT` with the `s3()` table function, reading them straight into a `MergeTree`. A glob in the path (`events/*.parquet`) reads every matching file, which is how the function scales from one file to a batch.
+manifest_version: 2
+metadata:
+  title: Bulk load from S3 with the s3() table function
+  description: |-
+    ClickHouse loads one file or a whole set from S3 in a single `INSERT` with the `s3()` table function, reading them straight into a `MergeTree`. A glob in the path (`events/*.parquet`) reads every matching file, which is how the function scales from one file to a batch.
 
-  This is the documented one-line import. It appends, without deduplication and without tracking what was already loaded.
-tradeoffs:
-  benefits:
-    - One INSERT reads a single file or a whole set through a glob, with no extra engine or service to run.
-    - The function infers the schema and reads the common formats, including Parquet, CSV, JSONEachRow, and compressed files.
-    - Reads parallelize across the matched files, and s3Cluster spreads them across a cluster for large loads.
-  limitations:
-    - Nothing records which files were loaded, so re-running the same INSERT appends the rows again.
-    - There is no deduplication or update handling; correcting a row needs a key and ReplacingMergeTree, or reloading a clean table.
-    - It is a one-shot pull, so files that arrive later are not picked up; the S3Queue engine loads new files as they land.
-graph: |-
-  load:
-    client:orchestrator(label=orchestrator) -[stage files]-> minio:files(bucket=clickhouse,prefix=events/,format=Parquet,label=events/*.parquet) -[INSERT INTO events FROM s3()]-> mergetree:events(engine=MergeTree,label=demo.events)
+    This is the documented one-line import. It appends, without deduplication and without tracking what was already loaded.
+  graph: |-
+    load:
+      client:orchestrator(label=orchestrator) -[stage files]-> minio:files(bucket=clickhouse,prefix=events/,format=Parquet,label=events/*.parquet) -[INSERT INTO events FROM s3()]-> mergetree:events(engine=MergeTree,label=demo.events)
 
-  query:
-    mergetree:events -[read]-> client:reader(label=reader)
-category: ingestion
-flow: ingestion
-topology: single
-order: 1
-tags: [s3, bulk-load, s3-function, glob]
-driver_node: ch
-profiles: [single, s3]
+    query:
+      mergetree:events -[read]-> client:reader(label=reader)
+  status: under-review
+  category: ingestion
+  flow: ingestion
+  topology: single
+  order: 1
+  tags: [s3, bulk-load, s3-function, glob]
 
-references:
-  - label: "ClickHouse: Integrating S3 with ClickHouse"
-    url: https://clickhouse.com/docs/integrations/s3
-  - label: "ClickHouse: s3 table function"
-    url: https://clickhouse.com/docs/sql-reference/table-functions/s3
+  references:
+    - label: 'ClickHouse: Integrating S3 with ClickHouse'
+      url: https://clickhouse.com/docs/integrations/s3
+    - label: 'ClickHouse: s3 table function'
+      url: https://clickhouse.com/docs/sql-reference/table-functions/s3
 
-schema_sql: schema.sql
-load: load.py          # stage three Parquet files, load them all with one glob
+  tradeoffs:
+    benefits:
+      - One INSERT reads a single file or a whole set through a glob, with no extra engine or service to run.
+      - The function infers the schema and reads the common formats, including Parquet, CSV, JSONEachRow, and compressed files.
+      - Reads parallelize across the matched files, and s3Cluster spreads them across a cluster for large loads.
+    limitations:
+      - Nothing records which files were loaded, so re-running the same INSERT appends the rows again.
+      - There is no deduplication or update handling; correcting a row needs a key and ReplacingMergeTree, or reloading a clean table.
+      - It is a one-shot pull, so files that arrive later are not picked up; the S3Queue engine loads new files as they land.
+spec:
+  profiles: [single, s3]
+  driver_node: ch
+  steps:
+    schema: schema.sql
+    load: load.py      # stage three Parquet files, load them all with one glob
 
-# One INSERT with a glob loaded all three staged files (3000 rows).
-ready_when:
-  - query: "SELECT count() FROM demo.events"
-    value: 3000
-    node: ch
-    timeout: 60
+    # One INSERT with a glob loaded all three staged files (3000 rows).
+    ready_when:
+      - query: SELECT count() FROM demo.events
+        value: 3000
+        node: ch
+        timeout: 60
 
-verify:
-  sql: verify.sql
-  expected: expected.txt
+    verify:
+      sql: verify.sql
+      expected: expected.txt

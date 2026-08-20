@@ -81,11 +81,12 @@ def clone_pattern(source_slug: str, clone_slug: str) -> CloneInfo:
         )
         cloned_manifest = staged / "pattern.yaml"
         contents = cloned_manifest.read_text()
-        if re.search(r"^status:.*$", contents, flags=re.MULTILINE):
-            contents = re.sub(r"^status:.*$", "status: wip", contents, flags=re.MULTILINE)
+        # v2 manifests nest status under metadata: (two-space indent).
+        if re.search(r"^  status:.*$", contents, flags=re.MULTILINE):
+            contents = re.sub(r"^  status:.*$", "  status: wip", contents, flags=re.MULTILINE)
         else:
             contents += "" if contents.endswith("\n") else "\n"
-            contents += "status: wip\n"
+            contents += "  status: wip\n"
         cloned_manifest.write_text(contents)
         _write_workspace_metadata(staged, source.slug, created_at)
         staged.replace(destination)
@@ -108,23 +109,28 @@ def create_workspace_pattern(slug: str) -> CloneInfo:
         staged = Path(temporary) / slug
         staged.mkdir()
         pattern = {
-            "title": title,
-            "description": (
-                "Document what this architecture demonstrates, when to use it, "
-                "and the operational trade-offs."
-            ),
-            "graph": (
-                "architecture:\n"
-                "  client:source(label=replace with the real source)\n"
-                "    -> mergetree:destination(label=replace with the real destination)\n"
-            ),
-            "mode": "reference",
-            "status": "wip",
-            "category": "custom",
-            "flow": "ingestion",
-            "topology": "single",
-            "tags": ["workspace"],
-            "profiles": [],
+            "manifest_version": 2,
+            "metadata": {
+                "title": title,
+                "description": (
+                    "Document what this architecture demonstrates, when to use it, "
+                    "and the operational trade-offs."
+                ),
+                "graph": (
+                    "architecture:\n"
+                    "  client:source(label=replace with the real source)\n"
+                    "    -> mergetree:destination(label=replace with the real destination)\n"
+                ),
+                "status": "wip",
+                "category": "custom",
+                "flow": "ingestion",
+                "topology": "single",
+                "tags": ["workspace"],
+            },
+            "spec": {
+                "mode": "reference",
+                "profiles": [],
+            },
         }
         (staged / "pattern.yaml").write_text(yaml.safe_dump(pattern, sort_keys=False))
         _write_workspace_metadata(staged, "scratch", created_at)

@@ -1,62 +1,65 @@
-manifest_version: 1
-status: wip
-title: "Each shard filters to its own partitions"
-description: |-
-  Every shard runs its own `Kafka`-engine consumer, a separate consumer group on `demo.events_queue`, reading all four partitions, because the Kafka engine cannot deterministically assign partitions to specific shards.
+manifest_version: 2
+metadata:
+  title: Each shard filters to its own partitions
+  description: |-
+    Every shard runs its own `Kafka`-engine consumer, a separate consumer group on `demo.events_queue`, reading all four partitions, because the Kafka engine cannot deterministically assign partitions to specific shards.
 
-  Each shard's `demo.events_mv` then filters on the Kafka `_partition` virtual column before writing to `demo.events`, so shard 1 keeps partitions 0 and 1 while shard 2 keeps 2 and 3.
+    Each shard's `demo.events_mv` then filters on the Kafka `_partition` virtual column before writing to `demo.events`, so shard 1 keeps partitions 0 and 1 while shard 2 keeps 2 and 3.
 
-  Every event is stored once across the cluster, at the cost of each shard reading and decoding the whole topic.
-tradeoffs:
-  benefits:
-    - Each event is stored once, with deterministic partition ownership per shard.
-    - One symmetric ON CLUSTER schema creates the same Kafka table and view everywhere.
-    - Accepted rows are written locally, so ingestion avoids inter-shard inserts.
-  limitations:
-    - Every shard reads and decodes every Kafka message using a separate consumer group.
-    - The filter statically couples Kafka partition ranges to the shard count.
-    - Changing partitions or shards requires an intentional mapping update.
-graph: |-
-  ingestion:
-    topic:events(partitions=4)
-      -[groups w1_s1 / w1_s2]-> kafka-table:events_queue@shards
-      -> mv:events_mv@shards
-      -[partition filter]-> mergetree:events@shards
+    Every event is stored once across the cluster, at the cost of each shard reading and decoding the whole topic.
+  graph: |-
+    ingestion:
+      topic:events(partitions=4)
+        -[groups w1_s1 / w1_s2]-> kafka-table:events_queue@shards
+        -> mv:events_mv@shards
+        -[partition filter]-> mergetree:events@shards
 
-  query:
-    client -> distributed:events_all -> mergetree:events@shards
-profiles: [shards, kafka]
-category: kafka
-flow: ingestion
-topology: sharded
-order: 2
-tags: [kafka, pull, kafka-engine, workaround, partition-routing]
-references:
-  - label: "ClickHouse Kafka table engine"
-    url: "https://clickhouse.com/docs/engines/table-engines/integrations/kafka"
-  - label: "GitHub RFC: sticky partition-to-shard assignment"
-    url: "https://github.com/ClickHouse/ClickHouse/issues/107832"
-driver_node: ch-s1
-superseded_by: kafka-ingest-sharded-partition-affinity
-superseded_since: "26.8"
+    query:
+      client -> distributed:events_all -> mergetree:events@shards
+  status: wip
+  category: kafka
+  flow: ingestion
+  topology: sharded
+  order: 2
+  tags: [kafka, pull, kafka-engine, workaround, partition-routing]
+  references:
+    - label: ClickHouse Kafka table engine
+      url: https://clickhouse.com/docs/engines/table-engines/integrations/kafka
+    - label: 'GitHub RFC: sticky partition-to-shard assignment'
+      url: https://github.com/ClickHouse/ClickHouse/issues/107832
+  superseded_by: kafka-ingest-sharded-partition-affinity
+  superseded_since: '26.8'
 
-# One ON CLUSTER schema. The {shard} server macro gives each node its own
-# consumer group and lets the MV derive its static partition assignment.
-schema_sql: schema.sql
+  # One ON CLUSTER schema. The {shard} server macro gives each node its own
+  # consumer group and lets the MV derive its static partition assignment.
+  tradeoffs:
+    benefits:
+      - Each event is stored once, with deterministic partition ownership per shard.
+      - One symmetric ON CLUSTER schema creates the same Kafka table and view everywhere.
+      - Accepted rows are written locally, so ingestion avoids inter-shard inserts.
+    limitations:
+      - Every shard reads and decodes every Kafka message using a separate consumer group.
+      - The filter statically couples Kafka partition ranges to the shard count.
+      - Changing partitions or shards requires an intentional mapping update.
+spec:
+  profiles: [shards, kafka]
+  driver_node: ch-s1
+  steps:
+    schema: schema.sql
 
-load: load.py
+    load: load.py
 
-# Convergence: each shard stored exactly its owned half (4000 of 8000).
-ready_when:
-  - query: "SELECT count() FROM demo.events"
-    value: 4000
-    node: ch-s1
-    timeout: 90
-  - query: "SELECT count() FROM demo.events"
-    value: 4000
-    node: ch-s2
-    timeout: 60
+    # Convergence: each shard stored exactly its owned half (4000 of 8000).
+    ready_when:
+      - query: SELECT count() FROM demo.events
+        value: 4000
+        node: ch-s1
+        timeout: 90
+      - query: SELECT count() FROM demo.events
+        value: 4000
+        node: ch-s2
+        timeout: 60
 
-verify:
-  sql: verify.sql
-  expected: expected.txt
+    verify:
+      sql: verify.sql
+      expected: expected.txt

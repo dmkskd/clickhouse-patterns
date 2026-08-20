@@ -1,54 +1,57 @@
-manifest_version: 1
-status: stable
-title: "Query-time aggregation (rollups computed on read)"
-description: |-
-  The rollup is computed at read time, directly from the raw rows with a `GROUP BY`.
+manifest_version: 2
+metadata:
+  title: Query-time aggregation (rollups computed on read)
+  description: |-
+    The rollup is computed at read time, directly from the raw rows with a `GROUP BY`.
 
-  For a market-data feed, the same raw table answers both 1-minute and 5-minute candles (open, high, low, close, volume) on demand, with the time bucket and the metrics set in the query.
+    For a market-data feed, the same raw table answers both 1-minute and 5-minute candles (open, high, low, close, volume) on demand, with the time bucket and the metrics set in the query.
 
-  Each row is written once, with no write amplification from derived tables. The cost is that every query rescans every raw row in its time range.
-tradeoffs:
-  benefits:
-    - The raw table is the only object to create and maintain, with no derived tables and no write amplification on insert.
-    - Any time bucket or metric is available on read without deciding on it up front.
-    - Always exact and consistent, with no backfill or derived state to keep in sync.
-  limitations:
-    - Every query rescans every raw row in its time range, so cost grows with the volume retained and the frequency of the queries.
-    - Interactive dashboards read the raw table on every refresh, so response time grows with the retention window.
-    - Aggregates that track a value by position, such as `argMin`/`argMax`, keep more state per group than a running total, so wide-range reads cost more CPU and memory.
-graph: |-
-  ingest:
-    client:loader -[INSERT · 3 batches]-> mergetree:ticks(label=demo.ticks)
+    Each row is written once, with no write amplification from derived tables. The cost is that every query rescans every raw row in its time range.
+  graph: |-
+    ingest:
+      client:loader -[INSERT · 3 batches]-> mergetree:ticks(label=demo.ticks)
 
-  query-1m:
-    mergetree:ticks -[toStartOfMinute · argMin/argMax/min/max/sum]-> client:rollup_1m(label=1m rollup)
+    query-1m:
+      mergetree:ticks -[toStartOfMinute · argMin/argMax/min/max/sum]-> client:rollup_1m(label=1m rollup)
 
-  query-5m:
-    mergetree:ticks -[toStartOfFiveMinutes · same aggregates on read]-> client:rollup_5m(label=5m rollup)
-category: aggregation
-flow: transform
-topology: single
-order: 1
-tags: [aggregation, rollup, query-time]
-driver_node: ch
-profiles: [single]
+    query-5m:
+      mergetree:ticks -[toStartOfFiveMinutes · same aggregates on read]-> client:rollup_5m(label=5m rollup)
+  status: stable
+  category: aggregation
+  flow: transform
+  topology: single
+  order: 1
+  tags: [aggregation, rollup, query-time]
 
-references:
-  - label: "roq-trading: OHLC candles computed at query time from raw ticks in ClickHouse"
-    url: https://roq-trading.com/docs/tutorials/data/clickhouse/index.html
-  - label: "ClickHouse: Build a rollup with materialized views"
-    url: https://clickhouse.com/docs/knowledgebase/materialized-view-rollup-timeseries
+  references:
+    - label: 'roq-trading: OHLC candles computed at query time from raw ticks in ClickHouse'
+      url: https://roq-trading.com/docs/tutorials/data/clickhouse/index.html
+    - label: 'ClickHouse: Build a rollup with materialized views'
+      url: https://clickhouse.com/docs/knowledgebase/materialized-view-rollup-timeseries
 
-schema_sql: schema.sql
-load: load.py          # insert raw ticks in three separate parts
+  tradeoffs:
+    benefits:
+      - The raw table is the only object to create and maintain, with no derived tables and no write amplification on insert.
+      - Any time bucket or metric is available on read without deciding on it up front.
+      - Always exact and consistent, with no backfill or derived state to keep in sync.
+    limitations:
+      - Every query rescans every raw row in its time range, so cost grows with the volume retained and the frequency of the queries.
+      - Interactive dashboards read the raw table on every refresh, so response time grows with the retention window.
+      - Aggregates that track a value by position, such as `argMin`/`argMax`, keep more state per group than a running total, so wide-range reads cost more CPU and memory.
+spec:
+  profiles: [single]
+  driver_node: ch
+  steps:
+    schema: schema.sql
+    load: load.py      # insert raw ticks in three separate parts
 
-# All nine ticks landed; the candles themselves are checked by verify.sql.
-ready_when:
-  - query: "SELECT count() FROM demo.ticks"
-    value: 9
-    node: ch
-    timeout: 30
+    # All nine ticks landed; the candles themselves are checked by verify.sql.
+    ready_when:
+      - query: SELECT count() FROM demo.ticks
+        value: 9
+        node: ch
+        timeout: 30
 
-verify:
-  sql: verify.sql
-  expected: expected.txt
+    verify:
+      sql: verify.sql
+      expected: expected.txt

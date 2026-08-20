@@ -1,83 +1,86 @@
-manifest_version: 1
-status: stable
-title: "Materialized view rollups (fan-out from raw)"
-description: |-
-  Precomputes the rollup as data arrives. Each time bucket is an incremental materialized view attached to the raw table as a trigger: it runs its aggregation over each newly inserted block and stores a partial result (a state) in an `AggregatingMergeTree`.
+manifest_version: 2
+metadata:
+  title: Materialized view rollups (fan-out from raw)
+  description: |-
+    Precomputes the rollup as data arrives. Each time bucket is an incremental materialized view attached to the raw table as a trigger: it runs its aggregation over each newly inserted block and stores a partial result (a state) in an `AggregatingMergeTree`.
 
-  On read, queries group the stored states and combine them with the `-Merge` combinators, so partials written by separate inserts collapse into one finished candle per bucket.
+    On read, queries group the stored states and combine them with the `-Merge` combinators, so partials written by separate inserts collapse into one finished candle per bucket.
 
-  For a market-data feed, a single candle is assembled from partial results written by separate inserts, and ClickHouse still combines them into the correct candle.
-tradeoffs:
-  benefits:
-    - Queries read a small precomputed table instead of rescanning the raw stream.
-    - Each time bucket is its own view on the raw data, so one can be added or rebuilt without touching the others.
-    - The answer is correct no matter how the inserts were split, because the partial results from every part are combined on read.
-  limitations:
-    - Each insert into the raw table is sent to every materialized view attached to it, so N time buckets each process the same inserted block.
-    - Each column holds an aggregate's intermediate state, not a finished number, so a plain SELECT returns unreadable bytes; the value comes back only through the matching -Merge function.
-    - More storage and setup than query time, with one precomputed table plus one view per time bucket.
-graph: |-
-  ingest:
-    client:loader -[INSERT · 3 batches]-> mergetree:ticks(label=demo.ticks)
+    For a market-data feed, a single candle is assembled from partial results written by separate inserts, and ClickHouse still combines them into the correct candle.
+  graph: |-
+    ingest:
+      client:loader -[INSERT · 3 batches]-> mergetree:ticks(label=demo.ticks)
 
-  rollup-1m:
-    mergetree:ticks -[MV · argMin/max/min/sumState · per insert block]-> mv:mv_1m -> mergetree:candles_1m(engine=AggregatingMergeTree,label=1m states)
+    rollup-1m:
+      mergetree:ticks -[MV · argMin/max/min/sumState · per insert block]-> mv:mv_1m -> mergetree:candles_1m(engine=AggregatingMergeTree,label=1m states)
 
-  rollup-5m:
-    mergetree:ticks -[MV · toStartOfFiveMinutes · ...State from raw]-> mv:mv_5m -> mergetree:candles_5m(engine=AggregatingMergeTree,label=5m states)
+    rollup-5m:
+      mergetree:ticks -[MV · toStartOfFiveMinutes · ...State from raw]-> mv:mv_5m -> mergetree:candles_5m(engine=AggregatingMergeTree,label=5m states)
 
-  query:
-    {mergetree:candles_1m, mergetree:candles_5m} -[argMinMerge/maxMerge/... on read]-> client:rollup(label=rollup query)
-category: aggregation
-flow: transform
-topology: single
-order: 2
-tags: [aggregation, rollup, materialized-view, aggregatingmergetree, fan-out]
-driver_node: ch
-profiles: [single]
+    query:
+      {mergetree:candles_1m, mergetree:candles_5m} -[argMinMerge/maxMerge/... on read]-> client:rollup(label=rollup query)
+  status: stable
+  category: aggregation
+  flow: transform
+  topology: single
+  order: 2
+  tags: [aggregation, rollup, materialized-view, aggregatingmergetree, fan-out]
 
-references:
-  - label: "Benjamin Wootton: Real-time OHLC candlestick charts with ClickHouse"
-    url: https://benjaminwootton.com/insights/ohlc-candlestick-charts-clickhouse
-  - label: "ClickHouse: AggregatingMergeTree table engine (-State/-Merge)"
-    url: https://clickhouse.com/docs/engines/table-engines/mergetree-family/aggregatingmergetree
-  - label: "ClickHouse: Build a rollup with materialized views"
-    url: https://clickhouse.com/docs/knowledgebase/materialized-view-rollup-timeseries
+  references:
+    - label: 'Benjamin Wootton: Real-time OHLC candlestick charts with ClickHouse'
+      url: https://benjaminwootton.com/insights/ohlc-candlestick-charts-clickhouse
+    - label: 'ClickHouse: AggregatingMergeTree table engine (-State/-Merge)'
+      url: https://clickhouse.com/docs/engines/table-engines/mergetree-family/aggregatingmergetree
+    - label: 'ClickHouse: Build a rollup with materialized views'
+      url: https://clickhouse.com/docs/knowledgebase/materialized-view-rollup-timeseries
 
-schema_sql: schema.sql
-load: load.py          # insert raw ticks in three separate parts; MVs trigger per part
+  tradeoffs:
+    benefits:
+      - Queries read a small precomputed table instead of rescanning the raw stream.
+      - Each time bucket is its own view on the raw data, so one can be added or rebuilt without touching the others.
+      - The answer is correct no matter how the inserts were split, because the partial results from every part are combined on read.
+    limitations:
+      - Each insert into the raw table is sent to every materialized view attached to it, so N time buckets each process the same inserted block.
+      - Each column holds an aggregate's intermediate state, not a finished number, so a plain SELECT returns unreadable bytes; the value comes back only through the matching -Merge function.
+      - More storage and setup than query time, with one precomputed table plus one view per time bucket.
+spec:
+  profiles: [single]
+  driver_node: ch
+  steps:
+    schema: schema.sql
+    load: load.py      # insert raw ticks in three separate parts; MVs trigger per part
 
-# 1. all nine ticks landed.
-# 2. every one-minute bucket exists.
-# 3. the states merged back to exactly the query-time ground truth -- proving the
-#    per-part partial states recombined into the correct candle (zero mismatches).
-ready_when:
-  - query: "SELECT count() FROM demo.ticks"
-    value: 9
-    node: ch
-    timeout: 30
-  - query: "SELECT uniqExact(bucket) FROM demo.candles_1m"
-    value: 3
-    node: ch
-    timeout: 30
-  - query: >-
-      SELECT count() FROM (
-        SELECT symbol, bucket,
-               argMinMerge(open) o, max(high) h, min(low) l,
-               argMaxMerge(close) c, sum(volume) v
-        FROM demo.candles_1m GROUP BY symbol, bucket
-      ) r
-      INNER JOIN (
-        SELECT symbol, toStartOfMinute(ts) AS bucket,
-               argMin(price, ts) o, max(price) h, min(price) l,
-               argMax(price, ts) c, sum(volume) v
-        FROM demo.ticks GROUP BY symbol, bucket
-      ) g USING (symbol, bucket)
-      WHERE (r.o, r.h, r.l, r.c, r.v) != (g.o, g.h, g.l, g.c, g.v)
-    value: 0
-    node: ch
-    timeout: 30
+    # 1. all nine ticks landed.
+    # 2. every one-minute bucket exists.
+    # 3. the states merged back to exactly the query-time ground truth -- proving the
+    #    per-part partial states recombined into the correct candle (zero mismatches).
+    ready_when:
+      - query: SELECT count() FROM demo.ticks
+        value: 9
+        node: ch
+        timeout: 30
+      - query: SELECT uniqExact(bucket) FROM demo.candles_1m
+        value: 3
+        node: ch
+        timeout: 30
+      - query: >-
+          SELECT count() FROM (
+            SELECT symbol, bucket,
+                   argMinMerge(open) o, max(high) h, min(low) l,
+                   argMaxMerge(close) c, sum(volume) v
+            FROM demo.candles_1m GROUP BY symbol, bucket
+          ) r
+          INNER JOIN (
+            SELECT symbol, toStartOfMinute(ts) AS bucket,
+                   argMin(price, ts) o, max(price) h, min(price) l,
+                   argMax(price, ts) c, sum(volume) v
+            FROM demo.ticks GROUP BY symbol, bucket
+          ) g USING (symbol, bucket)
+          WHERE (r.o, r.h, r.l, r.c, r.v) != (g.o, g.h, g.l, g.c, g.v)
+        value: 0
+        node: ch
+        timeout: 30
 
-verify:
-  sql: verify.sql
-  expected: expected.txt
+    verify:
+      sql: verify.sql
+      expected: expected.txt

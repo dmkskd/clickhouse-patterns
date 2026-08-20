@@ -1,59 +1,62 @@
-manifest_version: 1
-status: wip
-title: "TTL GROUP BY: downsample historical detail"
-description: |-
-  TTL GROUP BY replaces expired raw rows with aggregate rows in the same
-  MergeTree table.
+manifest_version: 2
+metadata:
+  title: 'TTL GROUP BY: downsample historical detail'
+  description: |-
+    TTL GROUP BY replaces expired raw rows with aggregate rows in the same
+    MergeTree table.
 
-  ClickHouse performs the aggregation during a background TTL merge. The GROUP
-  BY keys must be a prefix of the primary key, and the table needs columns to
-  hold the aggregate results. The original detail is gone once the rewrite
-  completes.
+    ClickHouse performs the aggregation during a background TTL merge. The GROUP
+    BY keys must be a prefix of the primary key, and the table needs columns to
+    hold the aggregate results. The original detail is gone once the rewrite
+    completes.
 
-  This example keeps individual request measurements for seven days, then
-  retains one aggregated row per hour with the request count, total bytes, and
-  peak request size.
-graph: |-
-  ingest:
-    client:writer -> mergetree:hourly_request_metrics(engine=MergeTree,note=**GROUP BY TTL**\n- Recent rows remain detailed\n- Old rows group by service and hour\n- Aggregate rows replace the old detail)
+    This example keeps individual request measurements for seven days, then
+    retains one aggregated row per hour with the request count, total bytes, and
+    peak request size.
+  graph: |-
+    ingest:
+      client:writer -> mergetree:hourly_request_metrics(engine=MergeTree,note=**GROUP BY TTL**\n- Recent rows remain detailed\n- Old rows group by service and hour\n- Aggregate rows replace the old detail)
 
-  query:
-    mergetree:hourly_request_metrics -[queries recent detail and hourly history]-> client:analyst
-category: retention
-flow: transform
-topology: single
-order: 6
-tags: [ttl, group-by, rollup, downsampling, rewrite]
-related_patterns:
-  - slug: ttl-policy-change-rollout
-    note: Read before changing this table's TTL on existing data.
-profiles: [single]
-driver_node: ch
-schema_sql: schema.sql
-load: load.py
-ready_when:
-  - query: >-
-      SELECT count() FROM demo.hourly_request_metrics
-    value: 3
-    timeout: 60
+    query:
+      mergetree:hourly_request_metrics -[queries recent detail and hourly history]-> client:analyst
+  status: wip
+  category: retention
+  flow: transform
+  topology: single
+  order: 6
+  tags: [ttl, group-by, rollup, downsampling, rewrite]
+  references:
+    - label: 'ClickHouse: Manage data with TTL'
+      url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
+  related_patterns:
+    - slug: ttl-policy-change-rollout
+      note: Read before changing this table's TTL on existing data.
+  tradeoffs:
+    benefits:
+      - Keeps recent detail while shrinking older data to the resolution users need.
+      - Avoids maintaining a second historical aggregate table.
+    limitations:
+      - Rewrites parts and competes with ordinary merges for resources.
+      - Old detail is irrecoverable, and the primary key must accommodate the TTL grouping keys.
+spec:
+  profiles: [single]
+  driver_node: ch
+  steps:
+    schema: schema.sql
+    load: load.py
+    ready_when:
+      - query: >-
+          SELECT count() FROM demo.hourly_request_metrics
+        value: 3
+        timeout: 60
   # A GROUP BY rollup is logged as TTLDropMerge, not a recompression merge, and
   # the merge can be selected more than once while the demo runs.
-  - query: >-
-      SELECT count() >= 1 FROM system.part_log
-      WHERE database = 'demo' AND table = 'hourly_request_metrics'
-        AND merge_reason = 'TTLDropMerge'
-    value: 1
-    timeout: 60
-verify:
-  sql: verify.sql
-  expected: expected.txt
-references:
-  - label: "ClickHouse: Manage data with TTL"
-    url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
-tradeoffs:
-  benefits:
-    - Keeps recent detail while shrinking older data to the resolution users need.
-    - Avoids maintaining a second historical aggregate table.
-  limitations:
-    - Rewrites parts and competes with ordinary merges for resources.
-    - Old detail is irrecoverable, and the primary key must accommodate the TTL grouping keys.
+      - query: >-
+          SELECT count() >= 1 FROM system.part_log
+          WHERE database = 'demo' AND table = 'hourly_request_metrics'
+            AND merge_reason = 'TTLDropMerge'
+        value: 1
+        timeout: 60
+    verify:
+      sql: verify.sql
+      expected: expected.txt

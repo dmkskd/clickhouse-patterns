@@ -1,85 +1,88 @@
-manifest_version: 1
-status: stable
-title: "Cascading materialized views (rollups built from rollups)"
-description: |-
-  Builds each coarser rollup from the level below instead of raw. Each level is an incremental materialized view attached as a trigger to the level below: the 1-minute view runs its aggregation over each newly inserted block of raw ticks, and the 5-minute view triggers on the rows the 1-minute view writes, re-aggregating their states with the `-MergeState` combinator.
+manifest_version: 2
+metadata:
+  title: Cascading materialized views (rollups built from rollups)
+  description: |-
+    Builds each coarser rollup from the level below instead of raw. Each level is an incremental materialized view attached as a trigger to the level below: the 1-minute view runs its aggregation over each newly inserted block of raw ticks, and the 5-minute view triggers on the rows the 1-minute view writes, re-aggregating their states with the `-MergeState` combinator.
 
-  On read, queries group the stored states and combine them with the `-Merge` combinators, as in the fan-out pattern.
+    On read, queries group the stored states and combine them with the `-Merge` combinators, as in the fan-out pattern.
 
-  For a market-data feed, running totals, highs and lows combine trivially when levels are stacked, but opening and closing prices do not. This pattern shows how to combine them correctly across levels.
-tradeoffs:
-  benefits:
-    - Each coarser level is built from the level below, not the raw data, so every insert is aggregated once per level.
-    - Cheapest write path when several levels are kept (1 minute, 5 minute, 1 hour, 1 day).
-    - Correct across parts, because the 1 minute level combines partials from each insert and the 5 minute level combines those.
-  limitations:
-    - The levels are coupled, so the 5 minute view depends on the 1 minute table and rebuilds have to run in order.
-    - Totals, highs and lows stack up trivially, but opening and closing prices need a special combine step, and using the wrong one is a silent error.
-    - A late or corrected raw row has to flow through every level, so deeper chains add latency and more to rebuild.
-graph: |-
-  ingest:
-    client:loader -[INSERT · 3 batches]-> mergetree:ticks(label=demo.ticks)
+    For a market-data feed, running totals, highs and lows combine trivially when levels are stacked, but opening and closing prices do not. This pattern shows how to combine them correctly across levels.
+  graph: |-
+    ingest:
+      client:loader -[INSERT · 3 batches]-> mergetree:ticks(label=demo.ticks)
 
-  cascade:
-    mergetree:ticks -[MV · argMin/max/min/sumState · per block]-> mv:mv_1m -> mergetree:candles_1m(engine=AggregatingMergeTree,label=1m states) -[MV · argMin/max/min/sumMergeState]-> mv:mv_5m -> mergetree:candles_5m(engine=AggregatingMergeTree,label=5m states)
+    cascade:
+      mergetree:ticks -[MV · argMin/max/min/sumState · per block]-> mv:mv_1m -> mergetree:candles_1m(engine=AggregatingMergeTree,label=1m states) -[MV · argMin/max/min/sumMergeState]-> mv:mv_5m -> mergetree:candles_5m(engine=AggregatingMergeTree,label=5m states)
 
-  query:
-    mergetree:candles_5m -[argMinMerge/maxMerge/... on read]-> client:rollup(label=5m rollup)
-category: aggregation
-flow: transform
-topology: single
-order: 3
-tags: [aggregation, rollup, materialized-view, aggregatingmergetree, cascade]
-driver_node: ch
-profiles: [single]
+    query:
+      mergetree:candles_5m -[argMinMerge/maxMerge/... on read]-> client:rollup(label=5m rollup)
+  status: stable
+  category: aggregation
+  flow: transform
+  topology: single
+  order: 3
+  tags: [aggregation, rollup, materialized-view, aggregatingmergetree, cascade]
 
-references:
-  - label: "ObsessionDB: feeding OHLC candles to TradingView from ClickHouse"
-    url: https://obsessiondb.com/blog/ohlc-candles-tradingview-clickhouse
-  - label: "ClickHouse: Cascading materialized views"
-    url: https://clickhouse.com/docs/guides/developer/cascading-materialized-views
-  - label: "ClickHouse: AggregatingMergeTree and combinators (-State/-Merge/-MergeState)"
-    url: https://clickhouse.com/docs/engines/table-engines/mergetree-family/aggregatingmergetree
+  references:
+    - label: 'ObsessionDB: feeding OHLC candles to TradingView from ClickHouse'
+      url: https://obsessiondb.com/blog/ohlc-candles-tradingview-clickhouse
+    - label: 'ClickHouse: Cascading materialized views'
+      url: https://clickhouse.com/docs/guides/developer/cascading-materialized-views
+    - label: 'ClickHouse: AggregatingMergeTree and combinators (-State/-Merge/-MergeState)'
+      url: https://clickhouse.com/docs/engines/table-engines/mergetree-family/aggregatingmergetree
 
-schema_sql: schema.sql
-load: load.py          # insert raw ticks in three parts; cascade triggers per part
+  tradeoffs:
+    benefits:
+      - Each coarser level is built from the level below, not the raw data, so every insert is aggregated once per level.
+      - Cheapest write path when several levels are kept (1 minute, 5 minute, 1 hour, 1 day).
+      - Correct across parts, because the 1 minute level combines partials from each insert and the 5 minute level combines those.
+    limitations:
+      - The levels are coupled, so the 5 minute view depends on the 1 minute table and rebuilds have to run in order.
+      - Totals, highs and lows stack up trivially, but opening and closing prices need a special combine step, and using the wrong one is a silent error.
+      - A late or corrected raw row has to flow through every level, so deeper chains add latency and more to rebuild.
+spec:
+  profiles: [single]
+  driver_node: ch
+  steps:
+    schema: schema.sql
+    load: load.py      # insert raw ticks in three parts; cascade triggers per part
 
-# 1. all nine ticks landed.
-# 2. the 1m level was populated from raw.
-# 3. the single 5m bucket exists.
-# 4. the 5m candle, built only from the 1m states via -MergeState, equals the 5m
-#    window computed directly from raw (zero mismatches) -- the cascade is correct.
-ready_when:
-  - query: "SELECT count() FROM demo.ticks"
-    value: 9
-    node: ch
-    timeout: 30
-  - query: "SELECT uniqExact(bucket) FROM demo.candles_1m"
-    value: 3
-    node: ch
-    timeout: 30
-  - query: "SELECT uniqExact(bucket) FROM demo.candles_5m"
-    value: 1
-    node: ch
-    timeout: 30
-  - query: >-
-      SELECT count() FROM (
-        SELECT symbol, bucket,
-               argMinMerge(open) o, max(high) h, min(low) l,
-               argMaxMerge(close) c, sum(volume) v
-        FROM demo.candles_5m GROUP BY symbol, bucket
-      ) r
-      INNER JOIN (
-        SELECT symbol, toStartOfFiveMinutes(ts) AS bucket,
-               argMin(price, ts) o, max(price) h, min(price) l,
-               argMax(price, ts) c, sum(volume) v
-        FROM demo.ticks GROUP BY symbol, bucket
-      ) g USING (symbol, bucket)
-      WHERE (r.o, r.h, r.l, r.c, r.v) != (g.o, g.h, g.l, g.c, g.v)
-    value: 0
-    node: ch
-    timeout: 30
+    # 1. all nine ticks landed.
+    # 2. the 1m level was populated from raw.
+    # 3. the single 5m bucket exists.
+    # 4. the 5m candle, built only from the 1m states via -MergeState, equals the 5m
+    #    window computed directly from raw (zero mismatches) -- the cascade is correct.
+    ready_when:
+      - query: SELECT count() FROM demo.ticks
+        value: 9
+        node: ch
+        timeout: 30
+      - query: SELECT uniqExact(bucket) FROM demo.candles_1m
+        value: 3
+        node: ch
+        timeout: 30
+      - query: SELECT uniqExact(bucket) FROM demo.candles_5m
+        value: 1
+        node: ch
+        timeout: 30
+      - query: >-
+          SELECT count() FROM (
+            SELECT symbol, bucket,
+                   argMinMerge(open) o, max(high) h, min(low) l,
+                   argMaxMerge(close) c, sum(volume) v
+            FROM demo.candles_5m GROUP BY symbol, bucket
+          ) r
+          INNER JOIN (
+            SELECT symbol, toStartOfFiveMinutes(ts) AS bucket,
+                   argMin(price, ts) o, max(price) h, min(price) l,
+                   argMax(price, ts) c, sum(volume) v
+            FROM demo.ticks GROUP BY symbol, bucket
+          ) g USING (symbol, bucket)
+          WHERE (r.o, r.h, r.l, r.c, r.v) != (g.o, g.h, g.l, g.c, g.v)
+        value: 0
+        node: ch
+        timeout: 30
 
-verify:
-  sql: verify.sql
-  expected: expected.txt
+    verify:
+      sql: verify.sql
+      expected: expected.txt

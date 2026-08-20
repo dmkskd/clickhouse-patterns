@@ -55,6 +55,7 @@ from .orchestration.lifecycle import (
     validate_session,
 )
 from .catalog.manifest import discover_patterns, discover_workspace_patterns, load_pattern
+from .catalog.migrate import iter_manifest_paths, migrate_manifest
 from .orchestration.runner import run_pattern
 from .orchestration.stack import docker
 from .orchestration.wait import ConvergenceError
@@ -870,10 +871,20 @@ def _cmd_test_all(_args) -> int:
     return rc
 
 
+def _cmd_migrate(args) -> int:
+    rewritten = 0
+    for path in iter_manifest_paths(args.patterns):
+        if migrate_manifest(path):
+            rewritten += 1
+            print(f"migrated {path}")
+        else:
+            print(f"already current {path}")
+    print(f"{rewritten} manifest(s) rewritten")
+    return 0
+
+
 def _cmd_agent_setup(args) -> int:
     return setup_agents(args.agents, args.skills_dir)
-
-
 def _cmd_agent_status(args) -> int:
     return status_agents(args.agents)
 
@@ -902,6 +913,17 @@ def main() -> int:
         func=_cmd_describe
     )
     sub.add_parser("test-all").set_defaults(func=_cmd_test_all)
+
+    sp = sub.add_parser(
+        "migrate",
+        help="rewrite pattern.yaml files to the current manifest format",
+    )
+    sp.add_argument(
+        "patterns",
+        nargs="*",
+        help="patterns to migrate (default: all library and workspace patterns)",
+    )
+    sp.set_defaults(func=_cmd_migrate)
 
     sp = sub.add_parser("show")
     sp.add_argument("pattern")

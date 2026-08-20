@@ -1,66 +1,69 @@
-manifest_version: 1
-status: stable
-title: "Refreshable materialized view (scheduled recompute from raw)"
-description: |-
-  A refreshable materialized view recomputes a summary on a schedule by rerunning its full query over the raw tables, rather than maintaining it incrementally on each insert. Each run reads the current raw data, so the result reflects corrections, cancellations, and joins to other tables that an insert-triggered view cannot.
+manifest_version: 2
+metadata:
+  title: Refreshable materialized view (scheduled recompute from raw)
+  description: |-
+    A refreshable materialized view recomputes a summary on a schedule by rerunning its full query over the raw tables, rather than maintaining it incrementally on each insert. Each run reads the current raw data, so the result reflects corrections, cancellations, and joins to other tables that an insert-triggered view cannot.
 
-  The example revalues a trading book: positions from versioned trades are valued against a separately updating prices table, so the unrealized P&L moves when a price changes even though no trade was booked.
-tradeoffs:
-  benefits:
-    - A full query runs on each refresh, so FINAL dedup, joins, and window functions are available, none of which an insert-triggered view can do.
-    - The result reflects the current raw data, so corrections, cancellations, and moved marks appear on the next refresh with no reconciliation.
-    - One recompute serves many readers from a small finished table, instead of every reader rerunning the aggregation.
-  limitations:
-    - The summary is stale between refreshes, up to the refresh interval.
-    - Each refresh is a full recompute over its scope, so an unbounded query gets more expensive as data grows; bound it to a recent window.
-    - The refresh runs on a schedule outside the insert path, so it lags live inserts and adds a background job to operate.
-graph: |-
-  trades:
-    client:trade_booking(label=trade booking) -[INSERT · versioned]-> mergetree:trades(engine=ReplacingMergeTree,label=demo.trades)
+    The example revalues a trading book: positions from versioned trades are valued against a separately updating prices table, so the unrealized P&L moves when a price changes even though no trade was booked.
+  graph: |-
+    trades:
+      client:trade_booking(label=trade booking) -[INSERT · versioned]-> mergetree:trades(engine=ReplacingMergeTree,label=demo.trades)
 
-  prices:
-    client:feed(label=price feed) -[INSERT · latest price]-> mergetree:prices(engine=ReplacingMergeTree,label=demo.prices)
+    prices:
+      client:feed(label=price feed) -[INSERT · latest price]-> mergetree:prices(engine=ReplacingMergeTree,label=demo.prices)
 
-  refresh:
-    {mergetree:trades, mergetree:prices} -[REFRESH EVERY 5s]-> refreshable-mv:position_pnl(label=demo.position_pnl,note=**Scheduled recompute**\n- dedup trades with FINAL\n- value each position at the latest price\n- replaces the whole result each refresh)
+    refresh:
+      {mergetree:trades, mergetree:prices} -[REFRESH EVERY 5s]-> refreshable-mv:position_pnl(label=demo.position_pnl,note=**Scheduled recompute**\n- dedup trades with FINAL\n- value each position at the latest price\n- replaces the whole result each refresh)
 
-  query:
-    refreshable-mv:position_pnl -[finished numbers on read]-> client:readers(label=P&L readers)
-category: aggregation
-flow: transform
-topology: single
-order: 4
-tags: [aggregation, rollup, refreshable-mv, revaluation, mark-to-market]
-driver_node: ch
-profiles: [single]
+    query:
+      refreshable-mv:position_pnl -[finished numbers on read]-> client:readers(label=P&L readers)
+  status: stable
+  category: aggregation
+  flow: transform
+  topology: single
+  order: 4
+  tags: [aggregation, rollup, refreshable-mv, revaluation, mark-to-market]
 
-references:
-  - label: "ClickHouse: Refreshable materialized views"
-    url: https://clickhouse.com/docs/materialized-view/refreshable-materialized-view
-  - label: "ClickHouse: CREATE VIEW (REFRESH clause)"
-    url: https://clickhouse.com/docs/sql-reference/statements/create/view#refreshable-materialized-view
+  references:
+    - label: 'ClickHouse: Refreshable materialized views'
+      url: https://clickhouse.com/docs/materialized-view/refreshable-materialized-view
+    - label: 'ClickHouse: CREATE VIEW (REFRESH clause)'
+      url: https://clickhouse.com/docs/sql-reference/statements/create/view#refreshable-materialized-view
 
-schema_sql: schema.sql
-load: load.py          # book trades, move the marks with no trades, amend and cancel
+  tradeoffs:
+    benefits:
+      - A full query runs on each refresh, so FINAL dedup, joins, and window functions are available, none of which an insert-triggered view can do.
+      - The result reflects the current raw data, so corrections, cancellations, and moved marks appear on the next refresh with no reconciliation.
+      - One recompute serves many readers from a small finished table, instead of every reader rerunning the aggregation.
+    limitations:
+      - The summary is stale between refreshes, up to the refresh interval.
+      - Each refresh is a full recompute over its scope, so an unbounded query gets more expensive as data grows; bound it to a recent window.
+      - The refresh runs on a schedule outside the insert path, so it lags live inserts and adds a background job to operate.
+spec:
+  profiles: [single]
+  driver_node: ch
+  steps:
+    schema: schema.sql
+    load: load.py      # book trades, move the marks with no trades, amend and cancel
 
-# Convergence: after the moved prices and the amend/cancel, the scheduled refresh
-# recomputes the book. Wait until both symbols are valued, the BTC position has
-# deduped to 125 (proving the amend and cancel applied), and BTC carries the
-# moved price of 101 (proving the revaluation, which happened with no trade).
-ready_when:
-  - query: "SELECT count() FROM demo.position_pnl"
-    value: 2
-    node: ch
-    timeout: 60
-  - query: "SELECT position FROM demo.position_pnl WHERE symbol = 'BTC'"
-    value: 125
-    node: ch
-    timeout: 60
-  - query: "SELECT toInt32(price) FROM demo.position_pnl WHERE symbol = 'BTC'"
-    value: 101
-    node: ch
-    timeout: 60
+    # Convergence: after the moved prices and the amend/cancel, the scheduled refresh
+    # recomputes the book. Wait until both symbols are valued, the BTC position has
+    # deduped to 125 (proving the amend and cancel applied), and BTC carries the
+    # moved price of 101 (proving the revaluation, which happened with no trade).
+    ready_when:
+      - query: SELECT count() FROM demo.position_pnl
+        value: 2
+        node: ch
+        timeout: 60
+      - query: SELECT position FROM demo.position_pnl WHERE symbol = 'BTC'
+        value: 125
+        node: ch
+        timeout: 60
+      - query: SELECT toInt32(price) FROM demo.position_pnl WHERE symbol = 'BTC'
+        value: 101
+        node: ch
+        timeout: 60
 
-verify:
-  sql: verify.sql
-  expected: expected.txt
+    verify:
+      sql: verify.sql
+      expected: expected.txt

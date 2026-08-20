@@ -510,7 +510,8 @@
 
   // The Definition strip under the diagram shows the pattern's source files in
   // lifecycle order: Structure (schema) -> Load -> Verify (query + expected),
-  // plus any ClickHouse configuration fragments the pattern mounts.
+  // plus any per-service customization the pattern mounts (ClickHouse config
+  // fragments, database init scripts).
   function codeBlock(file, code, lang) {
     const source = code || "";
     // Highlight.js escapes input before returning its markup. Keep the fallback

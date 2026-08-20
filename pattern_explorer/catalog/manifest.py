@@ -22,9 +22,10 @@ _PATTERN_SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 # The pattern.yaml manifest format version this build understands. Bump it
 # whenever the shape of pattern.yaml changes incompatibly, and gate the old shape
-# behind the older number so a file declares which parser it expects. Files
-# without the field are treated as version 1 (the shape before it was introduced).
-CURRENT_MANIFEST_VERSION = 1
+# behind the older number so a file declares which parser it expects. Version 2
+# introduced the metadata:/spec: layout; version 1 (flat keys) is no longer
+# readable — older files must be rewritten with `python -m pattern_explorer migrate`.
+CURRENT_MANIFEST_VERSION = 2
 
 
 class PatternManifestError(ValueError):
@@ -234,11 +235,52 @@ class ClickHouseConfigOverride(BaseModel):
         return self.name or Path(self.file).name
 
 
+# Compose services that initialize a fresh container from /docker-entrypoint-initdb.d
+# (mounted in compose/stack.yml), and can therefore run pattern-provided SQL at startup.
+INITDB_SERVICES = frozenset({"postgres", "mysql"})
+
+
+class ServiceInitOverride(BaseModel):
+    """A SQL script a database service runs once, when a fresh container initializes.
+
+    Mounted into the service's /docker-entrypoint-initdb.d by the compose
+    overlay, where the image's entrypoint executes it after the stack's shared
+    seed (init.sql). Sessions always recreate containers (`down -v`), so the
+    script re-runs on every start.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    service: str
+    file: str
+    name: str = ""  # destination filename; defaults to the source basename
+
+    @model_validator(mode="after")
+    def _validate(self):
+        if self.service not in INITDB_SERVICES:
+            raise ValueError(
+                f"services.{self.service} cannot run init scripts; "
+                f"services with an init directory: {sorted(INITDB_SERVICES)}"
+            )
+        if not self.file.endswith(".sql"):
+            raise ValueError("init file must be a .sql script")
+        if Path(self.file).is_absolute() or ".." in Path(self.file).parts:
+            raise ValueError("init file must be relative to the pattern directory")
+        destination = self.name or Path(self.file).name
+        if Path(destination).name != destination or not destination.endswith(".sql"):
+            raise ValueError("init name must be one .sql filename")
+        return self
+
+    @property
+    def destination_name(self) -> str:
+        return self.name or Path(self.file).name
+
+
 class Pattern(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # Which pattern.yaml manifest format this file is written against; see CURRENT_MANIFEST_VERSION.
-    manifest_version: int = 1
+    manifest_version: int = 2
     title: str
     description: str
     graph: str | None = None
@@ -268,6 +310,9 @@ class Pattern(BaseModel):
 
     # Additive config fragments, mounted only while this pattern's stack is up.
     clickhouse_config: list[ClickHouseConfigOverride] = Field(default_factory=list)
+
+    # Init scripts run by database services (postgres, mysql) on container init.
+    service_init: list[ServiceInitOverride] = Field(default_factory=list)
 
     ready_when: list[Expectation] = Field(default_factory=list)
 
@@ -299,8 +344,11 @@ class Pattern(BaseModel):
                 f"understands (max {CURRENT_MANIFEST_VERSION}); upgrade the pattern "
                 "explorer to read this pattern"
             )
-        if self.manifest_version < 1:
-            raise ValueError("manifest_version must be a positive integer")
+        if self.manifest_version < CURRENT_MANIFEST_VERSION:
+            raise ValueError(
+                f"manifest_version {self.manifest_version} uses the old flat format; "
+                "rewrite it with `python -m pattern_explorer migrate`"
+            )
         if self.superseded_by:
             validate_pattern_slug(self.superseded_by)
         if self.superseded_since and not re.fullmatch(r"\d+(\.\d+)*", self.superseded_since):
@@ -340,6 +388,10 @@ class Pattern(BaseModel):
         if len(destinations) != len(set(destinations)):
             raise ValueError("clickhouse_config cannot mount two fragments at the same destination")
 
+        init_destinations = [(item.service, item.destination_name) for item in self.service_init]
+        if len(init_destinations) != len(set(init_destinations)):
+            raise ValueError("services init cannot mount two scripts at the same destination")
+
         # Only check single-file fields the author set explicitly. Defaults that
         # happen to be absent are fine; the runner skips them.
         if self.dir != Path():
@@ -354,6 +406,9 @@ class Pattern(BaseModel):
                     if val and not (self.dir / val).exists():
                         missing.append(val)
             for item in self.clickhouse_config:
+                if not (self.dir / item.file).is_file():
+                    missing.append(item.file)
+            for item in self.service_init:
                 if not (self.dir / item.file).is_file():
                     missing.append(item.file)
             if missing:
@@ -409,6 +464,121 @@ def discover_groups() -> list[Group]:
     return sorted(groups, key=lambda group: (group.order, group.title))
 
 
+# Section layout of a manifest_version: 2 file. `metadata` holds everything the
+# catalog/explorer shows; `spec` holds everything the runner executes. The internal
+# Pattern model is flat, so _normalize_manifest flattens the sections before
+# validation — pydantic's extra="forbid" then still catches misspelled leaf keys.
+_METADATA_KEYS = frozenset({
+    "title", "description", "graph", "status", "category", "flow", "topology",
+    "order", "experimental", "tags", "references", "related_patterns",
+    "superseded_by", "superseded_since", "tradeoffs",
+})
+_SPEC_KEYS = frozenset({
+    "mode", "profiles", "driver_node", "requires", "services", "steps",
+})
+_STEP_KEYS = frozenset({"schema", "load", "ready_when", "verify"})
+
+
+def _normalize_manifest(manifest: Path, data: dict) -> dict:
+    """Flatten a manifest_version: 2 document into the internal flat Pattern shape."""
+    if not isinstance(data, dict):
+        raise PatternManifestError(f"{_manifest_path(manifest)}: expected a mapping at the top level")
+    version = data.get("manifest_version", 1)
+    if isinstance(version, int) and version < CURRENT_MANIFEST_VERSION:
+        raise PatternManifestError(
+            f"{_manifest_path(manifest)}: this pattern.yaml uses the old flat format; "
+            "rewrite it with `python -m pattern_explorer migrate`"
+        )
+
+    def _section(name: str) -> dict:
+        value = data.get(name) or {}
+        if not isinstance(value, dict):
+            raise PatternManifestError(f"{_manifest_path(manifest)}: `{name}` must be a mapping")
+        return value
+
+    unknown_top = set(data) - {"manifest_version", "metadata", "spec"}
+    if unknown_top:
+        hints = []
+        for key in sorted(unknown_top):
+            if key in _METADATA_KEYS:
+                hints.append(f"`{key}` belongs under `metadata:`")
+            elif key in _SPEC_KEYS or key in _STEP_KEYS or key in {"schema_sql", "clickhouse_config"}:
+                hints.append(f"`{key}` belongs under `spec:`")
+        hint = "; ".join(hints)
+        raise PatternManifestError(
+            f"{_manifest_path(manifest)}: unknown top-level key(s) {sorted(unknown_top)}"
+            + (f" — {hint}" if hint else "")
+        )
+
+    flat: dict = {"manifest_version": version}
+    flat.update(_section("metadata"))
+
+    spec = _section("spec")
+    unknown_spec = set(spec) - _SPEC_KEYS
+    if unknown_spec:
+        raise PatternManifestError(
+            f"{_manifest_path(manifest)}: unknown spec key(s) {sorted(unknown_spec)}; "
+            f"known: {sorted(_SPEC_KEYS)}"
+        )
+    for key in ("mode", "profiles", "driver_node", "requires"):
+        if key in spec:
+            flat[key] = spec[key]
+
+    services = spec.get("services") or {}
+    if not isinstance(services, dict):
+        raise PatternManifestError(f"{_manifest_path(manifest)}: `spec.services` must be a mapping")
+    clickhouse_config: list = []
+    service_init: list = []
+    for name, config in services.items():
+        config = config or {}
+        if not isinstance(config, dict):
+            raise PatternManifestError(
+                f"{_manifest_path(manifest)}: `spec.services.{name}` must be a mapping"
+            )
+        if name == "clickhouse":
+            unknown = set(config) - {"config"}
+            if unknown:
+                raise PatternManifestError(
+                    f"{_manifest_path(manifest)}: unknown spec.services.clickhouse key(s) "
+                    f"{sorted(unknown)}; known: ['config']"
+                )
+            clickhouse_config.extend(config.get("config") or [])
+        elif name in INITDB_SERVICES:
+            unknown = set(config) - {"init"}
+            if unknown:
+                raise PatternManifestError(
+                    f"{_manifest_path(manifest)}: unknown spec.services.{name} key(s) "
+                    f"{sorted(unknown)}; known: ['init']"
+                )
+            scripts = config.get("init") or []
+            if isinstance(scripts, str):
+                scripts = [scripts]
+            service_init.extend({"service": name, "file": script} for script in scripts)
+        else:
+            raise PatternManifestError(
+                f"{_manifest_path(manifest)}: unknown service {name!r} in spec.services; "
+                f"known: {['clickhouse', *sorted(INITDB_SERVICES)]}"
+            )
+    flat["clickhouse_config"] = clickhouse_config
+    flat["service_init"] = service_init
+
+    steps = spec.get("steps") or {}
+    if not isinstance(steps, dict):
+        raise PatternManifestError(f"{_manifest_path(manifest)}: `spec.steps` must be a mapping")
+    unknown_steps = set(steps) - _STEP_KEYS
+    if unknown_steps:
+        raise PatternManifestError(
+            f"{_manifest_path(manifest)}: unknown spec.steps key(s) {sorted(unknown_steps)}; "
+            f"known: {sorted(_STEP_KEYS)}"
+        )
+    if "schema" in steps:
+        flat["schema_sql"] = steps["schema"]
+    for key in ("load", "ready_when", "verify"):
+        if key in steps:
+            flat[key] = steps[key]
+    return flat
+
+
 def _load_pattern_dir(directory: Path, slug: str, location: str, group: str = "") -> Pattern:
     manifest = directory / "pattern.yaml"
     if not manifest.exists():
@@ -420,11 +590,10 @@ def _load_pattern_dir(directory: Path, slug: str, location: str, group: str = ""
     if not group:
         group = directory.parent.name if location == "library" else "workspaces"
     try:
+        data = _normalize_manifest(manifest, data)
         return Pattern(slug=slug, dir=directory, location=location, group=group, **data)
     except ValidationError as exc:
         raise _manifest_error(manifest, exc) from exc
-
-
 def load_pattern_dir(directory: Path, slug: str, location: str = "library") -> Pattern:
     """Load a pattern from an exact directory, as recorded by a live session."""
     return _load_pattern_dir(directory.resolve(), slug, location)

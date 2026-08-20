@@ -343,18 +343,21 @@ so keep `schema.sql` / `verify.sql` files to:
 This is enough for the current patterns. A ClickHouse-aware splitter can replace
 it when a pattern needs literals with those characters.
 
-## Per-pattern ClickHouse configuration
+## Per-pattern service configuration
 
 Some examples need server configuration that should not change the base stack:
 an S3 disk and storage policy, a named collection, or a user-profile setting.
-Declare additive fragments in `pattern.yaml`; the runner emits a small Compose
-overlay and mounts them only while that pattern is up:
+Declare additive fragments in `pattern.yaml` under `spec.services`; the runner
+emits a small Compose overlay and mounts them only while that pattern is up:
 
 ```yaml
-clickhouse_config:
-  - node: ch
-    file: config/tiered-storage.xml
-    depends_on: [minio-init]
+spec:
+  services:
+    clickhouse:
+      config:
+        - node: ch
+          file: config/tiered-storage.xml
+          depends_on: [minio-init]
 ```
 
 Fragments are relative to the pattern directory, must be XML, and mount under
@@ -363,6 +366,11 @@ available). This intentionally does not provide a way to replace `config.xml`:
 the shared listener, user, and topology configuration remains owned by the
 stack. A fragment takes effect at server startup, so use `just reload` after an
 edit to an active pattern.
+
+Database services follow the same overlay path: `spec.services.postgres.init`
+(or `mysql.init`) mounts a pattern-local `.sql` file into the service's
+`/docker-entrypoint-initdb.d`, where it runs after the stack's shared seed on
+every fresh container (sessions always `down -v` between runs).
 
 ## Isolation
 
@@ -375,11 +383,11 @@ use, `just test` reports it as a port conflict rather than a raw trace.
 
 ## Adding a pattern
 
-1. `patterns/<slug>/pattern.yaml`: a compact `title`, a structured `graph` that
-   drives the Explorer diagram, a detailed `description`, optional `tradeoffs` split into concrete
-   `benefits` and `limitations`, optional external `references`,
-   `category`, `flow`, `topology`, descriptive `tags`, runtime `profiles`,
-   `driver_node`, and `ready_when` checks. Use one `schema_sql` file; cluster-wide
+1. `patterns/<slug>/pattern.yaml`: a compact `metadata.title`, a structured `metadata.graph` that
+   drives the Explorer diagram, a detailed `metadata.description`, optional `metadata.tradeoffs` split into concrete
+   `benefits` and `limitations`, optional external `metadata.references`,
+   `metadata.category`, `flow`, `topology`, descriptive `tags`, runtime `spec.profiles`,
+   `spec.driver_node`, and `spec.steps.ready_when` checks. Use one `spec.steps.schema` file; cluster-wide
    objects belong in `ON CLUSTER` statements and node identity belongs in
    server macros. Label every end-to-end boundary path by direction. Ingestion
    patterns start with `INGESTION: source -> ClickHouse`. Output patterns split

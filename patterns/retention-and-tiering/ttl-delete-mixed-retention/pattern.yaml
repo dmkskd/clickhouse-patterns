@@ -1,50 +1,53 @@
-manifest_version: 1
-status: wip
-title: "TTL deletion: different retention period per row"
-description: |-
-  Retention can depend on values in each row. For example, a log table can
-  delete DEBUG rows after one day and INFO rows after one week.
+manifest_version: 2
+metadata:
+  title: 'TTL deletion: different retention period per row'
+  description: |-
+    Retention can depend on values in each row. For example, a log table can
+    delete DEBUG rows after one day and INFO rows after one week.
 
-  A materialized expiry timestamp, calculated by `multiIf` at insert time,
-  gives each row its deadline. The table's DELETE TTL later removes rows after
-  that deadline during a TTL merge.
-graph: |-
-  ingest:
-    client:writer -[application logs]-> mergetree:events(note=**Retention policy**\n- DEBUG: 1 day\n- INFO: 7 days\n- expires_at: multiIf(log_level, event_time)\n- TTL merge removes DEBUG rows\n- INFO rows remain in the rewritten part)
+    A materialized expiry timestamp, calculated by `multiIf` at insert time,
+    gives each row its deadline. The table's DELETE TTL later removes rows after
+    that deadline during a TTL merge.
+  graph: |-
+    ingest:
+      client:writer -[application logs]-> mergetree:events(note=**Retention policy**\n- DEBUG: 1 day\n- INFO: 7 days\n- expires_at: multiIf(log_level, event_time)\n- TTL merge removes DEBUG rows\n- INFO rows remain in the rewritten part)
 
-  query:
-    mergetree:events -[reads the active part after the TTL merge]-> client:analyst
-category: retention
-flow: transform
-topology: single
-order: 2
-tags: [ttl, delete, retention, multiif, expiry, policy]
-related_patterns:
-  - slug: ttl-policy-change-rollout
-    note: Read before changing this table's TTL on existing data.
-profiles: [single]
-driver_node: ch
-schema_sql: schema.sql
-load: load.py
-ready_when:
-  - query: >-
-      SELECT count() FROM demo.events
-    value: 2
-    timeout: 60
-  - query: >-
-      SELECT count() FROM system.parts
-      WHERE database = 'demo' AND table = 'events' AND active
-    value: 1
-    timeout: 60
-verify:
-  sql: verify.sql
-  expected: expected.txt
-references:
-  - label: "ClickHouse: Manage data with TTL"
-    url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
-tradeoffs:
-  benefits:
-    - Expresses value-dependent retention in one table-level TTL policy.
-    - Gives each row a visible, queryable expiry timestamp.
-  limitations:
-    - The calculated expiry must be deterministic and based on row values.
+    query:
+      mergetree:events -[reads the active part after the TTL merge]-> client:analyst
+  status: wip
+  category: retention
+  flow: transform
+  topology: single
+  order: 2
+  tags: [ttl, delete, retention, multiif, expiry, policy]
+  references:
+    - label: 'ClickHouse: Manage data with TTL'
+      url: https://clickhouse.com/docs/concepts/features/operations/delete/ttl
+  related_patterns:
+    - slug: ttl-policy-change-rollout
+      note: Read before changing this table's TTL on existing data.
+  tradeoffs:
+    benefits:
+      - Expresses value-dependent retention in one table-level TTL policy.
+      - Gives each row a visible, queryable expiry timestamp.
+    limitations:
+      - The calculated expiry must be deterministic and based on row values.
+spec:
+  profiles: [single]
+  driver_node: ch
+  steps:
+    schema: schema.sql
+    load: load.py
+    ready_when:
+      - query: >-
+          SELECT count() FROM demo.events
+        value: 2
+        timeout: 60
+      - query: >-
+          SELECT count() FROM system.parts
+          WHERE database = 'demo' AND table = 'events' AND active
+        value: 1
+        timeout: 60
+    verify:
+      sql: verify.sql
+      expected: expected.txt
