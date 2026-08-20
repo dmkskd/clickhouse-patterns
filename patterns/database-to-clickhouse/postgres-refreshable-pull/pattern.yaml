@@ -30,7 +30,7 @@ metadata:
     query:
       {refreshable-mv:orders, mv:orders_latest}
         -[plain SELECT · no FINAL]-> client:readers(label=analytics readers,note=**Plain reads**\nA plain MergeTree read.\n- stale by up to one interval)
-  status: under-review
+  status: stable
   topology: single
   order: 2
   tags: [postgres, refreshable-mv, scheduled-pull, dimension-table]
@@ -57,7 +57,7 @@ metadata:
       - Each refresh is a full scan on the Postgres side too, which is a periodic load spike on the OLTP database rather than the continuous trickle a WAL reader produces.
       - Only the current state is captured; intermediate values between two refreshes are never observed, so this cannot feed an audit trail or a change-history table.
       - Refreshes are wall-clock scheduled and independent per view, so several large views on the same interval can pile onto the same minute unless staggered with `OFFSET` or chained with `DEPENDS ON`.
-      - The APPEND variant rewrites the whole table on every tick whether or not anything changed, so its storage grows as rows times refreshes and needs both a coarse interval and a TTL.
+      - The APPEND variant appends a full snapshot of the result on every tick whether or not anything changed, so its storage grows as rows times refreshes and needs both a coarse interval and a TTL.
 
 spec:
   profiles: [single, postgres]
