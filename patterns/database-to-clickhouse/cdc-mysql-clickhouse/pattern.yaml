@@ -2,13 +2,22 @@ manifest_version: 2
 metadata:
   title: CDC · MySQL binlog → Altinity lightweight sink → ClickHouse
   description: |-
-    Compares three ways to land the same MySQL CDC stream in ClickHouse: allowing the Altinity sink to create the target, transforming that target through a materialized view, or writing into an existing ClickHouse table with deliberate types and a generated column.
+    The Altinity lightweight sink replicates MySQL into ClickHouse over JDBC. Its embedded Debezium works in two phases:
 
-    All three receive matching `INSERT`, `UPDATE`, and `DELETE` operations and preserve versioned current-state semantics.
+    - **Snapshot:** reads the source tables to seed the ClickHouse copy.
+    - **Streaming:** follows the binlog and applies every change as it commits.
 
-    Beyond ClickHouse and the source database, the pipeline is a single service. Embedded Debezium reads the binlog and writes over JDBC, keeping its offsets and schema history in ClickHouse tables, so the deployment requires no broker, orchestrator, catalog database, or object storage.
+    The Altinity lightweight sink is the only service to run with MySQL and ClickHouse, and it keeps its offsets and schema history in ClickHouse tables.
 
-    The connector performs no in-flight transformation. Removing the broker removes the place a Kafka Connect single-message transform would run, so all shaping happens in ClickHouse, either in the target DDL or in a materialized view.
+    The same CDC stream lands in three ClickHouse tables, each created differently:
+
+    - `test.orders` is created by the connector, with types inferred from the source.
+    - `test.orders_existing` is pre-created by the pattern, with deliberate types and a generated column.
+    - `test.orders_transformed` is populated by a materialized view that transforms the rows from `test.orders`.
+
+    The demo applies the same inserts, updates, and deletes to the two MySQL source tables. The sink never updates or deletes in ClickHouse: every change lands as a new row version (`_version`), and every delete as a tombstone (`is_deleted`). Read with `FINAL` and a tombstone filter, each of the three ClickHouse tables then returns the current state of the MySQL table — and because changes only ever arrive as inserts, the materialized view transforms new versions and tombstones like any other rows.
+
+    The connector cannot transform records in flight: single-message transforms run inside the Kafka Connect runtime, which this lightweight deployment does not include. Records land as Debezium produces them, so all shaping happens in ClickHouse, either in the target DDL or in a materialized view.
 
     This repository pins Altinity sink `2.9.1-lt` to ClickHouse `25.3` because its startup JDBC metadata reads fail against ClickHouse `26.6`.
   graph: |-
@@ -40,7 +49,7 @@ metadata:
       mergetree:orders
         -> mv:orders_transform_mv(reads=orders only)
         -> mergetree:orders_transformed@mv-transformed(source=orders MV)
-  status: under-review
+  status: stable
   topology: single
   order: 3
   tags: [cdc, mysql]
@@ -53,6 +62,8 @@ metadata:
       url: https://github.com/Altinity/clickhouse-sink-connector/blob/999b63d712212502583b4efe41a84d760c161e6a/sink-connector-lightweight/pom.xml#L474-L480
     - label: Sink connector architecture (lightweight vs Kafka deployment)
       url: https://github.com/Altinity/clickhouse-sink-connector/blob/develop/doc/architecture.md
+    - label: Debezium transformations (single-message transforms)
+      url: https://debezium.io/documentation/reference/stable/transformations/applying-transformations-selectively.html
     - label: Lightweight connector configuration reference
       url: https://github.com/Altinity/clickhouse-sink-connector/blob/develop/sink-connector-lightweight/docker/config.yml
     - label: 'Single-process snapshot limits: slowdown and OOM on large initial loads'
@@ -68,8 +79,8 @@ metadata:
       - Auto-create supports a connector-owned target while the same stream can land in a deliberately pre-created ClickHouse schema.
       - ReplacingMergeTree versions and delete markers preserve current-state semantics for inserts, updates, and deletes.
     limitations:
-      - Correctness now costs something on every read - a ReplacingMergeTree, a version column, a tombstone, and FINAL - none of which a scheduled full replace needs.
-      - No in-flight transformation, because without a broker there is no Kafka Connect single-message transform stage, so records land as Debezium produces them and all shaping happens in ClickHouse.
+      - "Reads must deduplicate versions and filter deletes, as with any ReplacingMergeTree table: FINAL or argMax for the versions, is_deleted = 0 for the tombstones."
+      - "No in-flight transformation is possible: single-message transforms are a Kafka Connect runtime feature that the lightweight deployment lacks, so records land as Debezium produces them and all shaping happens in ClickHouse."
       - The initial snapshot is a single embedded Debezium process, so large tables load serially and a failure restarts the snapshot rather than resuming it.
       - Binlog reading and ClickHouse writing share one pipeline, so a slow destination applies back pressure to the source.
       - Recovery is a process restart from the last flushed offset; there is no workflow history, no retry policy per step, and no second instance to fail over to.
