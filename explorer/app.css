@@ -175,6 +175,11 @@ button, input { font: inherit; }
 .session-actions button, .session-links a, .definition-tabs button { padding: 7px 10px; border: 1px solid #303955; border-radius: 7px; background: #111526; color: #c9d0e4; font-size: 11px; text-decoration: none; cursor: pointer; white-space: nowrap; }
 .session-actions button:hover, .session-links a:hover, .definition-tabs button:hover { border-color: #526086; color: white; }
 .session-actions button.primary { border-color: #2d765b; background: #153729; color: #8ef0c1; }
+/* Play cue on the Launch button: a slow pulse that dips the glyph toward dark
+   (and slightly enlarges it) so the control reads as the page's primary action. */
+.session-actions button.primary .play { display: inline-block; margin-right: 6px; font-size: 9px; animation: play-pulse 2.2s ease-in-out infinite; }
+@keyframes play-pulse { 50% { transform: scale(1.4); opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .session-actions button.primary .play { animation: none; } }
 .session-actions button.danger { border-color: #653b44; color: #f2a1a8; }
 /* Validate control doubles as the last-validation indicator: only the mark is
    colored (theme-aware), the button itself stays neutral. */
@@ -719,7 +724,7 @@ button, input { font: inherit; }
   border: 0; background: var(--bg); box-shadow: var(--raised-sm); color: var(--muted);
 }
 [data-theme="soft"] .session-actions button:hover, [data-theme="soft"] .session-links a:hover { color: var(--text); }
-[data-theme="soft"] .session-actions button.primary { color: var(--green); }
+[data-theme="soft"] .session-actions button.primary { color: var(--text); }
 [data-theme="soft"] .session-actions button.danger { color: #f2a1a8; }
 [data-theme="soft"] .explorer-mode { border: 0; background: var(--bg); box-shadow: var(--pressed-sm); color: var(--dim); }
 [data-theme="soft"] .explorer-mode.local { color: var(--blue); }
@@ -1052,7 +1057,7 @@ button, input { font: inherit; }
 [data-theme="flat"][data-scheme="light"] .session-actions button:hover,
 [data-theme="flat"][data-scheme="light"] .session-links a:hover,
 [data-theme="flat"][data-scheme="light"] .definition-tabs button:hover { border-color: #b8c2d8; color: var(--text); }
-[data-theme="flat"][data-scheme="light"] .session-actions button.primary { border-color: #9fd8bf; background: #eafaf2; color: var(--green); }
+[data-theme="flat"][data-scheme="light"] .session-actions button.primary { border-color: #9fd8bf; background: #eafaf2; color: var(--text); }
 [data-theme="flat"][data-scheme="light"] .session-actions button.danger { border-color: #ecc5c8; color: #c14b47; }
 [data-theme="flat"][data-scheme="light"] .session-progress { border-top-color: var(--line); }
 [data-theme="flat"][data-scheme="light"] .session-progress ol { color: var(--muted); }

@@ -287,7 +287,7 @@ window.PE.session = (() => {
       summaryEl.onclick = compact && active ? () => ctx.selectPattern(active.slug) : null;
       $("start-session").disabled = busy;
       const switching = Boolean(active && selectedDiffers);
-      $("start-session").textContent = switching ? "Launch this pattern" : "Launch pattern";
+      $("start-session").innerHTML = `<span class="play" aria-hidden="true">▶</span>${switching ? "Launch this pattern" : "Launch pattern"}`;
       if (switching) $("start-session").title = `Stops ${active.slug} (its containers and volumes are removed), then launches ${selected.slug}.`;
       $("validate-session").disabled = busy;
       $("stop-session").disabled = busy;
