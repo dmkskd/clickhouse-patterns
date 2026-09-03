@@ -16,11 +16,11 @@ metadata:
     `ttl-replicated/ch-01/` and `ch-02` beneath `ttl-replicated/ch-02/` in the
     same MinIO bucket.
 
-    ClickHouse also offers experimental remote-filesystem zero-copy replication.
+    ClickHouse also offers **experimental** remote-filesystem zero-copy replication.
     In that model, `ch-01` uploads a part's files to S3 once. To make the part
     available on `ch-02`, ClickHouse creates local part metadata on `ch-02` that
-    refers to those existing S3 files; it does not upload a second S3 copy. It is
-    not recommended for production.
+    refers to those existing S3 files; it does not upload a second S3 copy. **It
+    is not recommended for production.**
   graph: |-
     replication:
       client:writer
@@ -53,6 +53,7 @@ metadata:
     limitations:
       - 'The replication factor applies in S3 too: two replicas create two cold object sets.'
       - Cold reads and moves take on object-storage latency, throughput, caching, and egress considerations.
+      - Zero-copy replication would avoid the duplicate S3 copies, but it is experimental and not recommended for production.
 spec:
   profiles: [cluster, s3]
   driver_node: ch-01

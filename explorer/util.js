@@ -6,7 +6,7 @@ window.PE.util = (() => {
 
   const FLOW_COLORS = {
     ingestion: "#3ed598", input: "#3ed598", output: "#f6b73c",
-    snapshot: "#a78bfa", changes: "#3ed598", transformation: "#f6b73c",
+    snapshot: "#a78bfa", changes: "#f0883e", transformation: "#f6b73c",
     query: "#4cc3f7", replication: "#a78bfa", evaluation: "#a78bfa",
     state: "#a78bfa", transitions: "#f472b6", test: "#8b93ad",
     // Pattern-specific flow names, colored so each diagram's flows stay distinct.

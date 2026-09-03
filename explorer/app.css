@@ -561,6 +561,13 @@ button, input { font: inherit; }
 .code-file { margin: 0; min-width: 0; }
 .code-file figcaption { color: var(--dim); font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
 .code-file pre.code { margin: 0; max-height: 360px; overflow: auto; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--text); font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; }
+/* Match the highlight.js github-dark surface used by the code blocks, so the
+   expected output reads as the same "screen" in every theme. */
+.code-file .expected-scroll { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #0d1117; }
+.expected-table { border-collapse: collapse; color: #c9d1d9; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.expected-table td { padding: 2px 14px; white-space: nowrap; }
+.expected-table tr:first-child td { padding-top: 10px; }
+.expected-table tr:last-child td { padding-bottom: 10px; }
 .tradeoffs { padding-bottom: 16px; }
 .tradeoffs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 16px; }
 .tradeoff-card { border: 1px solid var(--line); border-radius: 11px; background: #090c16; padding: 16px 18px; }
@@ -1317,9 +1324,11 @@ button, input { font: inherit; }
 }
 [data-theme="soft"][data-scheme="dark"] .definition-tabs button.active { background: var(--well); }
 [data-theme="soft"] .definition-body { padding: 4px 18px 18px; }
-[data-theme="soft"] .code-file pre.code {
+[data-theme="soft"] .code-file pre.code,
+[data-theme="soft"] .code-file .expected-scroll {
   border: 0; background: var(--screen-flat); color: #d9deed; box-shadow: var(--pressed-sm);
 }
+[data-theme="soft"] .expected-table { color: #d9deed; }
 
 /* ---------- collapsible sidebar ---------- */
 .pattern-sidebar { transition: transform .22s ease, opacity .18s ease; }

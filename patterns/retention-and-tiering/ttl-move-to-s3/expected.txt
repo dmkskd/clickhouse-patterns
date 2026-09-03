@@ -1,2 +1,2 @@
-current	default	2
-expired	cold_s3	2
+200001	2	cold_s3	eligible	1	0
+current month	2	default	waiting for newest row	0	0

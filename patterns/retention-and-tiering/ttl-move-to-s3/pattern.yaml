@@ -14,9 +14,21 @@ metadata:
     local storage for recent writes and low-latency reads, then an S3-backed disk
     for older parts.
 
-    The storage policy defines a local hot tier and an S3-backed cold tier. The
-    table selects that policy with `SETTINGS storage_policy = 'tiered'` and names
-    the cold tier in its TTL.
+    **When a part moves.** MOVE TTL is asynchronous background work and moves
+    whole parts, never single rows. A part becomes movable only when its
+    newest row satisfies the TTL: for `event_time + INTERVAL 30 DAY`, when the
+    newest row's `event_time` is more than 30 days in the past. The actual
+    move time then depends on:
+
+    - **Move cooldown:** `merge_with_ttl_timeout` (default four hours) bounds
+      how often ClickHouse schedules TTL work. It delays when an eligible part
+      is picked up; it does not re-move or rewrite a part on every interval.
+    - **Capacity:** selected moves wait for a background mover slot; watch
+      `system.moves` and `system.part_log` for progress.
+
+    This example defines its own storage policy, `tiered`, with a local hot
+    tier and an S3-backed cold tier. The table selects that policy with
+    `SETTINGS storage_policy = 'tiered'` and names the cold tier in its TTL.
     An already-eligible inserted part moves immediately by default;
     `perform_ttl_move_on_insert = 0` defers that potentially slow S3 write to the
     background mover. Inspect `system.parts.disk_name`, `system.part_log`, and
@@ -51,6 +63,7 @@ metadata:
     limitations:
       - Needs server storage configuration and careful S3 operational design, rather than SQL alone.
       - Older reads may be slower or cost more, so a cache and workload measurement are often necessary.
+      - A part moves only when its newest row passes the TTL, so coarse partitions can keep old rows on the hot tier far longer than the TTL suggests.
 
 spec:
   profiles: [single, s3]
@@ -76,6 +89,13 @@ spec:
           SELECT count() FROM system.parts
           WHERE database = 'demo' AND table = 'tiered_events'
             AND active AND disk_name = 'default'
+        value: 1
+        node: ch
+        timeout: 60
+      - query: >-
+          SELECT count() FROM system.part_log
+          WHERE database = 'demo' AND table = 'tiered_events'
+            AND event_type = 'MovePart'
         value: 1
         node: ch
         timeout: 60

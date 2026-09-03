@@ -34,13 +34,17 @@ ORDER BY name, active DESC, disk_name;
 
 After the switch, the moved part appears with `active = 1` on `cold_s3`; its
 former `default`-disk copy appears with `active = 0` until cleanup. Use
-`system.part_log` to see the `MOVE_PART` event.
+`system.part_log` to see the `MovePart` event.
 
 The load inserts two rows in an expired monthly partition and two current rows.
 The cold volume has `perform_ttl_move_on_insert = 0`, so an already-expired
 insert initially lands locally. `ALTER TABLE ... MATERIALIZE TTL` then makes
 the demonstration deterministic. The checks require one active part on
-`cold_s3`, one on `default`, and the expected two rows on each.
+`cold_s3`, one on `default`, and a `MovePart` entry in `system.part_log`.
+The verification then shows each active part with its disk, its TTL state
+based on its newest row, and its `MovePart` versus `MergeParts` event counts,
+demonstrating that the eligible part moved whole and was never rewritten by a
+merge.
 
 MOVE TTL has its own per-table `Moving` scheduler in
 `background_schedule_pool`. It scans active parts, compares each part's stored

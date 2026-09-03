@@ -523,6 +523,16 @@
       + `<pre class="code lang-${esc(lang)}"><code class="hljs language-${esc(lang)}">${highlighted}</code></pre></figure>`;
   }
 
+  function expectedTable(file, tsv) {
+    const text = (tsv || "").trim();
+    const rows = text ? text.split("\n").map((line) => line.split("\t")) : [];
+    const body = rows.length
+      ? rows.map((row) => `<tr>${row.map((cell) => `<td>${esc(cell)}</td>`).join("")}</tr>`).join("")
+      : `<tr><td>(empty)</td></tr>`;
+    return `<figure class="code-file"><figcaption>${esc(file)}</figcaption>`
+      + `<div class="expected-scroll"><table class="expected-table"><tbody>${body}</tbody></table></div></figure>`;
+  }
+
   function showDefinition(pattern, key) {
     const def = pattern.definition || {};
     const body = $("definition-body");
@@ -537,7 +547,7 @@
       const v = def.verify;
       body.className = "definition-body verify";
       body.innerHTML = codeBlock(v.sqlFile, v.sql, "sql")
-        + (v.expected != null ? codeBlock(v.expectedFile, v.expected, "text") : "");
+        + (v.expected != null ? expectedTable(v.expectedFile, v.expected) : "");
     } else if (key === "config") {
       body.className = "definition-body configuration";
       body.innerHTML = def.config.map((item) =>
