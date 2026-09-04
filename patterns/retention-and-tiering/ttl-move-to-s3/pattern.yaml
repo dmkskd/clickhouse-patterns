@@ -2,10 +2,10 @@ manifest_version: 2
 metadata:
   title: 'TTL move: hot/cold storage with S3'
   description: |-
-    Use this base pattern to keep recent parts on local storage and place older
-    parts on an S3-backed volume. See the
-    [[ttl-move-to-s3-replicated|replicated companion pattern]] when the table
-    has multiple replicas.
+    A MOVE TTL keeps recent parts of a MergeTree table on local hot storage
+    and moves older parts to S3-backed cold storage, while queries read across
+    both through the same table. When the table has multiple replicas, see the
+    [[ttl-move-to-s3-replicated|replicated companion pattern]].
 
     A `TO VOLUME` or `TO DISK` TTL moves the files of each MergeTree part that
     meets its TTL condition from one storage tier to another. Across tiers,
