@@ -123,6 +123,11 @@ spec:
       expected: expected.txt
 ```
 
+In `expected.txt`, lines starting with `#` are annotations and are ignored by
+the comparison. Add a tab-separated `#` header naming the columns (matching the
+`verify.sql` aliases) so readers can tell what each value is; the explorer
+renders it as a header row, and `just test <slug> --update` preserves it.
+
 ### Per-service customization (`spec.services`)
 
 `spec.services:` customizes the compose services a pattern runs against, keyed

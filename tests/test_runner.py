@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from pattern_explorer.catalog.manifest import Requires
-from pattern_explorer.orchestration.runner import _run_load, _check_clickhouse_version
+from pattern_explorer.orchestration.runner import _comment_header, _run_load, _check_clickhouse_version
 
 
 class _FakeDriver:
@@ -59,3 +59,21 @@ def test_python_load_output_is_streamed_to_reporter(tmp_path):
         "LOAD    offsets reset; connector reprocessing from 0",
         "LOAD    reprocessing done (committed offset 8000)",
     ]
+
+
+def test_comment_header_keeps_leading_annotations(tmp_path):
+    expected = tmp_path / "expected.txt"
+    expected.write_text("# partition\trows\n# explains the columns\n200001\t2\n")
+
+    assert _comment_header(expected) == "# partition\trows\n# explains the columns\n"
+
+
+def test_comment_header_stops_at_first_data_line(tmp_path):
+    expected = tmp_path / "expected.txt"
+    expected.write_text("200001\t2\n# trailing note\n")
+
+    assert _comment_header(expected) == ""
+
+
+def test_comment_header_handles_missing_file(tmp_path):
+    assert _comment_header(tmp_path / "expected.txt") == ""

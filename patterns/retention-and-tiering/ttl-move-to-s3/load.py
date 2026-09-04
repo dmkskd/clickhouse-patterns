@@ -1,4 +1,6 @@
 """Insert hot and cold partitions, then materialize the configured move TTL."""
+from datetime import datetime, timezone
+
 from pattern_explorer.orchestration.nodes import connect
 
 ch = connect("ch")
@@ -9,11 +11,20 @@ ch = connect("ch")
 ch.command(
     "INSERT INTO demo.tiered_events VALUES "
     "('2000-01-15 00:00:00', 1, 'old-a'), "
-    "('2000-01-15 00:01:00', 2, 'old-b'), "
-    "(now(), 3, 'hot-a'), "
-    "(now(), 4, 'hot-b')"
+    "('2000-01-15 00:01:00', 2, 'old-b')"
 )
-print("inserted one expired and one current monthly partition on the hot volume")
+print("inserted one expired monthly partition on the hot volume")
+
+# The current-month rows land as two inserts, then OPTIMIZE consolidates them
+# into one part. The merge is forced rather than left to the background merger
+# for the same reason the TTL move is materialized: the demonstration must be
+# deterministic. The hot partition thus shows ordinary merge activity, in
+# contrast to the cold partition, which moves whole and is never rewritten.
+ch.command("INSERT INTO demo.tiered_events VALUES (now(), 3, 'hot-a')")
+ch.command("INSERT INTO demo.tiered_events VALUES (now(), 4, 'hot-b')")
+current_month = datetime.now(timezone.utc).strftime("%Y%m")
+ch.command(f"OPTIMIZE TABLE demo.tiered_events PARTITION '{current_month}' FINAL")
+print("inserted the current monthly partition as two parts, then merged them")
 
 # Deterministic demonstration control: production normally lets the background
 # mover perform this work after a part becomes eligible.

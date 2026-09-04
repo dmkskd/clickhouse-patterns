@@ -110,6 +110,19 @@ def prepare_pattern(pattern: Pattern, report: Reporter | None = None) -> None:
         _emit(report, "LOAD    complete")
 
 
+def _comment_header(path: Path) -> str:
+    """Leading '#' annotation lines of an expected file, kept across --update."""
+    if not path.exists():
+        return ""
+    lines = []
+    for line in path.read_text().splitlines():
+        if line.startswith("#"):
+            lines.append(line)
+        elif line.strip():
+            break
+    return "".join(f"{line}\n" for line in lines)
+
+
 def validate_pattern(
     pattern: Pattern,
     update: bool = False,
@@ -135,7 +148,8 @@ def validate_pattern(
         expected_path = pattern.path(pattern.verify.expected)
 
         if update:
-            expected_path.write_text(got + "\n")
+            header = _comment_header(expected_path)
+            expected_path.write_text(header + got + "\n")
             _emit(report, f"UPDATE  {expected_path.name} ({len(got.splitlines())} row(s))")
             _emit(report, "RESULT\n" + "\n".join(
                 f"          {line}" for line in format_tsv_table(got).splitlines()

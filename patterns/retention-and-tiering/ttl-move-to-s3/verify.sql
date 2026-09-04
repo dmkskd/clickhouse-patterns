@@ -14,7 +14,8 @@ SELECT
     if(p.max_time < now() - INTERVAL 30 DAY, 'eligible', 'waiting for newest row') AS ttl_state,
 
     -- The point of the demo: the expired part was moved whole (one MovePart
-    -- event) and never rewritten by a merge (zero MergeParts events).
+    -- event, zero MergeParts), while the hot partition lived normally (zero
+    -- MovePart, one MergeParts consolidating the two load inserts).
     ifNull(l.moves, 0) AS move_events,
     ifNull(l.merges, 0) AS merge_events
 

@@ -1,4 +1,4 @@
-from pattern_explorer.orchestration.tsv import format_tsv_table
+from pattern_explorer.orchestration.tsv import format_tsv_table, tsv_diff, tsv_equal
 
 
 def test_format_tsv_table_aligns_columns():
@@ -17,3 +17,20 @@ def test_format_tsv_table_limits_output():
 
 def test_format_tsv_table_handles_empty_results():
     assert format_tsv_table("") == "(no rows)"
+
+
+def test_tsv_equal_ignores_comment_lines():
+    got = "200001\t2\tcold_s3"
+    want = "# partition\trows\tdisk\n200001\t2\tcold_s3"
+
+    assert tsv_equal(got, want)
+
+
+def test_tsv_equal_still_compares_data_rows():
+    assert not tsv_equal("200001\t3", "# header\n200001\t2")
+
+
+def test_tsv_diff_ignores_comment_lines():
+    assert "(results differ only in trailing whitespace)" == tsv_diff(
+        "a\t1", "# comment\na\t1"
+    )

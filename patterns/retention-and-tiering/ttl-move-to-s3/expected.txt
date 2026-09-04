@@ -1,2 +1,3 @@
+# partition_label	rows	disk_name	ttl_state	move_events	merge_events
 200001	2	cold_s3	eligible	1	0
-current month	2	default	waiting for newest row	0	0
+current month	2	default	waiting for newest row	0	1

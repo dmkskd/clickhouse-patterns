@@ -3,6 +3,11 @@
 Modelled on ClickHouse's own `tests/integration/helpers/test_tools.py:TSV`:
 compare results as rows-of-columns (not raw strings) and, on mismatch, show a
 line-by-line diff instead of two opaque blobs.
+
+Lines starting with '#' in the expected file are annotations (typically a
+column header naming the verify.sql aliases). ClickHouse output never contains
+them, so they label the columns without taking part in the comparison, and the
+explorer renders them as a header row above the values.
 """
 from __future__ import annotations
 
@@ -10,7 +15,14 @@ import difflib
 
 
 def _rows(text: str) -> list[list[str]]:
-    return [line.split("\t") for line in text.strip().splitlines()]
+    # Lines starting with '#' are annotations (typically a column header);
+    # ClickHouse output never contains them, so they play no part in the
+    # comparison.
+    return [
+        line.split("\t")
+        for line in text.strip().splitlines()
+        if not line.startswith("#")
+    ]
 
 
 def tsv_equal(got: str, want: str) -> bool:

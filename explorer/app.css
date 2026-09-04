@@ -571,6 +571,7 @@ button, input { font: inherit; }
 .code-file .expected-scroll { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #0d1117; }
 .expected-table { border-collapse: collapse; color: #c9d1d9; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .expected-table td { padding: 2px 14px; white-space: nowrap; }
+.expected-table tr.expected-comment td { color: var(--dim); border-bottom: 1px solid var(--line); }
 .expected-table tr:first-child td { padding-top: 10px; }
 .expected-table tr:last-child td { padding-bottom: 10px; }
 .tradeoffs { padding-bottom: 16px; }

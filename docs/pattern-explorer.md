@@ -402,6 +402,10 @@ use, `just test` reports it as a port conflict rather than a raw trace.
    explain tradeoffs and the behavior the pattern proves. Both are shown by
    `just describe` and before a run.
 2. `schema.sql`, a `load.{sql,py}`, `verify.sql`, `expected.txt`, `README.md`.
+   In `expected.txt`, lines starting with `#` are annotations and are ignored
+   by the comparison — use a tab-separated `#` header to label the columns,
+   for example `# partition_label	rows	disk_name`. The explorer renders
+   it as a header row above the values, and `--update` keeps it.
 3. Generate the reference instead of hand-writing it:
 
 ```bash

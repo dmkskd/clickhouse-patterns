@@ -99,6 +99,13 @@ spec:
         value: 1
         node: ch
         timeout: 60
+      - query: >-
+          SELECT count() FROM system.part_log
+          WHERE database = 'demo' AND table = 'tiered_events'
+            AND event_type = 'MergeParts'
+        value: 1
+        node: ch
+        timeout: 60
     verify:
       sql: verify.sql
       expected: expected.txt

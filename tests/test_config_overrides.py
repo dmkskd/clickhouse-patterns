@@ -7,7 +7,7 @@ from pattern_explorer.orchestration.stack import pattern_compose_file
 
 
 def _pattern(tmp_path: Path, config: list[dict]) -> Pattern:
-    (tmp_path / "config").mkdir()
+    (tmp_path / "config").mkdir(exist_ok=True)
     (tmp_path / "config" / "tiered.xml").write_text("<clickhouse/>\n")
     return Pattern(
         title="Config overlay", description="Test pattern.",

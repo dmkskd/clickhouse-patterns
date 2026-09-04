@@ -134,7 +134,11 @@ class Tradeoffs(BaseModel):
 
 
 class Verify(BaseModel):
-    """The pattern's output check: run `sql` and require its result to equal `expected`."""
+    """The pattern's output check: run `sql` and require its result to equal `expected`.
+
+    The comparison is TSV row-by-row; lines starting with '#' in the expected
+    file are annotations (typically a column header) and are ignored.
+    """
 
     model_config = ConfigDict(extra="forbid")
 

@@ -80,7 +80,9 @@ under `spec:` (with the lifecycle under `spec.steps:`). Read the files that exis
 4. `README.md` for the technique and known constraints.
 5. `spec.steps.schema` for the concrete topology and data flow.
 6. `spec.steps.load` for the input data and operational sequence.
-7. `verify.sql` and `verify.expected` for deterministic output.
+7. `verify.sql` and `verify.expected` for deterministic output. Lines starting
+   with `#` in the expected file are annotations (usually a column header) and
+   are ignored by the comparison.
 8. `spec.steps.ready_when` for convergence checks, nodes, values, and timeouts.
 
 Use the `graph` as the initial topology claim, then verify it against the SQL,

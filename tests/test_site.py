@@ -104,10 +104,12 @@ def test_pattern_graph_builds_browser_site(tmp_path: Path):
     assert (tmp_path / "app.js").exists()
     assert (tmp_path / "app.css").exists()
     app = (tmp_path / "app.js").read_text()
-    assert 'apiUrl("api/session")' in app
+    session = (tmp_path / "session.js").read_text()
+    util = (tmp_path / "util.js").read_text()
+    assert 'apiUrl("api/session")' in session
     assert "setDiagramZoom" in app
     assert "openDiagramModal" in app
-    assert "data-clickhouse-resource-key" in app
+    assert "data-clickhouse-resource-key" in util
     catalog = (tmp_path / "catalog.js").read_text()
     assert "topic:events(partitions=4)" in catalog
     assert '"location": "library"' in catalog
@@ -119,17 +121,18 @@ def test_static_site_contains_catalog_and_declares_capability_mode(tmp_path: Pat
 
     assert html_path == (tmp_path / "index.html").resolve()
     assert {path.name for path in tmp_path.iterdir()} == {
-        "index.html", "app.css", "app.js", "catalog.js"
+        "index.html", "app.css", "app.js", "catalog.js",
+        "util.js", "diagram.js", "topology.js", "session.js",
     }
     html = html_path.read_text()
     app = (tmp_path / "app.js").read_text()
+    session = (tmp_path / "session.js").read_text()
     assert ">Static catalog</span>" in html
-    assert 'control.mode === "local"' in app
+    assert 'control.mode === "local"' in session
     assert "renderCatalogHome" in app
     assert "showCatalogHome" in app
     assert 'window.addEventListener("popstate"' in app
-    assert "Diagrams, trade-offs, references, and SVG export work without a local service" in app
-    assert "clone it into Workspace patterns" in app
+    assert "Diagrams, trade-offs, references, and SVG export work without a local service" in session
     assert "window.CLICKHOUSE_PATTERN_CATALOG" in (tmp_path / "catalog.js").read_text()
 
 

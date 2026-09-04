@@ -957,7 +957,7 @@ def main() -> int:
     sp.add_argument(
         "--update",
         action="store_true",
-        help="regenerate expected.txt from verify.sql output",
+        help="regenerate expected.txt from verify.sql output, keeping any leading '#' annotation lines",
     )
     sp.set_defaults(func=_cmd_run)
 
@@ -967,7 +967,7 @@ def main() -> int:
 
     sp = sub.add_parser("validate", help="validate the active running pattern")
     sp.add_argument("--update", action="store_true",
-                    help="regenerate expected.txt from verify.sql output")
+                    help="regenerate expected.txt from verify.sql output, keeping any leading '#' annotation lines")
     sp.set_defaults(func=lambda a: _guard(lambda: _cmd_validate(a), None))
 
     sub.add_parser("reload", help="rebuild the active pattern from source").set_defaults(
@@ -994,7 +994,7 @@ def main() -> int:
         help="advanced compatibility mode: leave the stack running",
     )
     sp.add_argument("--update", action="store_true",
-                    help="regenerate expected.txt from verify.sql output")
+                    help="regenerate expected.txt from verify.sql output, keeping any leading '#' annotation lines")
     sp.set_defaults(func=_cmd_test)
 
     args = parser.parse_args()

@@ -525,9 +525,15 @@
 
   function expectedTable(file, tsv) {
     const text = (tsv || "").trim();
-    const rows = text ? text.split("\n").map((line) => line.split("\t")) : [];
+    const rows = text ? text.split("\n").map((line) => {
+      // '#' lines are annotations (usually a column header); show them as a
+      // dimmed row, still split on tabs so the labels align with the columns.
+      const comment = line.startsWith("#");
+      const cells = (comment ? line.replace(/^#\s?/, "") : line).split("\t");
+      return `<tr${comment ? ' class="expected-comment"' : ""}>${cells.map((cell) => `<td>${esc(cell)}</td>`).join("")}</tr>`;
+    }) : [];
     const body = rows.length
-      ? rows.map((row) => `<tr>${row.map((cell) => `<td>${esc(cell)}</td>`).join("")}</tr>`).join("")
+      ? rows.join("")
       : `<tr><td>(empty)</td></tr>`;
     return `<figure class="code-file"><figcaption>${esc(file)}</figcaption>`
       + `<div class="expected-scroll"><table class="expected-table"><tbody>${body}</tbody></table></div></figure>`;
