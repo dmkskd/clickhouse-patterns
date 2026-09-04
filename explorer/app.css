@@ -561,7 +561,9 @@ button, input { font: inherit; }
 .definition-tabs { display: flex; gap: 4px; margin-left: auto; }
 .definition-tabs button.active { color: var(--accent, #f6b73c) !important; border-color: var(--accent, #f6b73c) !important; font-weight: 700; }
 .definition-body { padding: 14px 18px 18px; }
-.definition-body.verify { display: grid; grid-template-columns: minmax(0, 1fr) minmax(140px, 320px); gap: 16px; align-items: start; }
+/* Query first, expected result below: full width keeps every expected column
+   readable without a horizontal scrollbar. */
+.definition-body.verify { display: grid; gap: 16px; }
 .definition-body.configuration { display: grid; gap: 16px; }
 .code-file { margin: 0; min-width: 0; }
 .code-file figcaption { color: var(--dim); font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }

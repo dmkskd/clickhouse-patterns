@@ -2,6 +2,9 @@
 
 ## Overview
 
+To see it live, browse the hosted catalog at
+[dmkskd.github.io/clickhouse-patterns](https://dmkskd.github.io/clickhouse-patterns/):
+
 ClickHouse is a fast and flexible analytics engine. It offers several table
 engine families and multiple ways to ingest, process, replicate, and distribute
 data.
