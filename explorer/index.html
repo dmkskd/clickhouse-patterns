@@ -114,10 +114,6 @@
               <div class="section-heading">
                 <div><span>Architecture</span><h2 id="architecture-title">Resource flow</h2></div>
                 <div class="architecture-heading-tools">
-                  <!-- The legend sits left of the view switch: it is hidden in the
-                       physical view, and in a right-aligned row only items to its
-                       left would move. -->
-                  <div id="flow-legend" class="flow-legend"></div>
                   <div id="architecture-view" class="architecture-view" role="group" aria-label="Diagram view" hidden>
                     <button id="view-logical" type="button" class="active" aria-pressed="true" title="Logical view: data flow between the pattern's ClickHouse resources">
                       <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="3.2" cy="11" r="1.9"/><circle cx="8" cy="4.6" r="1.9"/><circle cx="12.8" cy="11" r="1.9"/><path d="M4.6 9.4 6.6 6.6M9.4 6.6l2 2.8"/></svg>
@@ -153,7 +149,12 @@
                   </button>
                 </div>
               </div>
-              <div id="architecture-canvas" class="architecture-canvas expandable" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Architecture diagram. Click to expand; use the mouse wheel to zoom."></div>
+              <!-- The legend is diagram info, so it overlays the canvas
+                   (bottom-right) rather than sitting in the heading. -->
+              <div class="architecture-diagram">
+                <div id="architecture-canvas" class="architecture-canvas expandable" tabindex="0" role="button" aria-haspopup="dialog" aria-label="Architecture diagram. Click to expand; use the mouse wheel to zoom."></div>
+                <div id="flow-legend" class="flow-legend" aria-label="Flow legend"></div>
+              </div>
               <!-- The panel's bottom row hosts both the session controls (left)
                    and the definition tabs (right), so no separate session bar
                    takes vertical space. The session cluster hides in static
@@ -217,7 +218,6 @@
   <dialog id="diagram-modal" class="diagram-modal" aria-labelledby="diagram-modal-title">
     <header class="diagram-modal-header">
       <div><span>Architecture</span><h2 id="diagram-modal-title">Resource flow</h2></div>
-      <div id="modal-flow-legend" class="flow-legend" aria-label="Flow legend"></div>
       <div class="diagram-modal-actions">
         <div id="modal-architecture-view" class="architecture-view" role="group" aria-label="Diagram view" hidden>
           <button id="modal-view-logical" type="button" class="active" aria-pressed="true" title="Logical view: data flow between the pattern's ClickHouse resources">
@@ -240,7 +240,12 @@
         <button id="diagram-modal-close" class="diagram-modal-close" type="button" aria-label="Close expanded diagram">×</button>
       </div>
     </header>
-    <div id="diagram-modal-canvas" class="architecture-canvas diagram-modal-canvas" tabindex="0" aria-label="Expanded architecture diagram. Use the mouse wheel to zoom."></div>
+    <!-- The legend is diagram info, so it overlays the canvas (bottom-right)
+         rather than sitting in the header. -->
+    <div class="diagram-modal-body">
+      <div id="diagram-modal-canvas" class="architecture-canvas diagram-modal-canvas" tabindex="0" aria-label="Expanded architecture diagram. Use the mouse wheel to zoom."></div>
+      <div id="modal-flow-legend" class="flow-legend" aria-label="Flow legend"></div>
+    </div>
   </dialog>
   <dialog id="resource-inspector" class="resource-inspector" aria-labelledby="resource-inspector-title" aria-live="polite">
     <header class="resource-inspector-header">

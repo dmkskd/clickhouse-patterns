@@ -501,7 +501,7 @@ button, input { font: inherit; }
    breathing room the section has in its default spot. */
 .architecture-panel.diagram-bottom { margin-top: 24px; }
 /* Collapsed diagram: the panel shrinks to its header row. */
-.architecture-panel.diagram-collapsed .architecture-canvas,
+.architecture-panel.diagram-collapsed .architecture-diagram,
 .architecture-panel.diagram-collapsed #control-strip,
 .architecture-panel.diagram-collapsed .definition-strip,
 .architecture-panel.diagram-collapsed .session-progress { display: none !important; }
@@ -1387,12 +1387,21 @@ button, input { font: inherit; }
   [data-sidebar="hidden"] .sidebar-toggle { left: auto; }
 }
 
-/* ---------- modal flow legend ---------- */
-.diagram-modal-header .flow-legend { flex: 1; justify-content: center; }
+/* ---------- flow legend: diagram info sits on the diagram ---------- */
+.architecture-diagram,
+.diagram-modal-body { position: relative; }
+/* Inset past the canvas scrollbars (classic bars are ~14px) so the chip
+   never overlaps them. */
+.architecture-diagram .flow-legend,
+.diagram-modal-body .flow-legend {
+  position: absolute; right: 30px; bottom: 20px; pointer-events: none;
+  padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+}
+/* A graph without flows leaves the legend empty; an empty chip would be noise. */
+.architecture-diagram .flow-legend:empty,
+.diagram-modal-body .flow-legend:empty { display: none; }
 
-/* ---------- diagram modal header: single line, legend by the controls ---------- */
+/* ---------- diagram modal header: single line ---------- */
 .diagram-modal-header > div:first-child { display: flex; align-items: baseline; gap: 14px; }
 .diagram-modal-header > div:first-child h2 { margin: 0; }
-.diagram-modal-header .flow-legend {
-  flex: initial; justify-content: flex-end; margin-left: auto; margin-right: 20px;
-}

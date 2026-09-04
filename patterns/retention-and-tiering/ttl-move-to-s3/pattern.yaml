@@ -42,7 +42,7 @@ metadata:
 
     query:
       mergetree:tiered_events -[transparent reads across local and S3 parts]-> client:reader
-  status: wip
+  status: under-review
   topology: single
   order: 7
   tags: [ttl, tiering, s3, storage-policy, volume, move, minio]
