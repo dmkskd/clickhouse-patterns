@@ -392,7 +392,27 @@ window.PE.diagram = (() => {
   // processor, reader, client, store), so the diagram carries its types in its
   // shapes rather than in color alone. Same node attributes as the isometric
   // renderer, so inspection, notes and the modal work unchanged.
-  const T = { W: 178, H: 106, HGAP: 188, VGAP: 40, LEFT: 44, TOP: 122 };
+  const T = { W: 186, HGAP: 188, VGAP: 34, LEFT: 44, TOP: 122 };
+  // What each shape draws below the text, and therefore how tall its box is:
+  // a table's grid needs room, a view's one query line does not, and a client
+  // has nothing under its name at all.
+  const BODY_HEIGHT = { table: 56, view: 22, topic: 26, store: 22, reader: 0, client: 0, processor: 0 };
+
+  function nodeDetails(resource) {
+    const displayName = resource.properties?.label || resource.name;
+    return Object.entries(resource.properties || {})
+      .filter(([key, value]) => key !== "label" && key !== "note" && !(key === "table" && value === displayName))
+      .map(([key, value]) => `${key.replaceAll("-", " ")} ${value}`)
+      .slice(0, 2);
+  }
+
+  // Text runs to a fixed rhythm — kind, name, up to two details — and the body
+  // block sits under it, so the box is exactly as tall as what it holds.
+  function nodeHeight(resource) {
+    const body = BODY_HEIGHT[shapeOf(resource.kind)] ?? 0;
+    const textBottom = 48 + nodeDetails(resource).length * 12;
+    return textBottom + (body ? body + 10 : 0) + 14;
+  }
   const schematicPalette = () => SCHEMATIC_PALETTES[document.documentElement.dataset.scheme === "light" ? "light" : "dark"];
 
   function clip(text, max) {
@@ -431,26 +451,28 @@ window.PE.diagram = (() => {
 
   function schematicLayout(graph) {
     const columns = columnOrder(graph);
-    const tallest = Math.max(...[...columns.values()].map((items) => items.length));
-    const columnHeight = tallest * T.H + (tallest - 1) * T.VGAP;
+    const heights = Object.fromEntries(graph.resources.map((item) => [item.key, nodeHeight(item)]));
+    const stack = (items) =>
+      items.reduce((total, item) => total + heights[item.key], 0) + (items.length - 1) * T.VGAP;
+    const columnHeight = Math.max(...[...columns.values()].map(stack));
     const positions = {};
     [...columns.keys()].sort((a, b) => a - b).forEach((column) => {
       const items = columns.get(column);
-      const height = items.length * T.H + (items.length - 1) * T.VGAP;
-      const top = T.TOP + (columnHeight - height) / 2;
-      items.forEach((resource, index) => {
-        positions[resource.key] = [T.LEFT + column * (T.W + T.HGAP), top + index * (T.H + T.VGAP)];
+      let y = T.TOP + (columnHeight - stack(items)) / 2;
+      items.forEach((resource) => {
+        positions[resource.key] = [T.LEFT + column * (T.W + T.HGAP), y];
+        y += heights[resource.key] + T.VGAP;
       });
     });
-    return positions;
+    return { positions, heights };
   }
 
   // Silhouettes. Every shape fills the same box, so text placement and edge
   // anchors stay identical across kinds. `attrs` carries the paint, so one
   // outline can be drawn twice: an opaque base that hides edges passing behind
   // the node, then the tinted face on top.
-  function schematicSilhouette(shape, x, y, attrs) {
-    const w = T.W, h = T.H;
+  function schematicSilhouette(shape, x, y, h, attrs) {
+    const w = T.W;
     if (shape === "processor") {
       return `<rect ${attrs} x="${x}" y="${y}" width="${w}" height="${h}" rx="26"/>`;
     }
@@ -469,19 +491,38 @@ window.PE.diagram = (() => {
         + ` V ${y + h - 7} A 7,7 0 0 1 ${x + w - 7},${y + h} H ${x + 7}`
         + ` A 7,7 0 0 1 ${x},${y + h - 7} V ${y + 22} Z"/>`;
     }
+    // table, view and reader are all ClickHouse objects: same rectangle, told
+    // apart by the motif inside them.
     return `<rect ${attrs} x="${x}" y="${y}" width="${w}" height="${h}" rx="7"/>`;
   }
 
-  // The motif inside the silhouette: ruled rows for a table, record slots for a
-  // topic, a doubled edge for a stream reader, a lid for an object store.
-  function schematicMotif(shape, x, y, color) {
-    const w = T.W, h = T.H;
+  // What is inside the outline says what the object holds. A table stores rows,
+  // so it carries a grid. A view stores nothing — it holds a query — so it
+  // carries `SELECT` instead. A reader pulls from a stream, so it carries the
+  // doubled edge. Marks tint with the node's own colour: they belong to it.
+  function schematicMotif(shape, x, y, h, color, kind) {
+    const w = T.W;
+    const left = x + 16, right = x + w - 16;
     if (shape === "table") {
-      const left = x + 16, right = x + w - 16;
-      const rows = [h - 26, h - 16].map((dy) => `<path d="M ${left},${y + dy} H ${right}"/>`).join("");
-      const ticks = [0.36, 0.7].map((at) =>
-        `<path d="M ${left + (right - left) * at},${y + h - 30} V ${y + h - 12}"/>`).join("");
-      return `<g class="t-rule" fill="none">${rows}${ticks}</g>`;
+      // A real little table: an outlined grid with a header row, three body
+      // rows and three columns — the same thing SHOW CREATE would give you.
+      const top = y + h - 54, bottom = y + h - 12;
+      const header = top + 12;
+      const rowPitch = (bottom - header) / 3;
+      const rows = [1, 2].map((index) => `<path d="M ${left},${header + rowPitch * index} H ${right}"/>`).join("");
+      const columns = [0.3, 0.55, 0.78].map((at) =>
+        `<path d="M ${left + (right - left) * at},${top} V ${bottom}"/>`).join("");
+      return `<g fill="none" stroke="${color}" stroke-width="1">`
+        + `<rect x="${left}" y="${top}" width="${right - left}" height="${bottom - top}" rx="2" stroke-opacity=".55"/>`
+        + `<path d="M ${left},${header} H ${right}" stroke-opacity=".9"/>`
+        + `<rect x="${left}" y="${top}" width="${right - left}" height="12" fill="${color}" fill-opacity=".16" stroke="none"/>`
+        + `<g stroke-opacity=".35">${rows}${columns}</g></g>`;
+    }
+    if (shape === "view") {
+      // A view holds a query, not rows, so where a table draws its grid a view
+      // states what runs and when.
+      const label = kind === "refreshable-mv" ? "SELECT · on a schedule" : "SELECT · on insert";
+      return `<text x="${left}" y="${y + h - 22}" class="t-query" fill="${color}">${esc(label)}</text>`;
     }
     if (shape === "topic") {
       const slots = Array.from({ length: 6 }, (_, index) =>
@@ -490,40 +531,38 @@ window.PE.diagram = (() => {
       return `<g>${slots}</g>`;
     }
     if (shape === "reader") {
-      return `<g class="t-rule" fill="none"><path d="M ${x + 8},${y + 12} V ${y + h - 12}"/>`
-        + `<path d="M ${x + 13},${y + 12} V ${y + h - 12}"/></g>`;
+      return `<g fill="none" stroke="${color}" stroke-opacity=".55" stroke-width="1">`
+        + `<path d="M ${x + 8},${y + 12} V ${y + h - 12}"/><path d="M ${x + 13},${y + 12} V ${y + h - 12}"/></g>`;
     }
     if (shape === "store") {
-      return `<g class="t-rule" fill="none"><path d="M ${x + 16},${y + h - 20} H ${x + w - 16}"/></g>`;
+      return `<g fill="none" stroke="${color}" stroke-opacity=".55" stroke-width="1">`
+        + `<path d="M ${left},${y + h - 20} H ${right}"/></g>`;
     }
     return "";
   }
 
-  function schematicNode(resource, position, inspectable) {
+  function schematicNode(resource, position, h, inspectable) {
     const [x, y] = position;
     const shape = shapeOf(resource.kind);
     const color = (KIND_COLORS[resource.kind] || ["#cbd5e1", "#8190a8", "#566278"])[1];
     const displayName = resource.properties?.label || resource.name;
     const kind = KIND_LABELS[resource.kind] || resource.kind.replaceAll("-", " ");
     const repeated = ["shards", "replicas"].includes(resource.scope);
-    const details = Object.entries(resource.properties || {})
-      .filter(([key, value]) => key !== "label" && key !== "note" && !(key === "table" && value === displayName))
-      .map(([key, value]) => `${key.replaceAll("-", " ")} ${value}`);
-    const detailLines = details.slice(0, 2)
+    const detailLines = nodeDetails(resource)
       .map((detail, index) => `<text x="${x + 16}" y="${y + 60 + index * 12}" class="t-detail">${esc(clip(detail, 26))}</text>`)
       .join("");
     const note = resource.properties?.note;
     const readable = INSPECTABLE_KINDS.has(resource.kind);
     const nodeInspectable = readable && inspectable;
     const ghost = repeated
-      ? schematicSilhouette(shape, x + 11, y - 11, `class="t-shape" fill="${color}" fill-opacity=".07" stroke="${color}"`)
+      ? schematicSilhouette(shape, x + 11, y - 11, h, `class="t-shape" fill="${color}" fill-opacity=".07" stroke="${color}"`)
       : "";
     const scopeTag = repeated
       ? `<text x="${x + T.W - 16}" y="${y + 22}" text-anchor="end" class="t-scope">×2 ${esc(resource.scope.toUpperCase())}</text>`
       : "";
     const noteBadge = note
-      ? `<g class="note-badge" aria-hidden="true"><circle cx="${x + T.W - 15}" cy="${y + T.H - 15}" r="7.5"/>`
-        + `<text x="${x + T.W - 15}" y="${y + T.H - 11.5}" text-anchor="middle">i</text></g>`
+      ? `<g class="note-badge" aria-hidden="true"><circle cx="${x + T.W - 15}" cy="${y + h - 15}" r="7.5"/>`
+        + `<text x="${x + T.W - 15}" y="${y + h - 11.5}" text-anchor="middle">i</text></g>`
       : "";
     return `<g class="t-node resource${nodeInspectable ? " inspectable-resource" : ""}${note ? " has-note" : ""}"`
       + ` id="schematic-${esc(resource.key)}"`
@@ -532,10 +571,10 @@ window.PE.diagram = (() => {
       + `${nodeInspectable ? ` data-resource-key="${esc(resource.key)}" tabindex="0" role="button" aria-label="Inspect ${esc(displayName)}"` : ""}>`
       + (nodeInspectable ? `<title>Inspect live definition and rows for ${esc(displayName)}</title>` : "")
       + `<g class="t-ghost">${ghost}</g>`
-      + schematicSilhouette(shape, x, y, `class="t-base" fill="${schematicPalette().nodeBase}"`)
-      + schematicSilhouette(shape, x, y, `class="t-shape" fill="${color}" fill-opacity=".16" stroke="${color}"`)
-      + schematicMotif(shape, x, y, color)
-      + `<text x="${x + 16}" y="${y + 22}" class="t-kind">${esc(kind.toUpperCase())}</text>`
+      + schematicSilhouette(shape, x, y, h, `class="t-base" fill="${schematicPalette().nodeBase}"`)
+      + schematicSilhouette(shape, x, y, h, `class="t-shape" fill="${color}" fill-opacity=".09" stroke="${color}"`)
+      + schematicMotif(shape, x, y, h, color, resource.kind)
+      + `<text x="${x + 16}" y="${y + 22}" class="t-kind" fill="${color}">${esc(kind.toUpperCase())}</text>`
       + `<text x="${x + 16}" y="${y + 44}" class="t-name">${esc(clip(displayName, 21))}</text>`
       + detailLines + scopeTag + noteBadge
       + `</g>`;
@@ -544,7 +583,7 @@ window.PE.diagram = (() => {
   // System boxes: contiguous runs of columns belonging to one system, padded
   // around the member nodes. Padding stays under half the column gap, so two
   // systems in neighbouring columns cannot draw into each other.
-  function schematicBoundaries(pattern, graph, positions) {
+  function schematicBoundaries(pattern, graph, positions, heights) {
     const CH_KINDS = ["kafka-table", "mv", "refreshable-mv", "distributed", "mergetree",
       "replicated-mergetree", "part", "keepermap", "consumer-group", "remote-table"];
     const systems = [];
@@ -579,7 +618,7 @@ window.PE.diagram = (() => {
         const left = Math.min(...members.map((item) => positions[item.key][0])) - 26;
         const right = Math.max(...members.map((item) => positions[item.key][0])) + T.W + 26;
         const top = Math.min(...members.map((item) => positions[item.key][1])) - 44;
-        const bottom = Math.max(...members.map((item) => positions[item.key][1])) + T.H + 22;
+        const bottom = Math.max(...members.map((item) => positions[item.key][1] + heights[item.key])) + 22;
         markup += `<g><rect class="t-boundary" x="${left}" y="${top}" width="${right - left}" height="${bottom - top}" rx="16"/>`
           + `<text x="${left + 14}" y="${top + 22}" class="t-boundary-label">${esc(label)}</text></g>`;
       });
@@ -589,7 +628,7 @@ window.PE.diagram = (() => {
 
   function schematicLegend(graph, width) {
     const shapes = [...new Set(graph.resources.map((item) => shapeOf(item.kind)))];
-    const order = ["table", "processor", "topic", "reader", "client", "store"];
+    const order = ["table", "view", "reader", "topic", "processor", "client", "store"];
     const used = order.filter((shape) => shapes.includes(shape));
     let x = T.LEFT;
     const entries = used.map((shape) => {
@@ -602,6 +641,8 @@ window.PE.diagram = (() => {
             ? `<path class="t-legend-mark" d="M ${x + 3},26 H ${x + 23} A 3,3 0 0 1 ${x + 26},29 V 33 A 7,7 0 0 1 ${x + 19},40 H ${x + 7} A 7,7 0 0 1 ${x},33 V 29 A 3,3 0 0 1 ${x + 3},26 Z"/>`
             : shape === "store"
               ? `<path class="t-legend-mark" d="M ${x + 8},26 H ${x + 24} A 2,2 0 0 1 ${x + 26},28 V 38 A 2,2 0 0 1 ${x + 24},40 H ${x + 2} A 2,2 0 0 1 ${x},38 V 34 Z"/>`
+              : shape === "view"
+              ? `<rect class="t-legend-mark" x="${x}" y="26" width="26" height="14" rx="3" stroke-dasharray="5 3"/>`
               : `<rect class="t-legend-mark" x="${x}" y="26" width="26" height="14" rx="3"/>`;
       const text = `<text x="${x + 33}" y="37" class="t-legend">${esc(label)}</text>`;
       x += 33 + label.length * 5.6 + 26;
@@ -612,10 +653,10 @@ window.PE.diagram = (() => {
 
   function schematicSvg(pattern, { inspectable = false } = {}) {
     const graph = pattern.graph;
-    const positions = schematicLayout(graph);
+    const { positions, heights } = schematicLayout(graph);
     // The right margin also clears the offset ghost drawn for @shards/@replicas.
     const width = Math.max(...Object.values(positions).map(([x]) => x)) + T.W + T.LEFT + 14;
-    const height = Math.max(...Object.values(positions).map(([, y]) => y)) + T.H + 46;
+    const height = Math.max(...graph.resources.map((item) => positions[item.key][1] + heights[item.key])) + 46;
     const pairCounts = new Map();
     graph.connections.forEach((edge) => {
       const key = `${edge.source}|${edge.target}`;
@@ -633,8 +674,8 @@ window.PE.diagram = (() => {
       const offset = (lane - (pairCounts.get(pair) - 1) / 2) * 14;
       const [sx, sy] = positions[edge.source];
       const [tx, ty] = positions[edge.target];
-      const x1 = sx + T.W, y1 = sy + T.H / 2 + offset;
-      const x2 = tx, y2 = ty + T.H / 2 + offset;
+      const x1 = sx + T.W, y1 = sy + heights[edge.source] / 2 + offset;
+      const x2 = tx, y2 = ty + heights[edge.target] / 2 + offset;
       const bend = Math.max(38, (x2 - x1) * 0.45);
       const id = `schematic-edge-${edgeIndex}`;
       const color = FLOW_COLORS[edge.flow] || "#8b93ad";
@@ -671,9 +712,9 @@ window.PE.diagram = (() => {
       <defs>${markers}<filter id="glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
       <style>${schematicPalette().style}</style>
       ${schematicLegend(graph, width)}
-      ${schematicBoundaries(pattern, graph, positions)}
+      ${schematicBoundaries(pattern, graph, positions, heights)}
       <g class="edge-layer">${paths.join("")}</g>
-      <g class="resource-layer">${graph.resources.map((resource) => schematicNode(resource, positions[resource.key], inspectable)).join("")}</g>
+      <g class="resource-layer">${graph.resources.map((resource) => schematicNode(resource, positions[resource.key], heights[resource.key], inspectable)).join("")}</g>
       <g class="annotation-layer">${labels.join("")}</g>
     </svg>`;
   }

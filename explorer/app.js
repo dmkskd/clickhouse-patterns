@@ -303,9 +303,8 @@
   const HOME_GROUP = {
     key: "all",
     title: "All patterns",
-    description: "Compare runnable patterns, understand their trade-offs, and adapt them for your own systems.",
-    intro: "In most ClickHouse systems the effort is not in querying. It is in how data arrives, how it is "
-      + "modelled and kept current, and how it is delivered, replayed, and spread across a cluster.\n\n"
+    description: "In ClickHouse, ingestion, retention, and replication are as complex as data modelling and query design.",
+    intro: "Compare runnable patterns, understand their trade-offs, and adapt them for your own systems.\n\n"
       + "Clone a pattern as a starting point, then use the agentic skills to define its flow and its Docker "
       + "test infrastructure. [View the cloning guide](https://github.com/dmkskd/clickhouse-patterns#create-your-own-patterns)\n\n"
       + "This catalog is a work in progress. Check each pattern's status before adapting it."
@@ -649,16 +648,29 @@
       + `<div class="expected-scroll"><table class="expected-table"><tbody>${body}</tbody></table></div></figure>`;
   }
 
+  // Source files open in a dialog over the diagram. They used to expand a strip
+  // under the panel, which pushed the page around and put the file far from the
+  // control that asked for it.
+  const definitionModal = $("definition-modal");
+  const DEFINITION_TABS = [
+    ["manifest", "Definition"], ["structure", "Structure"], ["load", "Loader"],
+    ["verify", "Verification"], ["config", "Configuration"]
+  ];
+
+  function definitionTitle(pattern, key) {
+    const def = pattern.definition || {};
+    if (key === "verify") return def.verify.sqlFile;
+    if (key === "config") return `${def.config.length} configuration ${def.config.length === 1 ? "file" : "files"}`;
+    return def[key].file;
+  }
+
   function showDefinition(pattern, key) {
     const def = pattern.definition || {};
     const body = $("definition-body");
-    const buttons = [...document.querySelectorAll("#definition-tabs button")];
-    // Clicking the open tab collapses the strip back to just the tabs.
-    const alreadyOpen = buttons.some((b) => b.dataset.def === key && b.classList.contains("active"));
-    buttons.forEach((b) => b.classList.toggle("active", !alreadyOpen && b.dataset.def === key));
-    if (alreadyOpen) { body.hidden = true; body.innerHTML = ""; $("definition-strip").hidden = true; return; }
-    $("definition-strip").hidden = false;
-    body.hidden = false;
+    // Clicking the tab that is already open closes the dialog again.
+    if (definitionModal.open && definitionModal.dataset.key === key) { definitionModal.close(); return; }
+    definitionModal.dataset.key = key;
+    $("definition-modal-title").textContent = definitionTitle(pattern, key);
     if (key === "verify") {
       const v = def.verify;
       body.className = "definition-body verify";
@@ -675,24 +687,38 @@
       body.className = "definition-body";
       body.innerHTML = codeBlock(d.file, d.code, d.lang);
     }
+    body.scrollTop = 0;
+    // The dialog carries its own copy of the tabs, so a reader can move between
+    // files without closing it.
+    const inModal = $("definition-modal-tabs");
+    inModal.replaceChildren(...DEFINITION_TABS.filter(([k]) => def[k]).map(([k, label]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.def = k;
+      button.textContent = label;
+      button.className = k === key ? "active" : "";
+      button.addEventListener("click", () => showDefinition(pattern, k));
+      return button;
+    }));
+    document.querySelectorAll("#definition-tabs button").forEach((b) =>
+      b.classList.toggle("active", b.dataset.def === key));
+    if (!definitionModal.open) definitionModal.showModal();
   }
 
   function renderDefinition(pattern) {
     const def = pattern.definition || {};
-    const tabs = [["manifest", "Definition", def.manifest], ["structure", "Structure", def.structure], ["load", "Loader", def.load], ["verify", "Verification", def.verify], ["config", "Configuration", def.config]]
-      .filter(([, , data]) => data);
+    const tabs = DEFINITION_TABS.filter(([key]) => def[key]);
     $("definition-tabs").replaceChildren(...tabs.map(([key, label]) => {
       const b = document.createElement("button");
       b.type = "button"; b.dataset.def = key; b.textContent = label;
       b.addEventListener("click", () => showDefinition(pattern, key));
       return b;
     }));
-    // Collapsed by default: tabs are shown, but no file is loaded until one is
-    // clicked, so the strip holding the file body starts hidden.
-    const body = $("definition-body");
-    body.hidden = true;
-    body.innerHTML = "";
-    $("definition-strip").hidden = true;
+    // Nothing is loaded until a tab is clicked; switching pattern closes any
+    // file left open from the previous one.
+    if (definitionModal.open) definitionModal.close();
+    delete definitionModal.dataset.key;
+    $("definition-body").innerHTML = "";
     // The bottom row hides only when neither side has content (static mode and
     // no definition files); session.js applies the same rule on its renders.
     $("control-strip").hidden = $("session-panel").hidden && !tabs.length;
@@ -704,6 +730,16 @@
     $("zoom-reset").disabled = !hasDiagram;
     $("zoom-out").disabled = !hasDiagram || diagramZoom <= MIN_ZOOM;
     $("zoom-in").disabled = !hasDiagram || diagramZoom >= MAX_ZOOM;
+  }
+
+  // A wide, shallow diagram (the schematic view especially) is scaled to the canvas
+  // width and then leaves the rest of the canvas empty. Centre it vertically so
+  // the empty space sits above and below rather than all below.
+  function centreIfShorter(target) {
+    requestAnimationFrame(() => {
+      const svg = target.querySelector("svg");
+      target.classList.toggle("fits-height", Boolean(svg) && svg.clientHeight < target.clientHeight);
+    });
   }
 
   function applyCanvasZoom(targetCanvas, nextZoom, previousZoom, anchorX, anchorY) {
@@ -718,6 +754,9 @@
     const ratio = next / previousZoom;
     targetCanvas.scrollLeft = Math.max(0, contentX * ratio - anchorX);
     targetCanvas.scrollTop = Math.max(0, contentY * ratio - anchorY);
+    // Vertical centring only applies while the diagram is shorter than the
+    // canvas; zooming past that has to release it, or the canvas cannot scroll.
+    centreIfShorter(targetCanvas);
     return next;
   }
 
@@ -735,16 +774,6 @@
   function setModalZoom(nextZoom, anchorX = modalCanvas.clientWidth / 2, anchorY = modalCanvas.clientHeight / 2) {
     modalZoom = applyCanvasZoom(modalCanvas, nextZoom, modalZoom, anchorX, anchorY);
     updateModalZoomControl();
-  }
-
-  // A wide, shallow diagram (the schematic view especially) is scaled to the canvas
-  // width and then leaves the rest of the canvas empty. Centre it vertically so
-  // the empty space sits above and below rather than all below.
-  function centreIfShorter(target) {
-    requestAnimationFrame(() => {
-      const svg = target.querySelector("svg");
-      target.classList.toggle("fits-height", Boolean(svg) && svg.clientHeight < target.clientHeight);
-    });
   }
 
   function resetDiagramZoom() {
@@ -1084,6 +1113,14 @@
   if (heroProse) attachShowMore(heroProse, "catalog-hero");
   $("clone-pattern")?.addEventListener("click", () => $("clone-modal").showModal());
   $("clone-modal-close")?.addEventListener("click", () => $("clone-modal").close());
+  $("definition-modal-close")?.addEventListener("click", () => definitionModal.close());
+  definitionModal.addEventListener("click", (event) => {
+    if (event.target === definitionModal) definitionModal.close();
+  });
+  definitionModal.addEventListener("close", () => {
+    delete definitionModal.dataset.key;
+    document.querySelectorAll("#definition-tabs button").forEach((b) => b.classList.remove("active"));
+  });
   $("clone-modal")?.addEventListener("click", (event) => {
     if (event.target === $("clone-modal")) $("clone-modal").close();
   });
@@ -1112,6 +1149,50 @@
     const factor = Math.exp(-delta * 0.0025);
     setDiagramZoom(diagramZoom * factor, event.clientX - bounds.left, event.clientY - bounds.top);
   }, { passive: false });
+  // Drag to pan. Scrollbars alone are awkward on a zoomed diagram, and macOS
+  // overlay bars are invisible until they move, so the canvas is grabbable.
+  // A press that never travels more than a few pixels is still a click, so
+  // inspecting a node keeps working.
+  function enablePanning(target) {
+    let panning = false;
+    let moved = false;
+    let startX = 0, startY = 0, scrollX = 0, scrollY = 0;
+    target.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || !target.querySelector("svg")) return;
+      panning = true;
+      moved = false;
+      startX = event.clientX;
+      startY = event.clientY;
+      scrollX = target.scrollLeft;
+      scrollY = target.scrollTop;
+    });
+    target.addEventListener("pointermove", (event) => {
+      if (!panning) return;
+      const dx = event.clientX - startX, dy = event.clientY - startY;
+      if (!moved && Math.hypot(dx, dy) < 4) return;
+      if (!moved) { moved = true; target.setPointerCapture(event.pointerId); target.classList.add("panning"); }
+      target.scrollLeft = scrollX - dx;
+      target.scrollTop = scrollY - dy;
+      event.preventDefault();
+    });
+    const end = (event) => {
+      if (!panning) return;
+      panning = false;
+      target.classList.remove("panning");
+      if (moved) {
+        // The release ends a drag, not a click on whatever is underneath.
+        target.releasePointerCapture?.(event.pointerId);
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    target.addEventListener("pointerup", end);
+    target.addEventListener("pointercancel", end);
+    target.addEventListener("click", (event) => { if (moved) { event.stopPropagation(); moved = false; } }, true);
+  }
+  enablePanning(canvas);
+  enablePanning(modalCanvas);
+
   const noteTip = document.createElement("div");
   noteTip.className = "diagram-note-tip";
   noteTip.hidden = true;
@@ -1420,8 +1501,8 @@
   // ---- Theme switcher: flat (default) vs soft, soft in light|dark schemes ----
   // Persisted in localStorage; the inline <head> script restores it pre-paint.
   const themeStore = {
-    read() { try { return JSON.parse(localStorage.getItem("pe-theme")) || {}; } catch { return {}; } },
-    write(theme, scheme) { try { localStorage.setItem("pe-theme", JSON.stringify({ theme, scheme })); } catch { /* private mode */ } },
+    read() { try { return JSON.parse(localStorage.getItem("pe-theme-v2")) || {}; } catch { return {}; } },
+    write(theme, scheme) { try { localStorage.setItem("pe-theme-v2", JSON.stringify({ theme, scheme })); } catch { /* private mode */ } },
   };
   let uiTheme = themeStore.read().theme || "flat";
   let uiScheme = themeStore.read().scheme || "light";

@@ -52,7 +52,8 @@ window.PE.util = (() => {
     mergetree: "table", "replicated-mergetree": "table", distributed: "table",
     part: "table", keepermap: "table", "remote-table": "table",
     postgres: "table", mysql: "table",
-    mv: "processor", "refreshable-mv": "processor", connector: "processor", peerdb: "processor",
+    mv: "view", "refreshable-mv": "view",
+    connector: "processor", peerdb: "processor",
     topic: "topic",
     "kafka-table": "reader", "consumer-group": "reader", s3queue: "reader",
     client: "client", validator: "client",
@@ -60,7 +61,8 @@ window.PE.util = (() => {
   };
   const SHAPE_LABELS = {
     table: "Table · stored rows",
-    processor: "Processor · transforms or delivers",
+    view: "View · a stored query",
+    processor: "External process · outside ClickHouse",
     topic: "Topic · retained stream",
     reader: "Reader · pulls from a stream",
     client: "Client · reads or writes",
@@ -107,14 +109,15 @@ window.PE.util = (() => {
   // the SVG is downloadable and embeddable, so it carries its own <style>.
   // Node fills are drawn from KIND_COLORS at low opacity, which reads correctly
   // on both a dark and a light ground, so only the chrome differs per scheme.
-  const SCHEMATIC_STYLE_SHARED = "text{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.t-edge{fill:none;stroke-width:1.8;stroke-dasharray:4 8;opacity:.8}.packet{filter:url(#glow)}[data-resource-key]{cursor:pointer}.t-node{transform-box:fill-box;transform-origin:center;transition:transform .12s ease}.inspectable-resource{cursor:pointer;outline:none}.inspectable-resource:hover .t-shape,.inspectable-resource:focus-visible .t-shape{stroke-width:2.6}.note-badge{cursor:help}.t-ghost{opacity:.34}";
+  const SCHEMATIC_STYLE_SHARED = "text{font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}.t-name,.t-query{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.t-edge{fill:none;stroke-width:1.8;stroke-dasharray:4 8;opacity:.8}.packet{filter:url(#glow)}[data-resource-key]{cursor:pointer}.t-node{transform-box:fill-box;transform-origin:center;transition:transform .12s ease}.inspectable-resource{cursor:pointer;outline:none}.inspectable-resource:hover .t-shape,.inspectable-resource:focus-visible .t-shape{stroke-width:2.6}.note-badge{cursor:help}.t-ghost{opacity:.34}";
   const SCHEMATIC_PALETTES = {
     dark: {
       nodeBase: "#0b0e1a",
       style: SCHEMATIC_STYLE_SHARED
         + ".t-shape{stroke-width:1.5}.t-rule{stroke:#8f9ab8;stroke-opacity:.55;stroke-width:1}"
         + ".t-name{fill:#f0f3ff;font-size:12.5px;font-weight:700}"
-        + ".t-kind{fill:#8b95b4;font-size:9px;letter-spacing:1.4px}"
+        + ".t-kind{font-size:9.5px;letter-spacing:1.2px;font-weight:600;fill-opacity:.85}"
+        + ".t-query{font-size:10px;letter-spacing:.4px;fill-opacity:.9}"
         + ".t-detail{fill:#7f89a6;font-size:9.5px}"
         + ".edge-label{fill:#c4cce1;font-size:10px;paint-order:stroke;stroke:#07080f;stroke-width:5px}"
         + ".t-boundary{fill:#11162a;fill-opacity:.3;stroke:#7486c9;stroke-opacity:.3;stroke-dasharray:7 7}"
@@ -128,7 +131,8 @@ window.PE.util = (() => {
       style: SCHEMATIC_STYLE_SHARED
         + ".t-shape{stroke-width:1.5}.t-rule{stroke:#7a8398;stroke-opacity:.5;stroke-width:1}"
         + ".t-name{fill:#232833;font-size:12.5px;font-weight:700}"
-        + ".t-kind{fill:#5a6478;font-size:9px;letter-spacing:1.4px}"
+        + ".t-kind{font-size:9.5px;letter-spacing:1.2px;font-weight:600;fill-opacity:.85}"
+        + ".t-query{font-size:10px;letter-spacing:.4px;fill-opacity:.9}"
         + ".t-detail{fill:#7d8598;font-size:9.5px}"
         + ".edge-label{fill:#454e5d;font-size:10px;paint-order:stroke;stroke:#eceff3;stroke-width:3.5px}"
         + ".t-boundary{fill:#c9d2e0;fill-opacity:.2;stroke:#4a6fd0;stroke-opacity:.4;stroke-dasharray:7 7}"

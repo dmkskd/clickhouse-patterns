@@ -9,7 +9,7 @@
     // Restore the saved theme before first paint so the page never flashes the wrong skin.
     (function () {
       try {
-        var saved = JSON.parse(localStorage.getItem("pe-theme") || "null") || {};
+        var saved = JSON.parse(localStorage.getItem("pe-theme-v2") || "null") || {};
         document.documentElement.dataset.theme = saved.theme || "flat";
         document.documentElement.dataset.scheme = saved.scheme || "light";
         if (localStorage.getItem("pe-sidebar") === "hidden") {
@@ -169,9 +169,6 @@
                 </div>
                 <div id="definition-tabs" class="definition-tabs" role="tablist"></div>
               </div>
-              <div id="definition-strip" class="definition-strip" hidden>
-                <div id="definition-body" class="definition-body"></div>
-              </div>
               <div id="session-progress" class="session-progress" hidden>
                 <div class="progress-heading"><span>Startup &amp; validation log</span><span id="operation-state"></span><div class="progress-actions"><button id="copy-session-logs" class="progress-icon" type="button" aria-label="Copy log" title="Copy log" hidden>⧉</button><button id="clear-session-logs" class="progress-icon" type="button" aria-label="Clear log" title="Clear log" hidden>⌫</button><button id="close-session-logs" class="progress-close" type="button" aria-label="Close log">×</button></div></div>
                 <ol id="progress-events"></ol>
@@ -236,6 +233,16 @@
       <div id="diagram-modal-canvas" class="architecture-canvas diagram-modal-canvas" tabindex="0" aria-label="Expanded architecture diagram. Use the mouse wheel to zoom."></div>
       <div id="modal-flow-legend" class="flow-legend" aria-label="Flow legend"></div>
     </div>
+  </dialog>
+  <dialog id="definition-modal" class="definition-modal" aria-labelledby="definition-modal-title">
+    <header class="diagram-modal-header">
+      <div><span>Definition</span><h2 id="definition-modal-title"></h2></div>
+      <div class="diagram-modal-actions">
+        <div id="definition-modal-tabs" class="definition-tabs" role="tablist"></div>
+        <button id="definition-modal-close" class="diagram-modal-close" type="button" aria-label="Close">&times;</button>
+      </div>
+    </header>
+    <div id="definition-body" class="definition-body"></div>
   </dialog>
   <dialog id="resource-inspector" class="resource-inspector" aria-labelledby="resource-inspector-title" aria-live="polite">
     <header class="resource-inspector-header">

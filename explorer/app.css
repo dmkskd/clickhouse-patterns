@@ -503,18 +503,30 @@ button, input { font: inherit; }
 .architecture-view button.active { background: #171c2f; color: #e8ecf7; }
 .architecture-view button:disabled { color: #444d68; cursor: default; }
 .architecture-view button:focus-visible { position: relative; z-index: 1; outline: 1px solid #7182b0; outline-offset: -2px; }
-.architecture-canvas { height: min(43vh, 480px); min-height: 320px; overflow: auto; padding: 16px 20px; background: radial-gradient(circle at 52% 46%, #11172b 0, #090b15 55%, #07080f 100%); scrollbar-color: #4b5572 #0a0d17; }
+.architecture-canvas { height: min(43vh, 480px); min-height: 320px; overflow: auto; padding: 16px 20px; background: radial-gradient(circle at 52% 46%, #11172b 0, #090b15 55%, #07080f 100%); }
 /* Bottom placement sits right under the reference links; give it the same
    breathing room the section has in its default spot. */
 .architecture-panel.diagram-bottom { margin-top: 24px; }
 /* Collapsed diagram: the panel shrinks to its header row. */
 .architecture-panel.diagram-collapsed .architecture-diagram,
 .architecture-panel.diagram-collapsed #control-strip,
-.architecture-panel.diagram-collapsed .definition-strip,
 .architecture-panel.diagram-collapsed .session-progress { display: none !important; }
 #collapse-diagram svg { transition: transform .18s ease; }
 .architecture-panel.diagram-collapsed #collapse-diagram svg { transform: rotate(180deg); }
 .architecture-canvas.fits-height { display: flex; flex-direction: column; justify-content: center; }
+/* A flex item shrinks below its own width by default, which swallowed the
+   zoomed diagram instead of letting the canvas scroll to it. */
+.architecture-canvas.fits-height > svg { flex: 0 0 auto; }
+.architecture-canvas { overscroll-behavior: contain; }
+/* macOS hides overlay scrollbars until they move, so a zoomed diagram looks
+   stuck. These are always drawn. */
+.architecture-canvas::-webkit-scrollbar { width: 11px; height: 11px; }
+.architecture-canvas::-webkit-scrollbar-track { background: transparent; }
+.architecture-canvas::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px; background: color-mix(in srgb, var(--muted) 55%, transparent); background-clip: content-box; }
+.architecture-canvas::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--muted) 80%, transparent); background-clip: content-box; }
+.architecture-canvas::-webkit-scrollbar-corner { background: transparent; }
+.architecture-canvas.panning { cursor: grabbing; }
+.architecture-canvas.panning svg { cursor: grabbing; }
 .architecture-canvas.expandable svg { cursor: zoom-in; }
 .architecture-canvas.expandable .resource { cursor: default; }
 .architecture-canvas:focus-visible { outline: 1px solid #526086; outline-offset: -1px; }
@@ -568,6 +580,12 @@ button, input { font: inherit; }
 .definition-head > span { color: var(--dim); font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .13em; text-transform: uppercase; }
 .definition-tabs { display: flex; gap: 4px; margin-left: auto; }
 .definition-tabs button.active { color: var(--accent, #f6b73c) !important; border-color: var(--accent, #f6b73c) !important; font-weight: 700; }
+/* Source files open over the diagram, in the same frame as the expanded
+   diagram: header with the file name and the tab row, scrolling body. */
+.definition-modal { width: min(92vw, 1200px); max-width: none; max-height: 88vh; padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text); box-shadow: 0 28px 100px #0006; }
+.definition-modal::backdrop { background: #02030a99; backdrop-filter: blur(4px); }
+.definition-modal .definition-body { max-height: calc(88vh - 66px); overflow: auto; }
+.definition-modal .diagram-modal-header h2 { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .definition-body { padding: 14px 18px 18px; }
 /* Query first, expected result below: full width keeps every expected column
    readable without a horizontal scrollbar. */
@@ -1181,7 +1199,6 @@ button, input { font: inherit; }
 [data-theme="flat"][data-scheme="light"] .tradeoffs { background: var(--panel); }
 [data-theme="flat"][data-scheme="light"] .architecture-panel .section-heading,
 [data-theme="flat"][data-scheme="light"] .tradeoffs .section-heading,
-[data-theme="flat"][data-scheme="light"] .definition-strip,
 [data-theme="flat"][data-scheme="light"] .tradeoff-card { background: var(--panel); }
 [data-theme="flat"][data-scheme="light"] .tradeoff-card.benefits h3 { color: var(--green); }
 [data-theme="flat"][data-scheme="light"] .tradeoff-card ul { color: var(--muted); }
