@@ -205,7 +205,9 @@
     card.addEventListener("click", () => selectPattern(pattern.slug));
 
     const header = document.createElement("span");
-    header.className = "catalog-card-header";
+    // Without the group mark the header is two columns, not three, or the
+    // badges land in the middle column instead of against the right edge.
+    header.className = `catalog-card-header${showGroup ? "" : " no-mark"}`;
     const mark = document.createElement("span");
     mark.className = `pattern-group-mark ${key}`;
     mark.innerHTML = patternGroupIcon(info.icon, true);
@@ -259,19 +261,6 @@
     return card;
   }
 
-  function renderHeroArt() {
-    // Decorative background: render the richest real pattern diagram once and
-    // embed it as an isolated data-URI background (no id clashes, no motion).
-    const art = $("catalog-hero-art");
-    if (!art || art.dataset.rendered) return;
-    const richest = patterns
-      .filter((pattern) => pattern.graph)
-      .sort((a, b) => b.graph.connections.length - a.graph.connections.length)[0];
-    if (!richest) return;
-    art.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(PE.diagram.render(richest, { inspectable: false }))}")`;
-    art.dataset.rendered = "1";
-  }
-
   function groupCard(key, items, info) {
     const card = document.createElement("div");
     card.className = "group-card";
@@ -301,8 +290,29 @@
     return card;
   }
 
+  const GITHUB_MARK = '<svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true">'
+    + '<path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49'
+    + '-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 '
+    + '1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 '
+    + '0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 '
+    + '1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 '
+    + '0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>';
+
+  // The landing page is described like a group, so the same title / lede /
+  // intro rendering covers both and the two pages cannot drift apart.
+  const HOME_GROUP = {
+    key: "all",
+    title: "All patterns",
+    description: "Compare runnable patterns, understand their trade-offs, and adapt them for your own systems.",
+    intro: "In most ClickHouse systems the effort is not in querying. It is in how data arrives, how it is "
+      + "modelled and kept current, and how it is delivered, replayed, and spread across a cluster.\n\n"
+      + "Clone a pattern as a starting point, then use the agentic skills to define its flow and its Docker "
+      + "test infrastructure. [View the cloning guide](https://github.com/dmkskd/clickhouse-patterns#create-your-own-patterns)\n\n"
+      + "This catalog is a work in progress. Check each pattern's status before adapting it."
+  };
+
   // Matches .group-intro-preview.collapsed in app.css.
-  const COLLAPSED_INTRO_HEIGHT = 132;
+  const COLLAPSED_INTRO_HEIGHT = 190;
 
   function renderIntro(text) {
     // group.yaml is trusted authoring, so allow inline [label](url) markdown links.
@@ -362,10 +372,38 @@
     return out.join("");
   }
 
-  // A group's intro is long enough to push the patterns below the fold, so it
-  // opens as a faded preview with a toggle. Which groups the reader has opened
-  // is remembered for the session.
+  // Long prose opens as a faded preview with a Show more toggle. The hero and
+  // every group intro use this one implementation; `key` remembers what the
+  // reader opened for the rest of the session.
   const introExpanded = new Map();
+
+  function attachShowMore(preview, key) {
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "group-intro-toggle";
+    toggle.setAttribute("aria-controls", preview.id);
+    toggle.hidden = true;
+    const apply = (open) => {
+      preview.classList.toggle("collapsed", !open);
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.textContent = open ? "Show less ↑" : "Show more ↓";
+    };
+    apply(introExpanded.get(key) ?? false);
+    toggle.addEventListener("click", () => {
+      const open = toggle.getAttribute("aria-expanded") !== "true";
+      introExpanded.set(key, open);
+      apply(open);
+    });
+    preview.after(toggle);
+    // Only text that actually overflows the collapsed height needs a toggle.
+    requestAnimationFrame(() => {
+      if (!preview.isConnected) return;
+      const overflows = preview.scrollHeight > COLLAPSED_INTRO_HEIGHT + 8;
+      toggle.hidden = !overflows;
+      if (!overflows) preview.classList.remove("collapsed");
+    });
+    return toggle;
+  }
 
   // The group's intro sits between the page heading and the pattern toolbar, so
   // a group page reads as one page: title, what it is, then its patterns.
@@ -381,31 +419,13 @@
       (lead ? `<p class="group-intro-lead">${renderIntro(lead)}</p>` : "") +
       (rest.length ? `<div class="group-intro-body">${renderIntroBody(rest)}</div>` : "") +
       `</div>`;
-    const preview = slot.querySelector(".group-intro-preview");
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "group-intro-toggle";
-    toggle.setAttribute("aria-controls", preview.id);
-    toggle.hidden = true;
-    const apply = (open) => {
-      preview.classList.toggle("collapsed", !open);
-      toggle.setAttribute("aria-expanded", String(open));
-      toggle.textContent = open ? "Show less ↑" : "Show more ↓";
-    };
-    apply(introExpanded.get(info.key) ?? false);
-    toggle.addEventListener("click", () => {
-      const open = toggle.getAttribute("aria-expanded") !== "true";
-      introExpanded.set(info.key, open);
-      apply(open);
+    // A link to the repository is a link, not prose: it keeps the GitHub mark it
+    // had before this copy moved into the intro.
+    slot.querySelectorAll('a[href*="github.com/dmkskd/clickhouse-patterns"]').forEach((link) => {
+      link.className = "clone-guide-link";
+      link.insertAdjacentHTML("afterbegin", GITHUB_MARK);
     });
-    slot.append(toggle);
-    // Only text that actually overflows the collapsed height needs a toggle.
-    requestAnimationFrame(() => {
-      if (!preview.isConnected) return;
-      const overflows = preview.scrollHeight > COLLAPSED_INTRO_HEIGHT + 8;
-      toggle.hidden = !overflows;
-      if (!overflows) preview.classList.remove("collapsed");
-    });
+    attachShowMore(slot.querySelector(".group-intro-preview"), info.key);
   }
 
   // External reading and related groups render below the pattern cards, not
@@ -437,16 +457,16 @@
   }
 
   function renderCatalogHome() {
-    renderHeroArt();
     renderCatalogFilters();
     const visible = patterns.filter(matchesCatalogFilters);
     const query = catalogFilters.search.trim();
-    const group = catalogFilters.group === "all" ? null : PATTERN_GROUPS[catalogFilters.group];
-    // The page heading is the thing being read: a group's own title on a group
-    // page, the query when searching, the catalog otherwise.
+    const group = catalogFilters.group === "all" ? HOME_GROUP : PATTERN_GROUPS[catalogFilters.group];
+    // The page heading is the thing being read: the group's title on a group
+    // page, the landing question on the landing page, the query when searching.
     const lede = $("catalog-browser-lede");
-    $("catalog-browser-title").textContent =
-      query ? `Results for “${query}”` : group ? group.title : "Browse the catalog";
+    const title = $("catalog-browser-title");
+    title.textContent = query ? `Results for “${query}”` : group ? group.title : "";
+    title.hidden = !title.textContent;
     lede.textContent = !query && group ? group.description || "" : "";
     lede.hidden = !lede.textContent;
     renderGroupIntro(query ? null : group);
@@ -1055,18 +1075,13 @@
     search.focus();
     try { search.setSelectionRange(caret, caret); } catch (_error) { /* unsupported input type */ }
   });
-  $("show-catalog-home").addEventListener("click", () => showCatalogHome());
-  // "Read more" expands and hides itself; the collapse control ("Read less")
-  // sits at the bottom of the expanded text, where reading ends.
-  const setWhyExpanded = (open) => {
-    const more = $("why-more");
-    if (!more) return;
-    more.hidden = !open;
-    $("why-open").hidden = open;
-    $("why-open").setAttribute("aria-expanded", String(open));
-  };
-  $("why-open")?.addEventListener("click", () => setWhyExpanded(true));
-  $("why-less")?.addEventListener("click", () => setWhyExpanded(false));
+  // The brand is "start over": back to the landing page with nothing narrowed.
+  $("show-catalog-home").addEventListener("click", () => {
+    $("pattern-search").value = "";
+    applyFilters({ group: "all", topology: "all", search: "" }, { home: true });
+  });
+  const heroProse = $("catalog-hero-prose");
+  if (heroProse) attachShowMore(heroProse, "catalog-hero");
   $("clone-pattern")?.addEventListener("click", () => $("clone-modal").showModal());
   $("clone-modal-close")?.addEventListener("click", () => $("clone-modal").close());
   $("clone-modal")?.addEventListener("click", (event) => {
@@ -1424,8 +1439,7 @@
     }
     // Diagrams are colored per scheme: re-render the open one and the hero art.
     if (selected) selectPattern(selected.slug, false);
-    const art = $("catalog-hero-art");
-    if (art && art.dataset.rendered) { delete art.dataset.rendered; renderHeroArt(); }
+
   }
   const themeSwitch = document.createElement("div");
   themeSwitch.className = "theme-switch";

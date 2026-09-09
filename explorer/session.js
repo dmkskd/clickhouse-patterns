@@ -123,20 +123,15 @@ window.PE.session = (() => {
       const active = snap?.session;
       const busy = snap?.operation?.status === "running";
       const starting = busy || active?.phase === "starting";
+      // The slot carries a running session and nothing else. The static-mode
+      // "browse only" hint used to live here too, but with no hero copy around
+      // it it read as an empty bar above the page title, and both things it said
+      // are already on the page: the repo link in the top bar, the catalog's
+      // status in the sidebar note.
       const show = home && control.interactive && Boolean(active) && active.phase !== "failed";
-      // Without a control plane the same slot explains how to get one, so the
-      // hero's right column is never empty on the catalog home.
-      const hint = home && !control.interactive;
-      el.hidden = !(show || hint);
+      el.hidden = !show;
       if (!show) {
         el.replaceChildren();
-        if (hint) {
-          el.innerHTML =
-            `<span class="hero-session-label">Browse only</span>` +
-            `<span class="hero-session-hint">Running a pattern needs Docker and a ` +
-            `local checkout.</span>` +
-            REPO_LINK;
-        }
         return;
       }
       const activePattern = ctx.patterns.find((pattern) => pattern.slug === active.slug);

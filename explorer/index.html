@@ -47,45 +47,22 @@
   <div class="app-shell">
     <aside class="pattern-sidebar">
       <nav id="group-nav" class="group-nav" aria-label="Patterns"></nav>
-      <div class="sidebar-note">
-        <p>A working catalog of ClickHouse architectures.</p>
-        <p>Patterns are under review. Check each pattern's status before adapting it.</p>
-      </div>
     </aside>
 
     <main class="pattern-main">
+      <!-- The landing page renders through the same title / lede / intro slots as
+           a group page; the hero is now only the session strip. -->
       <header class="catalog-hero">
-        <div class="catalog-hero-art" id="catalog-hero-art" aria-hidden="true"></div>
-        <div class="catalog-hero-copy">
-          <div class="catalog-hero-text">
-            <div class="catalog-hero-title-row">
-              <span class="catalog-hero-logo" aria-hidden="true">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
-                  <g class="brand-morph-a"><ellipse cx="8" cy="4.6" rx="4" ry="2"/><path d="M4 4.6v6.9c0 1.1 1.8 2 4 2s4-.9 4-2V4.6"/><path d="M4 8c0 1.1 1.8 2 4 2s4-.9 4-2"/></g>
-                  <g class="brand-morph-b"><rect x="4" y="2.6" width="8" height="10.8" rx="1"/><path d="M4 6.2h8M4 9.8h8M8 2.6v10.8"/></g>
-                </svg>
-              </span>
-              <h1 id="catalog-home-title">Explore ClickHouse<sup>®</sup> architectures</h1>
-              <span class="status-chip">WIP</span>
-            </div>
-            <p>Compare runnable patterns, understand their trade-offs, and adapt them for your own systems. <button type="button" id="why-open" class="why-link" aria-controls="why-more" aria-expanded="false">Read more</button></p>
-            <p class="hero-disclaimer">This catalog is a work in progress and the patterns are still under review.</p>
-            <div id="why-more" class="catalog-hero-more" hidden>
-              <p>In most ClickHouse systems, querying is rarely the main challenge. The effort goes into how data arrives, how it is modelled and kept current, and how it is delivered, replayed, and spread across a cluster. This collection gathers runnable patterns for those problems, so their trade-offs can be compared on working examples.</p>
-              <p>Explore existing patterns or create your own to prototype a feature quickly or document an existing system. Clone a pattern as a starting point, then use the agentic skills to define its flow and Docker-based test infrastructure.</p>
-              <a class="clone-guide-link" href="https://github.com/dmkskd/clickhouse-patterns#create-your-own-patterns" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>View the cloning guide</span></a>
-              <button type="button" id="why-less" class="why-link" aria-controls="why-more">Read less</button>
-            </div>
-          </div>
-        </div>
         <div id="hero-session" class="hero-session" aria-live="polite" hidden></div>
       </header>
 
-      <section id="catalog-home" class="catalog-home" aria-labelledby="catalog-home-title">
+      <section id="catalog-home" class="catalog-home" aria-label="Pattern catalog">
         <div class="catalog-browser">
           <div class="catalog-browser-heading">
             <div>
-              <h2 id="catalog-browser-title">Browse the catalog</h2>
+              <!-- Filled by app.js: the group title, or the query when searching. Empty in
+                   the markup so it cannot flash before the first render. -->
+              <h2 id="catalog-browser-title" hidden></h2>
               <p id="catalog-browser-lede" class="catalog-browser-lede" hidden></p>
             </div>
           </div>
