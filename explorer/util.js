@@ -46,6 +46,28 @@ window.PE.util = (() => {
     mysql: "MySQL", peerdb: "PeerDB", minio: "Object storage", connector: "Connector",
     "consumer-group": "Kafka engine tables", s3queue: "S3Queue()"
   };
+  // Schematic view: each resource kind maps to a shape family, so the diagram
+  // carries its type in its silhouette rather than in color alone.
+  const KIND_SHAPES = {
+    mergetree: "table", "replicated-mergetree": "table", distributed: "table",
+    part: "table", keepermap: "table", "remote-table": "table",
+    postgres: "table", mysql: "table",
+    mv: "processor", "refreshable-mv": "processor", connector: "processor", peerdb: "processor",
+    topic: "topic",
+    "kafka-table": "reader", "consumer-group": "reader", s3queue: "reader",
+    client: "client", validator: "client",
+    minio: "store"
+  };
+  const SHAPE_LABELS = {
+    table: "Table · stored rows",
+    processor: "Processor · transforms or delivers",
+    topic: "Topic · retained stream",
+    reader: "Reader · pulls from a stream",
+    client: "Client · reads or writes",
+    store: "Object store · files"
+  };
+  const shapeOf = (kind) => KIND_SHAPES[kind] || "table";
+
   const REPEAT = 38;
   const REPEAT_Y = REPEAT * 0.42;
   const INSPECTABLE_KINDS = new Set([
@@ -78,6 +100,42 @@ window.PE.util = (() => {
       nodeShadow: "rgba(90,100,120,.35)",
       gridFill: "#b9c3d4", gridStroke: "#6b7a99",
       style: DIAGRAM_STYLE_SHARED + ".system{fill:#c9d2e0;fill-opacity:.14;stroke-dasharray:7 7}.clickhouse{stroke:#4a6fd0;stroke-opacity:.5}.kafka{fill:#ddd3f5;stroke:#7054c8;stroke-opacity:.45}.postgres-system{fill:#d3dfff;stroke:#496bad;stroke-opacity:.5}.mysql-system{fill:#d0eafa;stroke:#297ea6;stroke-opacity:.5}.peerdb-system{fill:#f8dcd7;stroke:#bd4b3b;stroke-opacity:.5}.minio-system{fill:#f8d7da;stroke:#ad3340;stroke-opacity:.5}.connector-system{fill:#f5e0d3;stroke:#c96a3b;stroke-opacity:.5}.boundary-label{fill:#6b7280;font-size:10px;letter-spacing:1.5px}.edge-label{fill:#454e5d;font-size:10px;paint-order:stroke;stroke:#eceff3;stroke-width:3.5px}.resource-name{fill:#232833;font-size:12px;font-weight:700;paint-order:stroke;stroke:#eceff3;stroke-width:3.5px}.resource-kind{fill:#5a6478;font-size:10px;paint-order:stroke;stroke:#eceff3;stroke-width:3.5px}.resource-detail{fill:#7d8598;font-size:9px;paint-order:stroke;stroke:#eceff3;stroke-width:3.5px}.instance{fill:#7a5c12;font-size:8px;font-weight:800;paint-order:stroke;stroke:#ffffff;stroke-width:2px}.unassigned-label{fill:#6b7280;stroke:#ffffff}[data-clickhouse-resource-key]:hover polygon{stroke:#4a6fd0;stroke-width:1.3px}.inspectable-resource:hover polygon,.inspectable-resource:focus-visible polygon{stroke:#232833;stroke-width:2px}.inspectable-resource:hover ellipse,.inspectable-resource:focus-visible ellipse{fill:#3d9e6d;opacity:.3}.note-badge circle{fill:#ffffff;stroke:#8a93a8;stroke-width:1}.note-badge text{fill:#5a6478;font-size:9px;font-weight:700}.has-note:hover .note-badge circle{fill:#fdf6e7;stroke:#c07a12}"
+    }
+  };
+
+  // Schematic (shape-per-kind) view palette. Same rationale as DIAGRAM_PALETTES:
+  // the SVG is downloadable and embeddable, so it carries its own <style>.
+  // Node fills are drawn from KIND_COLORS at low opacity, which reads correctly
+  // on both a dark and a light ground, so only the chrome differs per scheme.
+  const SCHEMATIC_STYLE_SHARED = "text{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.t-edge{fill:none;stroke-width:1.8;stroke-dasharray:4 8;opacity:.8}.packet{filter:url(#glow)}[data-resource-key]{cursor:pointer}.t-node{transform-box:fill-box;transform-origin:center;transition:transform .12s ease}.inspectable-resource{cursor:pointer;outline:none}.inspectable-resource:hover .t-shape,.inspectable-resource:focus-visible .t-shape{stroke-width:2.6}.note-badge{cursor:help}.t-ghost{opacity:.34}";
+  const SCHEMATIC_PALETTES = {
+    dark: {
+      nodeBase: "#0b0e1a",
+      style: SCHEMATIC_STYLE_SHARED
+        + ".t-shape{stroke-width:1.5}.t-rule{stroke:#8f9ab8;stroke-opacity:.55;stroke-width:1}"
+        + ".t-name{fill:#f0f3ff;font-size:12.5px;font-weight:700}"
+        + ".t-kind{fill:#8b95b4;font-size:9px;letter-spacing:1.4px}"
+        + ".t-detail{fill:#7f89a6;font-size:9.5px}"
+        + ".edge-label{fill:#c4cce1;font-size:10px;paint-order:stroke;stroke:#07080f;stroke-width:5px}"
+        + ".t-boundary{fill:#11162a;fill-opacity:.3;stroke:#7486c9;stroke-opacity:.3;stroke-dasharray:7 7}"
+        + ".t-boundary-label{fill:#7580a2;font-size:10px;letter-spacing:1.5px}"
+        + ".t-legend{fill:#79839f;font-size:10px}.t-legend-mark{stroke:#8f9ab8;stroke-opacity:.8;fill:#8f9ab8;fill-opacity:.16}"
+        + ".t-scope{fill:#c4cce1;font-size:9px;font-weight:700}"
+        + ".note-badge circle{fill:#161b2e;stroke:#7580a2;stroke-width:1}.note-badge text{fill:#c4cce1;font-size:9px;font-weight:700}.has-note:hover .note-badge circle{fill:#233056;stroke:#aab4d6}"
+    },
+    light: {
+      nodeBase: "#f2f4f8",
+      style: SCHEMATIC_STYLE_SHARED
+        + ".t-shape{stroke-width:1.5}.t-rule{stroke:#7a8398;stroke-opacity:.5;stroke-width:1}"
+        + ".t-name{fill:#232833;font-size:12.5px;font-weight:700}"
+        + ".t-kind{fill:#5a6478;font-size:9px;letter-spacing:1.4px}"
+        + ".t-detail{fill:#7d8598;font-size:9.5px}"
+        + ".edge-label{fill:#454e5d;font-size:10px;paint-order:stroke;stroke:#eceff3;stroke-width:3.5px}"
+        + ".t-boundary{fill:#c9d2e0;fill-opacity:.2;stroke:#4a6fd0;stroke-opacity:.4;stroke-dasharray:7 7}"
+        + ".t-boundary-label{fill:#6b7280;font-size:10px;letter-spacing:1.5px}"
+        + ".t-legend{fill:#6b7280;font-size:10px}.t-legend-mark{stroke:#6b7280;stroke-opacity:.85;fill:#6b7280;fill-opacity:.14}"
+        + ".t-scope{fill:#454e5d;font-size:9px;font-weight:700}"
+        + ".note-badge circle{fill:#ffffff;stroke:#8a93a8;stroke-width:1}.note-badge text{fill:#5a6478;font-size:9px;font-weight:700}.has-note:hover .note-badge circle{fill:#fdf6e7;stroke:#c07a12}"
     }
   };
 
@@ -232,7 +290,7 @@ window.PE.util = (() => {
   return {
     FLOW_COLORS, KIND_COLORS, KIND_LABELS, REPEAT, REPEAT_Y,
     INSPECTABLE_KINDS, TOPOLOGIES, DIRECTIONS, DIAGRAM_PALETTES,
-    TOPOLOGY_PALETTES, esc,
+    TOPOLOGY_PALETTES, SCHEMATIC_PALETTES, KIND_SHAPES, SHAPE_LABELS, shapeOf, esc,
     displayTitle, directionOf, formatDescInline, plainDesc,
     valueText, dataTable, patternGroupIcon
   };

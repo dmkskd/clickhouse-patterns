@@ -10,7 +10,7 @@
     (function () {
       try {
         var saved = JSON.parse(localStorage.getItem("pe-theme") || "null") || {};
-        document.documentElement.dataset.theme = saved.theme || "soft";
+        document.documentElement.dataset.theme = saved.theme || "flat";
         document.documentElement.dataset.scheme = saved.scheme || "light";
         if (localStorage.getItem("pe-sidebar") === "hidden") {
           document.documentElement.dataset.sidebar = "hidden";
@@ -22,29 +22,35 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.12.0/build/styles/github-dark.min.css">
 </head>
 <body>
+  <!-- One bar across the top: the brand returns home, the search is global. -->
+  <header class="app-header">
+    <button id="show-catalog-home" class="app-brand" type="button" aria-label="Open the Pattern Explorer home">
+      <!-- Project mark: a database cylinder and a table grid trade places
+           on a slow cycle — Escher's metamorphosis, a source becoming a
+           table. Neutral by design: the trademark policy allows the word
+           mark but not the ClickHouse logomark on third-party sites. -->
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+          <g class="brand-morph-a"><ellipse cx="8" cy="4.6" rx="4" ry="2"/><path d="M4 4.6v6.9c0 1.1 1.8 2 4 2s4-.9 4-2V4.6"/><path d="M4 8c0 1.1 1.8 2 4 2s4-.9 4-2"/></g>
+          <g class="brand-morph-b"><rect x="4" y="2.6" width="8" height="10.8" rx="1"/><path d="M4 6.2h8M4 9.8h8M8 2.6v10.8"/></g>
+        </svg>
+      </span>
+      <span class="app-brand-name"><strong>ClickHouse<sup>&reg;</sup></strong> Patterns</span>
+    </button>
+    <label class="app-search">
+      <span class="visually-hidden">Search all patterns</span>
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.4"/><path d="M10.4 10.4 14 14"/></svg>
+      <input id="pattern-search" type="search" placeholder="Search all patterns…" autocomplete="off">
+    </label>
+    <div id="header-tools" class="header-tools"></div>
+  </header>
   <div class="app-shell">
     <aside class="pattern-sidebar">
-      <button id="show-catalog-home" class="sidebar-header" type="button" aria-label="Open the Pattern Explorer home">
-        <!-- Project mark: a database cylinder and a table grid trade places
-             on a slow cycle — Escher's metamorphosis, a source becoming a
-             table. Neutral by design: the trademark policy allows the word
-             mark but not the ClickHouse logomark on third-party sites. -->
-        <div class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
-            <g class="brand-morph-a"><ellipse cx="8" cy="4.6" rx="4" ry="2"/><path d="M4 4.6v6.9c0 1.1 1.8 2 4 2s4-.9 4-2V4.6"/><path d="M4 8c0 1.1 1.8 2 4 2s4-.9 4-2"/></g>
-            <g class="brand-morph-b"><rect x="4" y="2.6" width="8" height="10.8" rx="1"/><path d="M4 6.2h8M4 9.8h8M8 2.6v10.8"/></g>
-          </svg>
-        </div>
-        <div><strong>ClickHouse<sup>®</sup></strong><span>Pattern Explorer</span></div>
-      </button>
-      <label class="pattern-search">
-        <span>Find a pattern</span>
-        <input id="pattern-search" type="search" placeholder="Kafka, CDC, sharded…" autocomplete="off">
-      </label>
-      <div class="group-controls" aria-label="Pattern group controls">
-        <button id="toggle-groups" type="button"><span aria-hidden="true">⊞</span><span class="group-toggle-label">Expand all</span></button>
+      <nav id="group-nav" class="group-nav" aria-label="Patterns"></nav>
+      <div class="sidebar-note">
+        <p>A working catalog of ClickHouse architectures.</p>
+        <p>Patterns are under review. Check each pattern's status before adapting it.</p>
       </div>
-      <nav id="pattern-list" class="pattern-list" aria-label="Patterns"></nav>
     </aside>
 
     <main class="pattern-main">
@@ -78,17 +84,16 @@
       <section id="catalog-home" class="catalog-home" aria-labelledby="catalog-home-title">
         <div class="catalog-browser">
           <div class="catalog-browser-heading">
-            <div><h2>Browse the catalog</h2></div>
-            <label class="catalog-search">
-              <span class="visually-hidden">Search patterns</span>
-              <input id="catalog-search" type="search" placeholder="Search Kafka, CDC, replication…" autocomplete="off">
-            </label>
+            <div>
+              <h2 id="catalog-browser-title">Browse the catalog</h2>
+              <p id="catalog-browser-lede" class="catalog-browser-lede" hidden></p>
+            </div>
           </div>
+          <div id="catalog-group-intro" class="catalog-group-intro" hidden></div>
           <div class="catalog-filters" aria-label="Catalog filters">
-            <div id="catalog-group-filters" class="filter-group" role="group" aria-label="Pattern group"></div>
+            <div id="catalog-results-summary" class="catalog-results-summary" aria-live="polite"></div>
             <div id="catalog-topology-filters" class="filter-group topology-filters" role="group" aria-label="ClickHouse topology"></div>
           </div>
-          <div id="catalog-results-summary" class="catalog-results-summary" aria-live="polite"></div>
           <div id="catalog-grid" class="catalog-grid"></div>
         </div>
       </section>
@@ -114,10 +119,14 @@
               <div class="section-heading">
                 <div><span>Architecture</span><h2 id="architecture-title">Resource flow</h2></div>
                 <div class="architecture-heading-tools">
-                  <div id="architecture-view" class="architecture-view" role="group" aria-label="Diagram view" hidden>
+                  <div id="architecture-view" class="architecture-view" role="group" aria-label="Diagram view">
                     <button id="view-logical" type="button" class="active" aria-pressed="true" title="Logical view: data flow between the pattern's ClickHouse resources">
                       <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="3.2" cy="11" r="1.9"/><circle cx="8" cy="4.6" r="1.9"/><circle cx="12.8" cy="11" r="1.9"/><path d="M4.6 9.4 6.6 6.6M9.4 6.6l2 2.8"/></svg>
                       <span class="visually-hidden">Logical view</span>
+                    </button>
+                    <button id="view-schematic" type="button" aria-pressed="false" title="Resource diagram: the same pipeline drawn flat, each resource a labelled box shaped by what it is — table, topic, view, client">
+                      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="1.6" y="3" width="5.4" height="4" rx="1"/><rect x="9" y="3" width="5.4" height="4" rx="2"/><rect x="1.6" y="9.4" width="5.4" height="4" rx="2"/><rect x="9" y="9.4" width="5.4" height="4" rx="1"/></svg>
+                      <span class="visually-hidden">Resource diagram</span>
                     </button>
                     <button id="view-physical" type="button" aria-pressed="false" title="Physical view: containers, ports, and startup order behind the running pattern">
                       <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2.2" y="2.6" width="11.6" height="4.4" rx="1.2"/><rect x="2.2" y="9" width="11.6" height="4.4" rx="1.2"/><path d="M4.6 4.8h.01M4.6 11.2h.01"/></svg>
@@ -219,10 +228,14 @@
     <header class="diagram-modal-header">
       <div><span>Architecture</span><h2 id="diagram-modal-title">Resource flow</h2></div>
       <div class="diagram-modal-actions">
-        <div id="modal-architecture-view" class="architecture-view" role="group" aria-label="Diagram view" hidden>
+        <div id="modal-architecture-view" class="architecture-view" role="group" aria-label="Diagram view">
           <button id="modal-view-logical" type="button" class="active" aria-pressed="true" title="Logical view: data flow between the pattern's ClickHouse resources">
             <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="3.2" cy="11" r="1.9"/><circle cx="8" cy="4.6" r="1.9"/><circle cx="12.8" cy="11" r="1.9"/><path d="M4.6 9.4 6.6 6.6M9.4 6.6l2 2.8"/></svg>
             <span class="visually-hidden">Logical view</span>
+          </button>
+          <button id="modal-view-schematic" type="button" aria-pressed="false" title="Resource diagram: the same pipeline drawn flat, each resource a labelled box shaped by what it is — table, topic, view, client">
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="1.6" y="3" width="5.4" height="4" rx="1"/><rect x="9" y="3" width="5.4" height="4" rx="2"/><rect x="1.6" y="9.4" width="5.4" height="4" rx="2"/><rect x="9" y="9.4" width="5.4" height="4" rx="1"/></svg>
+            <span class="visually-hidden">Resource diagram</span>
           </button>
           <button id="modal-view-physical" type="button" aria-pressed="false" title="Physical view: containers, ports, and startup order behind the running pattern">
             <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2.2" y="2.6" width="11.6" height="4.4" rx="1.2"/><rect x="2.2" y="9" width="11.6" height="4.4" rx="1.2"/><path d="M4.6 4.8h.01M4.6 11.2h.01"/></svg>

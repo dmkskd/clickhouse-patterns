@@ -95,7 +95,7 @@ def test_pattern_graph_builds_browser_site(tmp_path: Path):
     assert "ClickHouse Pattern Explorer" in html
     assert 'href="app.css"' in html
     assert 'src="app.js"' in html
-    assert 'id="toggle-groups"' in html
+    assert 'id="group-nav"' in html
     assert 'id="session-panel"' in html
     assert 'id="start-session"' in html
     assert 'id="explorer-mode"' in html
@@ -158,20 +158,22 @@ def test_pattern_switch_uses_one_launch_action(tmp_path: Path):
     assert 'command(apiUrl("api/session/switch"), { pattern: selected.slug })' in session
 
 
-def test_flat_light_reuses_soft_palette_with_flat_borders(tmp_path: Path):
+def test_flat_light_is_a_paper_palette_drawn_with_lines(tmp_path: Path):
+    """Flat/light is the default skin: white panels on a near-white page, with
+    one grey rule doing every separation and a yellow accent for the active row."""
     build_explorer_site(tmp_path)
 
     css = (tmp_path / "app.css").read_text()
     for token in (
-        "--bg: #e6e8ec;",
-        "--text: #26292e;",
-        "--muted: #5f656e;",
-        "--green: #3d9e6d;",
-        "--blue: #4f86c6;",
-        "--amber: #c97f1f;",
-        "--violet: #7d8fc4;",
+        "--bg: #f6f7f9;",
+        "--panel: #ffffff;",
+        "--line: #e0e3e8;",
+        "--accent-soft: #fff0b8;",
     ):
-        assert css.count(token) >= 2  # shared by soft/light and flat/light
+        assert token in css
+    assert ".app-header {" in css
+    assert "border-bottom: 1px solid var(--line); background: var(--panel);" in css
+    assert ".group-navlink.active { background: var(--accent-soft);" in css
     assert '[data-theme="flat"][data-scheme="light"] .tradeoffs { background: var(--panel); }' in css
     assert '[data-theme="flat"][data-scheme="light"] .tradeoff-card { background: var(--panel); }' in css
     assert ".tradeoff-card { border: 1px solid var(--line);" in css
@@ -238,6 +240,6 @@ def test_peerdb_graph_compiles_operation_labels_and_hover_note():
 
     raw = resources["mergetree:_peerdb_raw_two_table_mirror@peerdb-internal"]
     note = raw["properties"]["note"]
-    assert note.startswith("**How this table fills**")
-    assert "\\n- Owned by the two_table_mirror job" in note
-    assert "\\n- Routed by _peerdb_destination_table_name" in note
+    assert note.startswith("**PeerDB-internal table** · one per mirror")
+    assert "peerdb-flow-worker issues INSERT … SELECT FROM s3()" in note
+    assert "\\n- target inserts then decode each row into the table named by _peerdb_destination_table_name" in note

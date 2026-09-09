@@ -26,7 +26,7 @@ metadata:
       postgres:source_tables
         -[logical WAL]-> peerdb:cdc_worker(mirror=two_table_mirror,checkpoint=metadata_last_sync_state)
         -[writes Avro]-> minio:cdc_batch(bucket=clickhouse,prefix=peerdb/,format=Avro,label=CDC batch Avro,note=**Transient stage** · `s3://clickhouse/peerdb/two_table_mirror/`\nDeleted once ClickHouse has read the objects.\n- same staging path as the snapshot objects)
-        -[INSERT INTO _peerdb_raw … FROM s3()]-> mergetree:_peerdb_raw_two_table_mirror@peerdb-internal(label=mirror-wide CDC staging,table=test._peerdb_raw_two_table_mirror,note=**How this table fills**\nPeerDB writes raw CDC Avro here first.\n- Owned by the two_table_mirror job\n- Routed by _peerdb_destination_table_name)
+        -[INSERT INTO _peerdb_raw … FROM s3()]-> mergetree:_peerdb_raw_two_table_mirror@peerdb-internal(label=mirror-wide CDC staging,table=test._peerdb_raw_two_table_mirror,note=**PeerDB-internal table** · one per mirror\npeerdb-flow-worker issues INSERT … SELECT FROM s3() against test._peerdb_raw_two_table_mirror; ClickHouse reads the batch's Avro objects.\n- target inserts then decode each row into the table named by _peerdb_destination_table_name)
 
     changes:
       mergetree:_peerdb_raw_two_table_mirror@peerdb-internal

@@ -18,21 +18,43 @@
     `${String(GROUP_ORDER[p.group] ?? 999).padStart(5, "0")}/${String(p.order ?? 1000).padStart(5, "0")}/${p.title}`;
   const patterns = [...catalog.patterns].sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
   const $ = (id) => document.getElementById(id);
-  const list = $("pattern-list");
   const search = $("pattern-search");
   const canvas = $("architecture-canvas");
   const diagramModal = $("diagram-modal");
   const modalCanvas = $("diagram-modal-canvas");
   const resourceInspector = $("resource-inspector");
   const resourceInspectorBody = $("resource-inspector-body");
-  const toggleGroups = $("toggle-groups");
   let selected = null;
-  let catalogFilters = { group: "all", topology: "all", search: "" };
+  // Catalog state lives in the URL: ?group=&topology=&q=&pattern=. Every filter
+  // is therefore shareable, and the browser's back button walks the catalog the
+  // same way it walks patterns.
+  function readRoute() {
+    const params = new URL(window.location.href).searchParams;
+    const group = params.get("group") || "all";
+    const topology = params.get("topology") || "all";
+    return {
+      pattern: params.get("pattern") || "",
+      group: group === "all" || PATTERN_GROUPS[group] ? group : "all",
+      topology: topology === "all" || TOPOLOGIES[topology] ? topology : "all",
+      search: params.get("q") || "",
+    };
+  }
+  let catalogFilters = (({ group, topology, search }) => ({ group, topology, search }))(readRoute());
   let diagramZoom = 1;
   let modalZoom = 1;
-  let architectureView = "logical";   // "logical" (resource flow) | "physical" (containers)
+  // "logical" (isometric resource flow) | "schematic" (shape per resource kind) |
+  // "physical" (containers). Logical and schematic ("Resource diagram" in the
+  // UI) are two drawings of the same
+  // graph and are always available; physical needs a running session.
+  const DIAGRAM_VIEW_KEY = "pe.architectureView";
+  const GRAPH_VIEWS = ["logical", "schematic"];
+  let graphView = "logical";
+  try {
+    const stored = localStorage.getItem(DIAGRAM_VIEW_KEY);
+    if (GRAPH_VIEWS.includes(stored)) graphView = stored;
+  } catch (_error) { /* private mode: default applies */ }
+  let architectureView = graphView;
   let topologyRequest = 0;            // guards against out-of-order topology responses
-  const groupState = new Map();
   let control = { mode: "static", interactive: false, token: null, snapshot: null };
 
   // Shared constant tables and esc() live in util.js (window.PE.util); the pure
@@ -111,9 +133,24 @@
       pattern.slug, pattern.title, pattern.description,
       pattern.topology, ...(pattern.tags || [])
     ].join(" ").toLowerCase();
-    return (!catalogFilters.search || haystack.includes(catalogFilters.search))
+    const needle = catalogFilters.search.trim().toLowerCase();
+    return (!needle || haystack.includes(needle))
       && (catalogFilters.group === "all" || patternGroupKey(pattern) === catalogFilters.group)
       && (catalogFilters.topology === "all" || pattern.topology === catalogFilters.topology);
+  }
+
+  const anyFilterSet = () =>
+    catalogFilters.group !== "all" || catalogFilters.topology !== "all" || catalogFilters.search.trim() !== "";
+
+  // Single entry point for a catalog state change: merge, write the URL, redraw.
+  // `replace` is for keystroke-rate changes (typing in the search box), which
+  // should not leave one history entry per character.
+  function applyFilters(patch, { replace = false, home = false } = {}) {
+    catalogFilters = { ...catalogFilters, ...patch };
+    if (home && selected) showCatalogHome(false);
+    updateRoute(selected?.slug || "", replace);
+    renderCatalogHome();
+    renderSidebar();
   }
 
   function catalogFilterButton(value, label, count, type) {
@@ -123,29 +160,41 @@
     button.dataset.value = value;
     button.setAttribute("aria-pressed", String(catalogFilters[type] === value));
     button.innerHTML = `<span>${esc(label)}</span><small>${count}</small>`;
-    button.addEventListener("click", () => {
-      catalogFilters[type] = value;
-      renderCatalogHome();
-    });
+    button.addEventListener("click", () => applyFilters({ [type]: value }));
     return button;
   }
 
   // ===================== CATALOG (filters, cards, groups, list) =====================
+  // The group axis moved to the sidebar rail, so the catalog's own filter row
+  // carries the topology axis and a reset for whatever is currently narrowing
+  // the results — group, topology or search.
   function renderCatalogFilters() {
-    const groups = [["all", "All groups"], ...GROUPS.map((group) => [group.key, group.label])];
-    const groupFilters = $("catalog-group-filters");
-    groupFilters.replaceChildren(...groups.map(([value, label]) =>
-      catalogFilterButton(value, label, value === "all" ? patterns.length : patterns.filter((item) => patternGroupKey(item) === value).length, "group")
-    ));
-
+    const needle = catalogFilters.search.trim().toLowerCase();
+    const inScope = (item) =>
+      (catalogFilters.group === "all" || patternGroupKey(item) === catalogFilters.group)
+      && (!needle || [item.slug, item.title, item.description, item.topology, ...(item.tags || [])]
+        .join(" ").toLowerCase().includes(needle));
     const topologies = [["all", "Any topology"], ...Object.entries(TOPOLOGIES).map(([value, info]) => [value, info.label])];
     const topologyFilters = $("catalog-topology-filters");
-    topologyFilters.replaceChildren(...topologies.map(([value, label]) =>
-      catalogFilterButton(value, label, value === "all" ? patterns.length : patterns.filter((item) => item.topology === value).length, "topology")
-    ));
+    const buttons = topologies.map(([value, label]) =>
+      catalogFilterButton(value, label, patterns.filter((item) =>
+        inScope(item) && (value === "all" || item.topology === value)).length, "topology")
+    );
+    if (anyFilterSet()) {
+      const clear = document.createElement("button");
+      clear.type = "button";
+      clear.className = "filter-clear";
+      clear.textContent = "Clear filters";
+      clear.addEventListener("click", () => {
+        $("pattern-search").value = "";
+        applyFilters({ group: "all", topology: "all", search: "" }, { home: true });
+      });
+      buttons.push(clear);
+    }
+    topologyFilters.replaceChildren(...buttons);
   }
 
-  function patternCard(pattern) {
+  function patternCard(pattern, { showGroup = true } = {}) {
     const [key, info] = patternGroup(pattern);
     const topology = TOPOLOGIES[pattern.topology] || { label: pattern.topology, help: pattern.topology };
     const activeSession = control.snapshot?.session;
@@ -162,7 +211,11 @@
     mark.innerHTML = patternGroupIcon(info.icon, true);
     const context = document.createElement("span");
     context.className = "catalog-card-context";
-    context.innerHTML = `<span>${esc(info.title)}</span><small>${pattern.location === "workspace" ? "Workspace" : "Curated"}</small>`;
+    // On a group page the group name is the page title, and "Pattern" on a
+    // pattern card says nothing — so that line is dropped and only the
+    // provenance and status line remains.
+    context.innerHTML = (showGroup ? `<span>${esc(info.title)}</span>` : "")
+      + `<small>${pattern.location === "workspace" ? "Workspace" : "Curated"}</small>`;
     const status = patternStatusBadge(pattern.status);
     if (status) context.querySelector("small").append(" · ", status);
     const badge = document.createElement("span");
@@ -181,7 +234,8 @@
       badges.append(exp);
     }
     badges.append(badge);
-    header.append(mark, context, badges);
+    if (showGroup) header.append(mark, context, badges);
+    else header.append(context, badges);
 
     const title = document.createElement("strong");
     title.className = "catalog-card-title";
@@ -239,13 +293,16 @@
       `<div class="group-card-titles"><strong>${esc(info.title)}</strong>` +
       `<div class="group-card-meta"><span class="group-card-count">${items.length} ${items.length === 1 ? "pattern" : "patterns"}</span>${groupStatusRollup(items)}</div></div></div>` +
       (summary ? `<p class="group-card-intro">${esc(summary)}</p>` : "");
-    const openGroup = () => { catalogFilters.group = key; renderCatalogHome(); };
+    const openGroup = () => applyFilters({ group: key });
     card.addEventListener("click", openGroup);
     card.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openGroup(); }
     });
     return card;
   }
+
+  // Matches .group-intro-preview.collapsed in app.css.
+  const COLLAPSED_INTRO_HEIGHT = 132;
 
   function renderIntro(text) {
     // group.yaml is trusted authoring, so allow inline [label](url) markdown links.
@@ -305,20 +362,50 @@
     return out.join("");
   }
 
-  function groupHeader(info, items) {
-    const header = document.createElement("section");
-    header.className = "catalog-group-intro";
+  // A group's intro is long enough to push the patterns below the fold, so it
+  // opens as a faded preview with a toggle. Which groups the reader has opened
+  // is remembered for the session.
+  const introExpanded = new Map();
+
+  // The group's intro sits between the page heading and the pattern toolbar, so
+  // a group page reads as one page: title, what it is, then its patterns.
+  function renderGroupIntro(info) {
+    const slot = $("catalog-group-intro");
+    if (!slot) return;
+    if (!info) { slot.hidden = true; slot.replaceChildren(); return; }
+    slot.hidden = false;
     const paras = (info.intro || info.description || "").split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
-    // First paragraph reads full width as a lead; the rest flow into two columns
-    // so the summary uses the horizontal space instead of leaving it empty.
     const [lead, ...rest] = paras;
-    header.innerHTML =
-      `<div class="group-intro-head"><h3>${esc(info.title)}</h3>` +
-      `<span class="group-intro-count">${items.length} ${items.length === 1 ? "pattern" : "patterns"}${groupStatusRollup(items)}</span>` +
-      `</div>` +
+    slot.innerHTML =
+      `<div class="group-intro-preview" id="group-intro-${esc(info.key)}">` +
       (lead ? `<p class="group-intro-lead">${renderIntro(lead)}</p>` : "") +
-      (rest.length ? `<div class="group-intro-body">${renderIntroBody(rest)}</div>` : "");
-    return header;
+      (rest.length ? `<div class="group-intro-body">${renderIntroBody(rest)}</div>` : "") +
+      `</div>`;
+    const preview = slot.querySelector(".group-intro-preview");
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "group-intro-toggle";
+    toggle.setAttribute("aria-controls", preview.id);
+    toggle.hidden = true;
+    const apply = (open) => {
+      preview.classList.toggle("collapsed", !open);
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.textContent = open ? "Show less ↑" : "Show more ↓";
+    };
+    apply(introExpanded.get(info.key) ?? false);
+    toggle.addEventListener("click", () => {
+      const open = toggle.getAttribute("aria-expanded") !== "true";
+      introExpanded.set(info.key, open);
+      apply(open);
+    });
+    slot.append(toggle);
+    // Only text that actually overflows the collapsed height needs a toggle.
+    requestAnimationFrame(() => {
+      if (!preview.isConnected) return;
+      const overflows = preview.scrollHeight > COLLAPSED_INTRO_HEIGHT + 8;
+      toggle.hidden = !overflows;
+      if (!overflows) preview.classList.remove("collapsed");
+    });
   }
 
   // External reading and related groups render below the pattern cards, not
@@ -343,8 +430,7 @@
       (reading ? `<div class="group-links"><span>Further reading</span><ul>${reading}</ul></div>` : "") +
       `</div>`;
     footer.querySelectorAll(".group-link").forEach((btn) => btn.addEventListener("click", () => {
-      catalogFilters.group = btn.dataset.group;
-      renderCatalogHome();
+      applyFilters({ group: btn.dataset.group });
       $("catalog-home")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }));
     return footer;
@@ -354,15 +440,29 @@
     renderHeroArt();
     renderCatalogFilters();
     const visible = patterns.filter(matchesCatalogFilters);
+    const query = catalogFilters.search.trim();
+    const group = catalogFilters.group === "all" ? null : PATTERN_GROUPS[catalogFilters.group];
+    // The page heading is the thing being read: a group's own title on a group
+    // page, the query when searching, the catalog otherwise.
+    const lede = $("catalog-browser-lede");
+    $("catalog-browser-title").textContent =
+      query ? `Results for “${query}”` : group ? group.title : "Browse the catalog";
+    lede.textContent = !query && group ? group.description || "" : "";
+    lede.hidden = !lede.textContent;
+    renderGroupIntro(query ? null : group);
+    // Reading a group or a search result is being inside the catalog, so the
+    // landing hero folds away and the page starts on its own title. Anything
+    // the hero still carries (a running session) stays visible.
+    document.querySelector(".catalog-hero")?.classList.toggle("compact", anyFilterSet());
     $("catalog-results-summary").textContent = `${visible.length} ${visible.length === 1 ? "pattern" : "patterns"}`;
     const grid = $("catalog-grid");
     if (!visible.length) {
       grid.classList.remove("as-groups");
+      renderGroupIntro(null);
       grid.innerHTML = '<div class="catalog-empty"><strong>No matching patterns</strong><span>Try another search term or clear a filter.</span><button type="button">Clear filters</button></div>';
       grid.querySelector(".catalog-empty button")?.addEventListener("click", () => {
-        catalogFilters = { group: "all", topology: "all", search: "" };
-        $("catalog-search").value = "";
-        renderCatalogHome();
+        $("pattern-search").value = "";
+        applyFilters({ group: "all", topology: "all", search: "" });
       });
       return;
     }
@@ -375,9 +475,16 @@
     if (catalogFilters.group === "all") {
       // Landing: give the real estate to the groups. One tile per family, its
       // patterns as one-liners; click a tile to drill into the full cards.
-      grid.classList.add("as-groups");
-      grid.replaceChildren(...[...byGroup].map(([key, items]) =>
-        groupCard(key, items, PATTERN_GROUPS[key] || patternGroup(items[0])[1])));
+      // A search or a topology filter is a question about patterns, though, so
+      // those answer with the matching patterns across every group instead.
+      if (!anyFilterSet()) {
+        grid.classList.add("as-groups");
+        grid.replaceChildren(...[...byGroup].map(([key, items]) =>
+          groupCard(key, items, PATTERN_GROUPS[key] || patternGroup(items[0])[1])));
+        return;
+      }
+      grid.classList.remove("as-groups");
+      grid.replaceChildren(...visible.map(patternCard));
       return;
     }
     // Drill-in: the family's fuller intro, its pattern cards, then the
@@ -385,113 +492,96 @@
     grid.classList.remove("as-groups");
     const [groupKey, groupItems] = [...byGroup][0];
     const info = PATTERN_GROUPS[groupKey] || patternGroup(groupItems[0])[1];
-    grid.replaceChildren(groupHeader(info, groupItems), ...groupItems.map(patternCard));
+    grid.replaceChildren(...groupItems.map((pattern) => patternCard(pattern, { showGroup: false })));
     const footer = groupFooter(info);
     if (footer) grid.append(footer);
   }
 
-  function renderList(filter = "") {
-    const needle = filter.trim().toLowerCase();
-    const visible = patterns.filter((pattern) =>
+  // The sidebar is one flat rail: "All patterns" over one row per group. Only
+  // the group in view unfolds its patterns, so the column stays short enough to
+  // read at a glance instead of listing every pattern in the catalog.
+  function patternOption(pattern) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `pattern-option${pattern.slug === selected?.slug ? " active" : ""}${pattern.graph ? "" : " pending"}`;
+    button.title = pattern.slug;
+    const row = document.createElement("span");
+    row.className = "pattern-option-row";
+    const strong = document.createElement("strong");
+    strong.textContent = displayTitle(pattern);
+    // No topology or direction badge here: the rail is for moving between
+    // patterns, and both are on the card and the pattern page. Only a running
+    // session still shows, because that is state the rail cannot repeat.
+    const badges = document.createElement("span");
+    badges.className = "pattern-badges";
+    const activeSession = control.snapshot?.session;
+    if (activeSession?.slug === pattern.slug) {
+      const healthy = activeSession.reachable && activeSession.phase !== "failed";
+      const runtime = document.createElement("span");
+      runtime.className = `runtime-status${healthy ? " running" : " failed"}`;
+      runtime.title = activeSession.reachable ? "Running now" : "Active session is not reachable";
+      runtime.setAttribute("aria-label", runtime.title);
+      badges.append(runtime);
+    }
+    row.append(strong, badges);
+    button.append(row);
+    button.addEventListener("click", () => selectPattern(pattern.slug));
+    return button;
+  }
+
+  function renderSidebar() {
+    const nav = $("group-nav");
+    if (!nav) return;
+    const needle = catalogFilters.search.trim().toLowerCase();
+    const matches = (pattern) =>
       [pattern.slug, pattern.title, pattern.description, pattern.topology, ...(pattern.tags || [])]
-        .join(" ").toLowerCase().includes(needle)
-    );
-    list.replaceChildren();
-    const groups = new Map();
-    visible.forEach((pattern) => {
-      const key = patternGroupKey(pattern);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(pattern);
-    });
-    groups.forEach((items, key) => {
-      const section = document.createElement("details");
-      section.className = "pattern-group";
-      section.dataset.group = key;
-      // Always reveal the group of the pattern currently open, however it was
-      // opened (catalog grid, hero, direct link), not just when the user expanded
-      // it by hand. It is also marked current for a subtle highlight.
-      const isCurrent = Boolean(selected) && key === patternGroupKey(selected);
-      if (isCurrent) section.classList.add("current");
-      section.open = needle ? true : (isCurrent || (groupState.get(key) ?? false));
-      section.addEventListener("toggle", () => {
-        if (!needle) groupState.set(key, section.open);
-        updateGroupToggle();
-      });
-      const info = patternGroup(items[0])[1];
-      const summary = document.createElement("summary");
-      summary.className = "pattern-group-heading";
-      const icon = document.createElement("span");
-      icon.className = `pattern-group-mark ${key}`;
-      icon.innerHTML = patternGroupIcon(info.icon);
-      const copy = document.createElement("span");
-      copy.className = "pattern-group-copy";
-      const groupTitle = document.createElement("strong");
-      groupTitle.textContent = info.title;
-      const description = document.createElement("span");
-      description.textContent = info.description;
-      copy.append(groupTitle, description);
-      const count = document.createElement("span");
-      count.className = "pattern-count";
-      count.textContent = String(items.length);
-      summary.append(icon, copy, count);
-      const options = document.createElement("div");
-      options.className = "pattern-options";
-      items.forEach((pattern) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = `pattern-option${pattern.slug === selected?.slug ? " active" : ""}${pattern.graph ? "" : " pending"}`;
-        button.title = pattern.slug;
-        const row = document.createElement("span");
-        row.className = "pattern-option-row";
-        const strong = document.createElement("strong");
-        strong.textContent = displayTitle(pattern);
-        const topology = TOPOLOGIES[pattern.topology] || { label: pattern.topology, help: pattern.topology };
-        const badge = document.createElement("span");
-        badge.className = `topology-badge ${pattern.topology}`;
-        badge.textContent = topology.label;
-        badge.title = topology.help;
-        const badges = document.createElement("span");
-        badges.className = "pattern-badges";
-        const direction = directionBadge(pattern);
-        if (direction) badges.append(direction);
-        badges.append(badge);
-        const activeSession = control.snapshot?.session;
-        if (activeSession?.slug === pattern.slug) {
-          const healthy = activeSession.reachable && activeSession.phase !== "failed";
-          const runtime = document.createElement("span");
-          runtime.className = `runtime-status${healthy ? " running" : " failed"}`;
-          runtime.title = activeSession.reachable ? "Running now" : "Active session is not reachable";
-          runtime.setAttribute("aria-label", runtime.title);
-          badges.append(runtime);
-        }
-        row.append(strong, badges);
-        button.append(row);
-        button.addEventListener("click", () => selectPattern(pattern.slug));
-        options.append(button);
-      });
-      section.append(summary, options);
-      list.append(section);
-    });
-    updateGroupToggle();
-  }
+        .join(" ").toLowerCase().includes(needle);
+    const visible = patterns.filter(matches);
+    const active = selected ? patternGroupKey(selected) : catalogFilters.group;
 
-  function updateGroupToggle() {
-    const groups = [...list.querySelectorAll(".pattern-group")];
-    const allOpen = groups.length > 0 && groups.every((group) => group.open);
-    const label = allOpen ? "Collapse all" : "Expand all";
-    toggleGroups.dataset.action = allOpen ? "collapse" : "expand";
-    toggleGroups.querySelector("[aria-hidden]").textContent = allOpen ? "⊟" : "⊞";
-    toggleGroups.querySelector(".group-toggle-label").textContent = label;
-    toggleGroups.setAttribute("aria-label", `${label} pattern groups`);
-    toggleGroups.disabled = groups.length === 0;
-  }
+    const heading = document.createElement("span");
+    heading.className = "group-nav-heading";
+    heading.textContent = "Explore";
 
-  function setAllGroups(open) {
-    list.querySelectorAll(".pattern-group").forEach((group) => {
-      group.open = open;
-      groupState.set(group.dataset.group, open);
+    const link = (key, label, count, onClick, current) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `group-navlink${current ? " active" : ""}`;
+      button.setAttribute("aria-current", current ? "true" : "false");
+      const text = document.createElement("span");
+      text.textContent = label;
+      const badge = document.createElement("small");
+      badge.textContent = String(count);
+      button.append(text, badge);
+      button.addEventListener("click", onClick);
+      return button;
+    };
+
+    const rows = [heading, link("all", "All patterns", patterns.length, () => {
+      $("pattern-search").value = "";
+      applyFilters({ group: "all", topology: "all", search: "" }, { home: true });
+    }, !selected && active === "all" && !needle)];
+
+    GROUPS.forEach((group) => {
+      const items = visible.filter((pattern) => patternGroupKey(pattern) === group.key);
+      const total = patterns.filter((pattern) => patternGroupKey(pattern) === group.key).length;
+      // A search reveals every group that still has a hit; otherwise only the
+      // group being read is unfolded.
+      const unfold = needle ? items.length > 0 : group.key === active;
+      if (needle && !items.length) return;
+      const item = document.createElement("div");
+      item.className = `group-nav-item${unfold ? " open" : ""}`;
+      item.append(link(group.key, group.label, needle ? items.length : total,
+        () => applyFilters({ group: group.key }, { home: true }), group.key === active));
+      if (unfold) {
+        const options = document.createElement("div");
+        options.className = "pattern-options";
+        items.forEach((pattern) => options.append(patternOption(pattern)));
+        item.append(options);
+      }
+      rows.push(item);
     });
-    updateGroupToggle();
+    nav.replaceChildren(...rows);
   }
 
   // ===================== PATTERN DETAIL: trade-offs + diagram zoom =====================
@@ -627,6 +717,16 @@
     updateModalZoomControl();
   }
 
+  // A wide, shallow diagram (the schematic view especially) is scaled to the canvas
+  // width and then leaves the rest of the canvas empty. Centre it vertically so
+  // the empty space sits above and below rather than all below.
+  function centreIfShorter(target) {
+    requestAnimationFrame(() => {
+      const svg = target.querySelector("svg");
+      target.classList.toggle("fits-height", Boolean(svg) && svg.clientHeight < target.clientHeight);
+    });
+  }
+
   function resetDiagramZoom() {
     diagramZoom = 1;
     canvas.scrollTo({ left: 0, top: 0 });
@@ -635,6 +735,7 @@
       svg.style.width = "100%";
       svg.style.marginInline = "0";
     }
+    centreIfShorter(canvas);
     updateZoomControl(Boolean(svg));
   }
 
@@ -643,6 +744,7 @@
     modalCanvas.scrollTo({ left: 0, top: 0 });
     const svg = modalCanvas.querySelector("svg");
     if (svg) { svg.style.width = "100%"; svg.style.marginInline = "0"; }
+    centreIfShorter(modalCanvas);
     updateModalZoomControl();
   }
 
@@ -695,30 +797,39 @@
 
   // The panel and the expanded modal carry the same switch, driven by the one
   // `architectureView` state, so switching in either place keeps them in step.
+  const VIEW_TITLES = {
+    logical: "Resource flow", schematic: "Resource diagram", physical: "Container topology"
+  };
+
   function updateViewToggle() {
     const physical = architectureView === "physical";
     const available = physicalAvailable();
-    // The switch appears only where both views exist: a pattern that is not
-    // running has no containers to draw, so a disabled button would be noise.
-    [["architecture-view", "view-logical", "view-physical", "flow-legend"],
-     ["modal-architecture-view", "modal-view-logical", "modal-view-physical", "modal-flow-legend"]]
-      .forEach(([group, logicalId, physicalId, legendId]) => {
+    // Logical and schematic are always offered. The physical button appears only
+    // where it exists: a pattern that is not running has no containers to draw,
+    // so a disabled button would be noise.
+    [["architecture-view", "view", "flow-legend"],
+     ["modal-architecture-view", "modal-view", "modal-flow-legend"]]
+      .forEach(([group, prefix, legendId]) => {
         const container = $(group);
         if (!container) return;
-        container.hidden = !available;
-        $(logicalId).classList.toggle("active", !physical);
-        $(physicalId).classList.toggle("active", physical);
-        $(logicalId).setAttribute("aria-pressed", String(!physical));
-        $(physicalId).setAttribute("aria-pressed", String(physical));
+        container.hidden = false;
+        ["logical", "schematic", "physical"].forEach((view) => {
+          const button = $(`${prefix}-${view}`);
+          if (!button) return;
+          button.hidden = view === "physical" && !available;
+          button.classList.toggle("active", view === architectureView);
+          button.setAttribute("aria-pressed", String(view === architectureView));
+        });
         if ($(legendId)) $(legendId).hidden = physical;
       });
-    $("architecture-title").textContent = physical ? "Container topology" : "Resource flow";
+    $("architecture-title").textContent = VIEW_TITLES[architectureView];
     if (diagramModal.open) $("diagram-modal-title").textContent = modalTitle();
   }
 
   function modalTitle() {
     if (!selected) return "Resource flow";
-    return architectureView === "physical" ? `${selected.title} · containers` : selected.title;
+    if (architectureView === "physical") return `${selected.title} · containers`;
+    return architectureView === "schematic" ? `${selected.title} · diagram` : selected.title;
   }
 
   // The modal shows a clone of whatever the panel currently holds, so a view
@@ -737,7 +848,8 @@
   function renderArchitecture() {
     updateViewToggle();
     if (architectureView === "physical") { renderPhysical(); return; }
-    if (selected?.graph) canvas.innerHTML = PE.diagram.render(selected, { inspectable: canInspectSelectedPattern() });
+    const draw = architectureView === "schematic" ? PE.diagram.renderSchematic : PE.diagram.render;
+    if (selected?.graph) canvas.innerHTML = draw(selected, { inspectable: canInspectSelectedPattern() });
     else canvas.innerHTML = canvasMessage("Architecture pending", "This pattern has not declared a compact resource graph yet.");
     resetDiagramZoom();
     $("download-svg").disabled = !selected?.graph;
@@ -748,6 +860,13 @@
     if (view === "physical" && !physicalAvailable()) return;
     if (view === architectureView) return;
     architectureView = view;
+    // Which drawing of the graph the reader prefers is a browser-local setting,
+    // like the diagram's placement. Physical is a per-session step down into the
+    // containers, so it is never remembered.
+    if (GRAPH_VIEWS.includes(view)) {
+      graphView = view;
+      try { localStorage.setItem(DIAGRAM_VIEW_KEY, view); } catch (_error) { /* private mode */ }
+    }
     renderArchitecture();
   }
 
@@ -758,7 +877,7 @@
   function syncArchitecture() {
     if (!selected || $("pattern-detail").hidden) return;
     if (architectureView === "physical" && !physicalAvailable()) {
-      architectureView = "logical";
+      architectureView = graphView;
       renderArchitecture();
       return;
     }
@@ -773,10 +892,10 @@
     else updateViewToggle();
   }
 
-  $("view-logical").addEventListener("click", () => setArchitectureView("logical"));
-  $("view-physical").addEventListener("click", () => setArchitectureView("physical"));
-  $("modal-view-logical").addEventListener("click", () => setArchitectureView("logical"));
-  $("modal-view-physical").addEventListener("click", () => setArchitectureView("physical"));
+  ["logical", "schematic", "physical"].forEach((view) => {
+    ["view", "modal-view"].forEach((prefix) =>
+      $(`${prefix}-${view}`)?.addEventListener("click", () => setArchitectureView(view)));
+  });
 
   // ===================== DIAGRAM PLACEMENT & COLLAPSE =====================
   // Both are browser-local viewer preferences (localStorage), not per-pattern
@@ -825,13 +944,26 @@
   }
 
   // ===================== ROUTING & PATTERN SELECTION (detail view) =====================
+  // The whole catalog state is the route, so a link carries the group, the
+  // topology, the query and the open pattern together.
   function updateRoute(slug, replace = false) {
     const url = new URL(window.location.href);
-    if (slug) url.searchParams.set("pattern", slug);
-    else url.searchParams.delete("pattern");
-    const method = replace ? "replaceState" : "pushState";
-    history[method]({}, "", url);
+    const set = (key, value, blank) => {
+      if (value && value !== blank) url.searchParams.set(key, value);
+      else url.searchParams.delete(key);
+    };
+    set("pattern", slug, "");
+    set("group", catalogFilters.group, "all");
+    set("topology", catalogFilters.topology, "all");
+    set("q", catalogFilters.search.trim(), "");
+    if (url.href === window.location.href) return;
+    // Leaving the catalog for a pattern: remember where the reader was, so the
+    // back button returns to the same scroll position and not to the top.
+    if (slug && !selectedSlugInRoute()) history.replaceState({ scroll: window.scrollY }, "");
+    history[replace ? "replaceState" : "pushState"]({}, "", url);
   }
+
+  const selectedSlugInRoute = () => new URL(window.location.href).searchParams.get("pattern") || "";
 
   function showCatalogHome(updateUrl = true) {
     if (resourceInspector.open) resourceInspector.close();
@@ -841,9 +973,9 @@
     $("catalog-home").hidden = false;
     $("pattern-detail").hidden = true;
     document.title = "ClickHouse Pattern Explorer";
-    if (updateUrl) updateRoute(null);
+    if (updateUrl) updateRoute("");
     renderCatalogHome();
-    renderList(search.value);
+    renderSidebar();
     session.renderSession();
   }
 
@@ -904,20 +1036,24 @@
     $("flow-legend").innerHTML = legendHtml;
     const modalLegend = $("modal-flow-legend");
     if (modalLegend) modalLegend.innerHTML = legendHtml;
-    // Each pattern opens on its logical diagram; the physical one is a
-    // deliberate, server-backed step down into the container wiring.
-    architectureView = "logical";
+    // Each pattern opens on the reader's preferred drawing of the graph; the
+    // physical view is a deliberate, server-backed step down into the wiring.
+    architectureView = graphView;
     renderArchitecture();
     if (updateUrl) updateRoute(selected.slug);
-    renderList(search.value);
+    renderSidebar();
     session.renderSession();
     window.scrollTo(0, 0);
   }
 
-  search.addEventListener("input", () => renderList(search.value));
-  $("catalog-search").addEventListener("input", (event) => {
-    catalogFilters.search = event.target.value.trim().toLowerCase();
-    renderCatalogHome();
+  // One search box for the whole catalog. Typing replaces the history entry
+  // rather than pushing one per keystroke, and restores the caret across the
+  // re-render.
+  search.addEventListener("input", (event) => {
+    const caret = event.target.selectionStart;
+    applyFilters({ search: event.target.value }, { replace: true, home: true });
+    search.focus();
+    try { search.setSelectionRange(caret, caret); } catch (_error) { /* unsupported input type */ }
   });
   $("show-catalog-home").addEventListener("click", () => showCatalogHome());
   // "Read more" expands and hides itself; the collapse control ("Read less")
@@ -936,12 +1072,16 @@
   $("clone-modal")?.addEventListener("click", (event) => {
     if (event.target === $("clone-modal")) $("clone-modal").close();
   });
-  window.addEventListener("popstate", () => {
-    const slug = new URL(window.location.href).searchParams.get("pattern");
-    if (slug) selectPattern(slug, false);
-    else showCatalogHome(false);
+  window.addEventListener("popstate", (event) => {
+    const route = readRoute();
+    catalogFilters = { group: route.group, topology: route.topology, search: route.search };
+    search.value = route.search;
+    if (route.pattern) { selectPattern(route.pattern, false); return; }
+    showCatalogHome(false);
+    // Coming back from a pattern: land where the reader left the catalog.
+    const scroll = event.state?.scroll;
+    if (typeof scroll === "number") requestAnimationFrame(() => window.scrollTo(0, scroll));
   });
-  toggleGroups.addEventListener("click", () => setAllGroups(toggleGroups.dataset.action === "expand"));
   $("zoom-out").addEventListener("click", () => setDiagramZoom(diagramZoom - ZOOM_STEP));
   $("zoom-reset").addEventListener("click", resetDiagramZoom);
   $("zoom-in").addEventListener("click", () => setDiagramZoom(diagramZoom + ZOOM_STEP));
@@ -1102,10 +1242,8 @@
     all.textContent = "All patterns";
     // "All patterns" means unfiltered: reset any group/topology/search filtering.
     all.addEventListener("click", () => {
-      catalogFilters = { group: "all", topology: "all", search: "" };
-      const searchInput = $("catalog-search");
-      if (searchInput) searchInput.value = "";
-      showCatalogHome();
+      $("pattern-search").value = "";
+      applyFilters({ group: "all", topology: "all", search: "" }, { home: true });
     });
 
     // The group is the emphasised crumb, and clicking it returns to the catalog
@@ -1115,8 +1253,7 @@
     group.className = "crumb-link crumb-group";
     group.textContent = groupLabel;
     group.addEventListener("click", () => {
-      catalogFilters.group = groupKey;
-      showCatalogHome();
+      applyFilters({ group: groupKey }, { home: true });
       $("catalog-home")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
 
@@ -1257,7 +1394,8 @@
     const exportedSvg = svg.cloneNode(true);
     exportedSvg.removeAttribute("style");
     const blob = new Blob([new XMLSerializer().serializeToString(exportedSvg)], { type: "image/svg+xml" });
-    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `${selected.slug}.svg`; link.click();
+    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); const suffix = { logical: "", schematic: "-diagram", physical: "-containers" }[architectureView] || "";
+    link.download = `${selected.slug}${suffix}.svg`; link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   }
   $("download-svg").addEventListener("click", () => downloadDiagramSvg(canvas.querySelector("svg")));
@@ -1270,7 +1408,7 @@
     read() { try { return JSON.parse(localStorage.getItem("pe-theme")) || {}; } catch { return {}; } },
     write(theme, scheme) { try { localStorage.setItem("pe-theme", JSON.stringify({ theme, scheme })); } catch { /* private mode */ } },
   };
-  let uiTheme = themeStore.read().theme || "soft";
+  let uiTheme = themeStore.read().theme || "flat";
   let uiScheme = themeStore.read().scheme || "light";
   function applyTheme() {
     document.documentElement.dataset.theme = uiTheme;
@@ -1312,7 +1450,7 @@
       applyTheme();
     }
   });
-  document.body.appendChild(themeSwitch);
+  ($("header-tools") || document.body).appendChild(themeSwitch);
   applyTheme();
 
   // ---- Collapsible sidebar: edge toggle, persisted like the theme ----
@@ -1340,7 +1478,7 @@
     getControl: () => control,
     setControl: (next) => { control = next; },
     selectPattern,
-    renderList: () => renderList(search.value),
+    renderList: renderSidebar,
     renderCatalogHome,
     canInspect: canInspectSelectedPattern,
     syncArchitecture,
@@ -1348,9 +1486,10 @@
     patternGroups: PATTERN_GROUPS,
   });
 
-  const requested = new URL(window.location.href).searchParams.get("pattern");
-  renderList();
-  if (requested) selectPattern(requested, false);
+  const route = readRoute();
+  search.value = route.search;
+  renderSidebar();
+  if (route.pattern) selectPattern(route.pattern, false);
   else showCatalogHome(false);
   session.connectControlPlane();
 })();
