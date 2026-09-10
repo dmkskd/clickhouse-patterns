@@ -564,6 +564,14 @@ window.PE.diagram = (() => {
       ? `<g class="note-badge" aria-hidden="true"><circle cx="${x + T.W - 15}" cy="${y + h - 15}" r="7.5"/>`
         + `<text x="${x + T.W - 15}" y="${y + h - 11.5}" text-anchor="middle">i</text></g>`
       : "";
+    // Without a mark, a node that can be opened looks exactly like one that
+    // cannot; the magnifier says the live definition and rows are behind it.
+    const inspectX = x + T.W - (note ? 37 : 15);
+    const inspectBadge = nodeInspectable
+      ? `<g class="inspect-badge" aria-hidden="true"><circle cx="${inspectX}" cy="${y + h - 15}" r="8"/>`
+        + `<g transform="translate(${inspectX - 4.5} ${y + h - 19.5})" fill="none" stroke-width="1.5" stroke-linecap="round">`
+        + `<circle cx="3.6" cy="3.6" r="3.1"/><path d="M6 6 8.8 8.8"/></g></g>`
+      : "";
     return `<g class="t-node resource${nodeInspectable ? " inspectable-resource" : ""}${note ? " has-note" : ""}"`
       + ` id="schematic-${esc(resource.key)}"`
       + `${readable ? ` data-readable-resource-key="${esc(resource.key)}"` : ""}`
@@ -576,7 +584,7 @@ window.PE.diagram = (() => {
       + schematicMotif(shape, x, y, h, color, resource.kind)
       + `<text x="${x + 16}" y="${y + 22}" class="t-kind" fill="${color}">${esc(kind.toUpperCase())}</text>`
       + `<text x="${x + 16}" y="${y + 44}" class="t-name">${esc(clip(displayName, 21))}</text>`
-      + detailLines + scopeTag + noteBadge
+      + detailLines + scopeTag + inspectBadge + noteBadge
       + `</g>`;
   }
 

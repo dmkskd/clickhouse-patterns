@@ -362,3 +362,17 @@ def test_resource_endpoint_requires_token(explorer_server, monkeypatch):
     request.add_header("X-Explorer-Token", server.token)
     with urlopen(request) as response:
         assert json.loads(response.read()) == payload
+
+def test_materialized_view_target_is_named_for_the_browser():
+    """A `TO`-form MV stores nothing: the reader names the table its columns and
+    rows actually come from, so the browser does not present them as the view's."""
+    from pattern_explorer.server.resource_readers import _materialized_view_target
+
+    create = (
+        "CREATE MATERIALIZED VIEW test.orders_transform_mv TO test.orders_transformed "
+        "(`id` Int32) AS SELECT id FROM test.orders"
+    )
+    assert _materialized_view_target("MaterializedView", create) == "test.orders_transformed"
+    assert _materialized_view_target("MaterializedView", "CREATE MATERIALIZED VIEW v ENGINE = MergeTree AS SELECT 1") is None
+    assert _materialized_view_target("MergeTree", create) is None
+

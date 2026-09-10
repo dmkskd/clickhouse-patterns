@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -16,6 +17,25 @@ SAMPLE_LIMIT = 20
 OBJECT_LIMIT = 100
 OBJECT_PREVIEW_BYTES = 8 * 1024 * 1024
 
+
+
+_MV_TARGET = re.compile(
+    r"\bTO\s+((?:`[^`]+`|\w+)(?:\.(?:`[^`]+`|\w+))?)",
+    re.IGNORECASE,
+)
+
+
+def _materialized_view_target(engine: str, create_statement: str) -> str | None:
+    """The table a `TO`-form materialized view writes into.
+
+    A materialized view stores nothing itself: `system.columns` and a `SELECT`
+    against the view both resolve to this table, so the browser has to name it
+    rather than present those rows as the view's own.
+    """
+    if engine.lower() != "materializedview":
+        return None
+    match = _MV_TARGET.search(create_statement or "")
+    return match.group(1).replace("`", "") if match else None
 
 class ResourceReader(Protocol):
     """A bounded, read-only browser for one or more graph resource kinds."""
@@ -136,6 +156,7 @@ class ClickHouseReader:
             "type": "clickhouse-table",
             "resource": {"key": resource.key, "kind": resource.kind, "declared_name": resource.name},
             "database": database, "table": table, "engine": engine, "node": node,
+            "target": _materialized_view_target(engine, create_statement),
             "create_statement": create_statement, "columns": columns, "sample": sample,
             "sample_error": sample_error, "sample_disabled": sample_disabled,
         }

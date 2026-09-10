@@ -124,7 +124,7 @@ window.PE.util = (() => {
         + ".t-boundary-label{fill:#7580a2;font-size:10px;letter-spacing:1.5px}"
         + ".t-legend{fill:#79839f;font-size:10px}.t-legend-mark{stroke:#8f9ab8;stroke-opacity:.8;fill:#8f9ab8;fill-opacity:.16}"
         + ".t-scope{fill:#c4cce1;font-size:9px;font-weight:700}"
-        + ".note-badge circle{fill:#161b2e;stroke:#7580a2;stroke-width:1}.note-badge text{fill:#c4cce1;font-size:9px;font-weight:700}.has-note:hover .note-badge circle{fill:#233056;stroke:#aab4d6}"
+        + ".inspect-badge circle{fill:#161b2e;stroke:#7f8db0;stroke-width:1}.inspect-badge g{stroke:#7f8db0}.inspectable-resource:hover .inspect-badge circle{fill:#233056;stroke:#aab4d6}.inspectable-resource:hover .inspect-badge g{stroke:#aab4d6}.note-badge circle{fill:#161b2e;stroke:#7580a2;stroke-width:1}.note-badge text{fill:#c4cce1;font-size:9px;font-weight:700}.has-note:hover .note-badge circle{fill:#233056;stroke:#aab4d6}"
     },
     light: {
       nodeBase: "#f2f4f8",
@@ -139,7 +139,7 @@ window.PE.util = (() => {
         + ".t-boundary-label{fill:#6b7280;font-size:10px;letter-spacing:1.5px}"
         + ".t-legend{fill:#6b7280;font-size:10px}.t-legend-mark{stroke:#6b7280;stroke-opacity:.85;fill:#6b7280;fill-opacity:.14}"
         + ".t-scope{fill:#454e5d;font-size:9px;font-weight:700}"
-        + ".note-badge circle{fill:#ffffff;stroke:#8a93a8;stroke-width:1}.note-badge text{fill:#5a6478;font-size:9px;font-weight:700}.has-note:hover .note-badge circle{fill:#fdf6e7;stroke:#c07a12}"
+        + ".inspect-badge circle{fill:#ffffff;stroke:#7b869b;stroke-width:1}.inspect-badge g{stroke:#7b869b}.inspectable-resource:hover .inspect-badge circle{fill:#fdf6e7;stroke:#c07a12}.inspectable-resource:hover .inspect-badge g{stroke:#c07a12}.note-badge circle{fill:#ffffff;stroke:#8a93a8;stroke-width:1}.note-badge text{fill:#5a6478;font-size:9px;font-weight:700}.has-note:hover .note-badge circle{fill:#fdf6e7;stroke:#c07a12}"
     }
   };
 

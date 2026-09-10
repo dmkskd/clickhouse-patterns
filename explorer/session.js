@@ -45,12 +45,12 @@ window.PE.session = (() => {
       $(id).hidden = !visible;
     }
 
-    // The session cluster shares the diagram panel's bottom row with the
-    // definition tabs; the row hides only when neither side has content
-    // (static mode and a pattern without definition files). app.js applies
-    // the same rule when it renders the tabs.
+    // The session moved to its own bar under the top bar; the diagram panel's
+    // bottom row now carries the flow legend and the definition tabs, and hides
+    // only when it has neither.
     function syncControlStrip() {
-      $("control-strip").hidden = $("session-panel").hidden && !$("definition-tabs").childElementCount;
+      $("control-strip").hidden =
+        !$("definition-tabs").childElementCount && !$("flow-legend").childElementCount;
     }
 
     function renderExplorerMode() {
@@ -110,53 +110,7 @@ window.PE.session = (() => {
       return formatDuration(ended - eventStarted);
     }
 
-    // On the catalog home, a running pattern shows as a chip in the hero (top right).
-    // Reuses the real Stop/Open actions; the session control row lives inside the
-    // pattern detail view, which the home never shows.
-    function renderHeroSession() {
-      const el = $("hero-session");
-      if (!el) return;
-      const control = ctx.getControl();
-      const shell = document.querySelector(".app-shell");
-      const home = shell.classList.contains("home-view");
-      const snap = control.snapshot;
-      const active = snap?.session;
-      const busy = snap?.operation?.status === "running";
-      const starting = busy || active?.phase === "starting";
-      // The slot carries a running session and nothing else. The static-mode
-      // "browse only" hint used to live here too, but with no hero copy around
-      // it it read as an empty bar above the page title, and both things it said
-      // are already on the page: the repo link in the top bar, the catalog's
-      // status in the sidebar note.
-      const show = home && control.interactive && Boolean(active) && active.phase !== "failed";
-      el.hidden = !show;
-      if (!show) {
-        el.replaceChildren();
-        return;
-      }
-      const activePattern = ctx.patterns.find((pattern) => pattern.slug === active.slug);
-      const activeGroup = ctx.patternGroups[activePattern?.group];
-      const groupPrefix = activeGroup ? `${esc(activeGroup.label)} / ` : "";
-      const titleText = esc(activePattern ? displayTitle(activePattern) : active.slug);
-      el.classList.toggle("starting", starting);
-      el.innerHTML =
-        `<div class="hero-session-row">` +
-          `<span class="hero-session-dot"></span>` +
-          `<div class="hero-session-text">` +
-            `<span class="hero-session-label">${starting ? "Starting pattern" : "Running pattern"}</span>` +
-            `<span class="hero-session-title"><span class="session-group">${groupPrefix}</span>${titleText}</span>` +
-          `</div>` +
-        `</div>` +
-        `<div class="hero-session-actions">` +
-          `<button type="button" class="hero-open">Open pattern</button>` +
-          (starting ? "" : `<button type="button" class="hero-stop danger">Stop session</button>`) +
-        `</div>`;
-      el.querySelector(".hero-open").onclick = () => ctx.selectPattern(active.slug);
-      el.querySelector(".hero-stop")?.addEventListener("click", () => $("stop-session").click());
-    }
-
     function renderSession() {
-      renderHeroSession();
       const panel = $("session-panel");
       const control = ctx.getControl();
       const selected = ctx.getSelected();
@@ -395,6 +349,7 @@ window.PE.session = (() => {
       $("resource-inspector-subtitle").textContent = payload.node
         ? `${payload.engine} · node ${payload.node}`
         : payload.engine;
+      if (payload.target) $("resource-inspector-subtitle").textContent += ` → ${payload.target}`;
       const columnRows = payload.columns.map((column) => [
         column.name,
         column.type,
@@ -403,20 +358,27 @@ window.PE.session = (() => {
           : ""
       ]);
       const sample = payload.sample;
+      // Definition first — it is the object itself — then its columns, then the
+      // rows in it. The whole dialog is live, so the rows do not repeat the word.
+      // A materialized view stores nothing: both the columns and the rows below
+      // belong to the table it writes into, and the headings say so.
+      const target = payload.target;
+      const columnsHeading = target ? `Columns in ${esc(target)}` : "Columns";
+      const contentsHeading = target ? `Rows in ${esc(target)}` : "Contents";
       resourceInspectorBody.innerHTML = `
-        <section class="resource-inspector-section">
-          <h3>Columns</h3>
-          ${window.PE.util.dataTable(["Column", "Type", "Default"], columnRows)}
-        </section>
         <section class="resource-inspector-section">
           <h3>Table definition</h3>
           <pre>${esc(payload.create_statement)}</pre>
         </section>
         <section class="resource-inspector-section">
-          <h3>Live contents</h3>
+          <h3>${columnsHeading}</h3>
+          ${window.PE.util.dataTable(["Column", "Type", "Default"], columnRows)}
+        </section>
+        <section class="resource-inspector-section">
+          <h3>${contentsHeading}</h3>
           ${payload.sample_disabled ? `<p class="resource-inspector-note">${esc(payload.sample_disabled)}</p>` : ""}
           ${payload.sample_error ? `<p class="resource-inspector-note">The definition loaded, but this resource could not be sampled: ${esc(payload.sample_error)}</p>` : ""}
-          ${sample ? `<p class="resource-sample-meta">Raw live sample · up to ${sample.limit} rows</p>${window.PE.util.dataTable(sample.columns, sample.rows)}` : ""}
+          ${sample ? `<p class="resource-sample-meta">Up to ${sample.limit} rows</p>${window.PE.util.dataTable(sample.columns, sample.rows)}` : ""}
         </section>`;
     }
 

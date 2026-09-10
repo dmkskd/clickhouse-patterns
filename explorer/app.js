@@ -311,7 +311,7 @@
   };
 
   // Matches .group-intro-preview.collapsed in app.css.
-  const COLLAPSED_INTRO_HEIGHT = 190;
+  const COLLAPSED_INTRO_HEIGHT = 138;
 
   function renderIntro(text) {
     // group.yaml is trusted authoring, so allow inline [label](url) markdown links.
@@ -469,10 +469,6 @@
     lede.textContent = !query && group ? group.description || "" : "";
     lede.hidden = !lede.textContent;
     renderGroupIntro(query ? null : group);
-    // Reading a group or a search result is being inside the catalog, so the
-    // landing hero folds away and the page starts on its own title. Anything
-    // the hero still carries (a running session) stays visible.
-    document.querySelector(".catalog-hero")?.classList.toggle("compact", anyFilterSet());
     $("catalog-results-summary").textContent = `${visible.length} ${visible.length === 1 ? "pattern" : "patterns"}`;
     const grid = $("catalog-grid");
     if (!visible.length) {
@@ -653,16 +649,9 @@
   // control that asked for it.
   const definitionModal = $("definition-modal");
   const DEFINITION_TABS = [
-    ["manifest", "Definition"], ["structure", "Structure"], ["load", "Loader"],
-    ["verify", "Verification"], ["config", "Configuration"]
+    ["manifest", "Manifest"], ["config", "Configuration"], ["structure", "DDL"],
+    ["load", "Loader"], ["verify", "Verification"]
   ];
-
-  function definitionTitle(pattern, key) {
-    const def = pattern.definition || {};
-    if (key === "verify") return def.verify.sqlFile;
-    if (key === "config") return `${def.config.length} configuration ${def.config.length === 1 ? "file" : "files"}`;
-    return def[key].file;
-  }
 
   function showDefinition(pattern, key) {
     const def = pattern.definition || {};
@@ -670,7 +659,7 @@
     // Clicking the tab that is already open closes the dialog again.
     if (definitionModal.open && definitionModal.dataset.key === key) { definitionModal.close(); return; }
     definitionModal.dataset.key = key;
-    $("definition-modal-title").textContent = definitionTitle(pattern, key);
+    $("definition-modal-title").textContent = pattern.title;
     if (key === "verify") {
       const v = def.verify;
       body.className = "definition-body verify";
@@ -703,6 +692,9 @@
     document.querySelectorAll("#definition-tabs button").forEach((b) =>
       b.classList.toggle("active", b.dataset.def === key));
     if (!definitionModal.open) definitionModal.showModal();
+    // showModal() autofocuses the first control, which lands a focus ring on the
+    // first tab. The file itself is the thing being read, so it takes focus.
+    body.focus({ preventScroll: true });
   }
 
   function renderDefinition(pattern) {
@@ -719,9 +711,8 @@
     if (definitionModal.open) definitionModal.close();
     delete definitionModal.dataset.key;
     $("definition-body").innerHTML = "";
-    // The bottom row hides only when neither side has content (static mode and
-    // no definition files); session.js applies the same rule on its renders.
-    $("control-strip").hidden = $("session-panel").hidden && !tabs.length;
+    // The row carries the legend and the tabs; it hides only with neither.
+    $("control-strip").hidden = !tabs.length && !$("flow-legend").childElementCount;
   }
 
   function updateZoomControl(hasDiagram = Boolean(canvas.querySelector("svg"))) {
