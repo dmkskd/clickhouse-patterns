@@ -300,6 +300,8 @@ button, input { font: inherit; }
 .clone-guide-link svg { flex: 0 0 auto; }
 [data-theme="soft"] .clone-guide-link { border: 0; background: var(--bg); box-shadow: var(--raised-sm); color: var(--muted); }
 [data-theme="soft"] .clone-guide-link:hover { color: var(--accent); }
+/* The action keeps the copy's left edge and closes the block. */
+.group-intro-body p.group-intro-action { margin: 16px 0 0; }
 .group-intro-toggle { margin-top: 12px; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .group-intro-toggle:hover { color: var(--text); }
 .catalog-results-summary { padding: 16px 2px 11px; color: #687392; font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .09em; text-transform: uppercase; }

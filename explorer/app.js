@@ -305,9 +305,8 @@
     title: "All patterns",
     description: "In ClickHouse, ingestion, retention, and replication are as complex as data modelling and query design.",
     intro: "Compare runnable patterns, understand their trade-offs, and adapt them for your own systems.\n\n"
-      + "Clone a pattern as a starting point, then use the agentic skills to define its flow and its Docker "
-      + "test infrastructure. [View the cloning guide](https://github.com/dmkskd/clickhouse-patterns#create-your-own-patterns)\n\n"
-      + "This catalog is a work in progress. Check each pattern's status before adapting it."
+      + "This catalog is a work in progress. Check each pattern's status before adapting it.\n\n"
+      + "[How to run patterns locally](https://github.com/dmkskd/clickhouse-patterns#run-patterns-locally)"
   };
 
   // Matches .group-intro-preview.collapsed in app.css.
@@ -423,6 +422,12 @@
     slot.querySelectorAll('a[href*="github.com/dmkskd/clickhouse-patterns"]').forEach((link) => {
       link.className = "clone-guide-link";
       link.insertAdjacentHTML("afterbegin", GITHUB_MARK);
+      // A paragraph that is only this link is a control, not prose: it moves to
+      // the top-right of the intro so the copy keeps one straight left edge.
+      const para = link.closest("p");
+      if (para && para.childElementCount === 1 && para.textContent.trim() === link.textContent.trim()) {
+        para.classList.add("group-intro-action");
+      }
     });
     attachShowMore(slot.querySelector(".group-intro-preview"), info.key);
   }
