@@ -303,8 +303,9 @@
   const HOME_GROUP = {
     key: "all",
     title: "All patterns",
-    description: "In ClickHouse, ingestion, retention, and replication are as complex as data modelling and query design.",
-    intro: "Compare runnable patterns, understand their trade-offs, and adapt them for your own systems.\n\n"
+    description: "In ClickHouse, architecting ingestion, retention, and replication is as challenging as data modelling and query design.",
+    intro: "The curated patterns help to understand architectural decisions and their trade-offs.\n\n"
+      + "Patterns can be run locally to see how each architecture behaves in practice, then cloned and edited to validate a new idea or a planned refactoring.\n\n"
       + "This catalog is a work in progress. Check each pattern's status before adapting it.\n\n"
       + "[How to run patterns locally](https://github.com/dmkskd/clickhouse-patterns#run-patterns-locally)"
   };
@@ -429,7 +430,11 @@
         para.classList.add("group-intro-action");
       }
     });
-    attachShowMore(slot.querySelector(".group-intro-preview"), info.key);
+    const preview = slot.querySelector(".group-intro-preview");
+    attachShowMore(preview, info.key);
+    // The repository link is the page's call to action, so it stays outside the
+    // collapsible preview instead of hiding behind Show more.
+    slot.querySelectorAll(".group-intro-preview p.group-intro-action").forEach((para) => slot.append(para));
   }
 
   // External reading and related groups render below the pattern cards, not
