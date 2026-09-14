@@ -18,8 +18,8 @@ intro: |-
   The trade-off is that every query runs against the OLTP database.
 
   **Refreshable MV pull** reruns the whole `SELECT` on a schedule and atomically
-  replaces a local MergeTree. No earlier version of a row survives to be
-  reconciled, so reads need no `FINAL`. The trade-off is that the work scales
+  replaces a local MergeTree. Each refresh leaves one version of each row, so
+  reads are plain `SELECT`s. The trade-off is that the work scales
   with table size rather than with how much actually changed.
 
   **The CDC patterns** read the source's replication log and apply each change
@@ -34,7 +34,7 @@ intro: |-
   - **Managed by ClickHouse.** [ClickPipes](https://clickhouse.com/docs/integrations/clickpipes/postgres) is ClickHouse Cloud's Postgres and MySQL CDC, built on [PeerDB](https://docs.peerdb.io).
   - **Self-hosted.** [Debezium](https://debezium.io) with Kafka is the self-hosted equivalent, and the broker lets other consumers read the same stream.
   - **Managed by a third party.** A very active space, commercial and open source, where approaches differ: scheduled extraction versus log-based replication, deduplication and joins in the pipeline rather than in ClickHouse, delivery guarantees, schema-change handling.
-  - **Built into ClickHouse.** [MaterializedPostgreSQL](https://clickhouse.com/docs/engines/database-engines/materialized-postgresql) needs no external component, but has been experimental since 2021 and is absent from Cloud. Its MySQL counterpart was removed.
+  - **Built into ClickHouse.** [MaterializedPostgreSQL](https://clickhouse.com/docs/engines/database-engines/materialized-postgresql) is a server-side database engine, but has been experimental since 2021 and is absent from Cloud. Its MySQL counterpart was removed.
 
   The patterns here run locally and show the mechanism at work, which is what
   makes the trade-offs above visible; a managed service hides the same mechanism

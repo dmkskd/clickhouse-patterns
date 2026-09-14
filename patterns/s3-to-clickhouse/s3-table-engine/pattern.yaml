@@ -30,7 +30,7 @@ metadata:
     benefits:
       - A table name stands in for a bucket path, so queries do not repeat credentials, format, and URL.
       - Objects already in the bucket are visible as soon as the table is declared; there is no load step and nothing to keep in sync.
-      - An S3 engine table also writes, so exporting query results to S3 needs no external tool.
+      - An S3 engine table also writes, so `INSERT INTO ... SELECT` writes query results directly into the bucket.
     limitations:
       - No indexes, no ALTER, no updates or deletes, and every query re-reads and re-parses the objects.
       - A path with a glob is read-only, so covering a prefix and writing to it needs two table declarations.
