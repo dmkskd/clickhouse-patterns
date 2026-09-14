@@ -203,8 +203,16 @@ window.PE.diagram = (() => {
     return `<text x="${x}" y="${startY}" text-anchor="middle" class="edge-label">${spans}</text>`;
   }
 
+  // Every database in the diagram is the same cylinder, whatever the engine:
+  // one shape, and the label beside it does the identifying. For ClickHouse
+  // that is also what the trademark policy asks for — the word mark is allowed
+  // on third-party sites, the logomark is not.
+  function cylinderMark(x, y, label) {
+    return `<g transform="translate(${x} ${y})" fill="none" stroke="${palette().icon}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-label="${esc(label)}"><title>${esc(label)}</title><ellipse cx="10" cy="5" rx="7" ry="3.5"/><path d="M3 5v14c0 2 3.1 3.5 7 3.5s7-1.5 7-3.5V5M3 12c0 2 3.1 3.5 7 3.5s7-1.5 7-3.5"/></g>`;
+  }
+
   function clickHouseMark(x, y) {
-    return `<g transform="translate(${x} ${y})" fill="${palette().icon}"><rect width="4" height="26"/><rect x="7" width="4" height="26"/><rect x="14" width="4" height="26"/><rect x="21" width="4" height="26"/><rect x="28" y="9" width="4" height="8"/></g>`;
+    return cylinderMark(x, y, "ClickHouse");
   }
 
   function kafkaMark(x, y) {
@@ -212,7 +220,11 @@ window.PE.diagram = (() => {
   }
 
   function databaseToClickHouseMark(x, y) {
-    return `<g transform="translate(${x} ${y})" fill="none" stroke="${palette().icon}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-label="Database changes to ClickHouse"><title>Database changes to ClickHouse</title><ellipse cx="5" cy="5" rx="4" ry="2.2"/><path d="M1 5v11c0 1.3 1.8 2.2 4 2.2s4-.9 4-2.2V5M1 10.5c0 1.3 1.8 2.2 4 2.2s4-.9 4-2.2"/><path d="M10.5 11.5h4.5m-2-2 2 2-2 2"/><path d="M17 4v15M20.5 4v15M24 4v15M27.5 9v5" stroke-width="2.3"/></g>`;
+    // Database to database, at the scale the composite allows: the same
+    // cylinder as every other store in the set, twice, with the change stream
+    // between them.
+    const cyl = (dx) => `<g transform="translate(${dx} 0)"><ellipse cx="7" cy="4" rx="5" ry="2.5"/><path d="M2 4v10c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5V4M2 9c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5"/></g>`;
+    return `<g transform="translate(${x} ${y})" fill="none" stroke="${palette().icon}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-label="Database changes to ClickHouse"><title>Database changes to ClickHouse</title>${cyl(0)}<path d="M15 10h5m-2-2 2 2-2 2"/>${cyl(23)}</g>`;
   }
 
   function externalMark(kind, x, y, system = "") {
@@ -223,7 +235,7 @@ window.PE.diagram = (() => {
       return databaseToClickHouseMark(x, y);
     }
     if (kind === "postgres" || kind === "mysql") {
-      return `<g transform="translate(${x} ${y})" fill="none" stroke="${palette().icon}" stroke-width="1.8"><ellipse cx="10" cy="5" rx="7" ry="3.5"/><path d="M3 5v14c0 2 3.1 3.5 7 3.5s7-1.5 7-3.5V5M3 12c0 2 3.1 3.5 7 3.5s7-1.5 7-3.5"/></g>`;
+      return cylinderMark(x, y, kind === "mysql" ? "MySQL" : "Postgres");
     }
     if (kind === "minio") {
       return `<g transform="translate(${x} ${y})" fill="none" stroke="${palette().icon}" stroke-width="1.8"><path d="M3 8h20l-2 14H5zM7 8V4h12v4M8 13h10"/></g>`;
@@ -310,7 +322,7 @@ window.PE.diagram = (() => {
         let min = minCh - 92, max = maxCh + 105;
         if (leftTopics.length) min = Math.max(min, (Math.max(...leftTopics) + minCh) / 2 + 6);
         if (rightTopics.length) max = Math.min(max, (maxCh + Math.min(...rightTopics)) / 2 - 6);
-        const label = `${clickHouseMark(min+14,101)}<text x="${min+54}" y="121" class="boundary-label">CLICKHOUSE · ${esc(pattern.topology.toUpperCase())}</text>`;
+        const label = `${clickHouseMark(min+14,103)}<text x="${min+54}" y="121" class="boundary-label">CLICKHOUSE · ${esc(pattern.topology.toUpperCase())}</text>`;
         boundaries += `<g><rect x="${min}" y="85" width="${max-min}" height="${boundaryHeight}" rx="23" class="system clickhouse"/>${label}</g>`;
       });
     }
