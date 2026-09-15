@@ -659,8 +659,11 @@
   // control that asked for it.
   const definitionModal = $("definition-modal");
   const DEFINITION_TABS = [
-    ["manifest", "Manifest"], ["config", "Configuration"], ["structure", "DDL"],
-    ["load", "Loader"], ["verify", "Verification"]
+    ["manifest", "Manifest", "Manifest: YAML pattern definition"],
+    ["config", "Configuration", "Configuration: ClickHouse and service config files"],
+    ["structure", "DDL", "DDL: table and view definitions"],
+    ["load", "Loader", "Loader: data load script"],
+    ["verify", "Verification", "Verification: check query and expected output"]
   ];
 
   function showDefinition(pattern, key) {
@@ -690,11 +693,12 @@
     // The dialog carries its own copy of the tabs, so a reader can move between
     // files without closing it.
     const inModal = $("definition-modal-tabs");
-    inModal.replaceChildren(...DEFINITION_TABS.filter(([k]) => def[k]).map(([k, label]) => {
+    inModal.replaceChildren(...DEFINITION_TABS.filter(([k]) => def[k]).map(([k, label, hint]) => {
       const button = document.createElement("button");
       button.type = "button";
       button.dataset.def = k;
       button.textContent = label;
+      button.title = hint;
       button.className = k === key ? "active" : "";
       button.addEventListener("click", () => showDefinition(pattern, k));
       return button;
@@ -710,9 +714,10 @@
   function renderDefinition(pattern) {
     const def = pattern.definition || {};
     const tabs = DEFINITION_TABS.filter(([key]) => def[key]);
-    $("definition-tabs").replaceChildren(...tabs.map(([key, label]) => {
+    $("definition-tabs").replaceChildren(...tabs.map(([key, label, hint]) => {
       const b = document.createElement("button");
       b.type = "button"; b.dataset.def = key; b.textContent = label;
+      b.title = hint;
       b.addEventListener("click", () => showDefinition(pattern, key));
       return b;
     }));

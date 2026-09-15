@@ -2,7 +2,7 @@
 // behind its profiles, as returned by /api/topology. Input is that payload;
 // output is an SVG string. Holds no app state.
 //
-// The logical diagram (diagram.js) draws data flow between ClickHouse
+// The logical diagram (diagram.js) draws data flow between the pattern's
 // resources. This one draws containers, the ports they publish to the host,
 // the config files bound into them, and their startup dependencies. The two
 // graphs are deliberately different: Compose knows startup order, not queries.
