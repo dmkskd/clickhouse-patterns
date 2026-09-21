@@ -32,8 +32,8 @@ intro: |-
   built, and the choice comes down to who operates it.
 
   - **Managed by ClickHouse.** [ClickPipes](https://clickhouse.com/docs/integrations/clickpipes/postgres) is ClickHouse Cloud's Postgres and MySQL CDC, built on [PeerDB](https://docs.peerdb.io).
-  - **Self-hosted.** [Debezium](https://debezium.io) with Kafka is the self-hosted equivalent, and the broker lets other consumers read the same stream.
-  - **Managed by a third party.** A very active space, commercial and open source, where approaches differ: scheduled extraction versus log-based replication, deduplication and joins in the pipeline rather than in ClickHouse, delivery guarantees, schema-change handling.
+  - **Self-hosted.** [Debezium](https://debezium.io) with Kafka is a common option for change data capture, as other consumers can read the same stream.
+  - **Managed by a third party.** A very active space, commercial and open source, where many tools address the same ingestion problem with different approaches and trade-offs: scheduled extraction versus log-based replication, deduplication and joins in the pipeline rather than in ClickHouse, delivery guarantees, schema-change handling. The choice warrants research and a careful comparison.
   - **Built into ClickHouse.** [MaterializedPostgreSQL](https://clickhouse.com/docs/engines/database-engines/materialized-postgresql) is a server-side database engine, but has been experimental since 2021 and is absent from Cloud. Its MySQL counterpart was removed.
 
   The patterns here run locally and show the mechanism at work, which is what
