@@ -36,7 +36,7 @@ Reconstructing current state
 from a stream of changes requires a `ReplacingMergeTree`, a `_version` column to
 order competing rows, an `is_deleted` tombstone to represent a removal, and
 `FINAL` on every read to collapse them. A full replace never holds two versions
-of a row, and a row deleted in Postgres is simply absent from the next result,
+of a row, and a row deleted in Postgres is absent from the next result,
 so `verify.sql` is a plain `SELECT ... ORDER BY id`.
 
 The transformation is equally cheap, because `upper(customer)`, the

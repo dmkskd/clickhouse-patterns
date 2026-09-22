@@ -13,10 +13,11 @@ intro: |-
   - **On a schedule.** A refreshable materialized view reruns a full query and replaces its output.
 
   The following patterns are ordered by how much of the work moves off the read
-  path. The first three build OHLC candles from the same stream of market
-  data, so their results can be compared directly. The fourth revalues a
-  trading book at the latest price, an answer that changes when no row has been
-  inserted and that an insert-triggered view therefore has no way to produce.
+  path. The first three build OHLC candles (open, high, low and close price per
+  interval) from the same stream of financial market data, so their results can
+  be compared directly. The fourth revalues a trading book at the latest price,
+  an answer that changes when no row has been inserted and that an
+  insert-triggered view therefore has no way to produce.
 links:
   - label: "Materialized views in ClickHouse — benefits, limitations, and alternatives (GlassFlow)"
     url: https://www.glassflow.dev/blog/clickhouse-materialized-views

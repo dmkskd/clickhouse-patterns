@@ -15,7 +15,7 @@ pattern difficult to follow.
 |---|---|---|
 | Role | **Replication source** | **PeerDB control plane** |
 | Owned by | the operator | PeerDB |
-| Holds | `public.orders` and `public.orders_existing`, the user data | peers, mirror config, Temporal workflow history |
+| Contains | `public.orders` and `public.orders_existing` | peers, mirror config, Temporal workflow history |
 | Read by | PeerDB, through a logical replication slot | PeerDB and Temporal, as their own metadata store |
 | User rows | yes, this is the data being replicated | **never** |
 | Compose profile | `postgres` | `peerdb` |

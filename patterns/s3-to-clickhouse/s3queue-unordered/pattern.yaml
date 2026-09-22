@@ -6,7 +6,7 @@ metadata:
 
     In unordered mode it keeps the full set of processed files in Keeper, so it ingests every new file regardless of name, including one that arrives out of lexical order.
 
-    This handles writers with key-order jitter, at the cost of a tracked-file set that grows and must be bounded. The managed ClickPipes equivalent uses S3 event notifications.
+    The cost is a tracked-file set that grows and must be bounded. The managed ClickPipes equivalent uses S3 event notifications.
   graph: |-
     ingest:
       client:producer(label=file producer) -[drop files any order]-> minio:queue(bucket=clickhouse,prefix=queue/,format=Parquet,label=queue/*.parquet) -[S3Queue unordered · processed set in Keeper]-> s3queue:events_queue(label=demo.events_queue) -> mv:events_mv -> mergetree:events(label=demo.events)

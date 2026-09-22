@@ -4,7 +4,7 @@ description: Make Postgres or MySQL data available for queries in ClickHouse
 icon: database
 order: 2
 intro: |-
-  These patterns connect ClickHouse to data that lives in Postgres or MySQL,
+  These patterns connect ClickHouse to data stored in Postgres or MySQL,
   either by querying the source in place or by holding a copy in ClickHouse,
   kept in sync on a schedule or by replicating changes as they happen. Which one
   to use depends on freshness, source size, and whether the change history

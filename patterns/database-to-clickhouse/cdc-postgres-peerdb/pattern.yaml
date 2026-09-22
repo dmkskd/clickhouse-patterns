@@ -8,7 +8,7 @@ metadata:
 
     PeerDB performs no in-flight transformation. It has no per-message transform hook on the CDC path, so all shaping happens in ClickHouse, either in the target DDL or in a materialized view.
 
-    **Two Postgres instances run in this pattern, with unrelated responsibilities.** `postgres` is the replication source holding the user data. `peerdb-catalog` stores PeerDB's own metadata and Temporal's workflow history, and never holds a replicated row.
+    **Two Postgres instances run in this pattern.** `postgres` is the source database being replicated. `peerdb-catalog` stores PeerDB's own metadata and Temporal's workflow history, and takes no part in replication.
 
     Beyond ClickHouse and the source database, the stack adds nine services, because replication runs as Temporal workflows. Nothing at this three-row scale exercises what that provides.
   graph: |-

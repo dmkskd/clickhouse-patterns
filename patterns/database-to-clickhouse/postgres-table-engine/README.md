@@ -2,9 +2,9 @@
 
 Profiles: `single`, `postgres`. Driver: `ch`.
 
-Level 1 of this group. Nothing is replicated or stored and there is no pipeline
-to operate. ClickHouse holds a declaration of where the Postgres table is and
-resolves it on every read.
+Level 1 of this group. Nothing is replicated or copied and there is no pipeline
+to operate. ClickHouse stores only the connection details and the source table
+name, and queries Postgres on every read.
 
 ```text
                                     ClickHouse
