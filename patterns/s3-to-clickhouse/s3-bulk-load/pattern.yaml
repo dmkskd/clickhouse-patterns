@@ -2,9 +2,9 @@ manifest_version: 2
 metadata:
   title: Bulk load from S3 with the s3() table function
   description: |-
-    The `s3()` table function reads a single object or a set of objects matched by a glob pattern (`events/*.parquet`), so one `INSERT ... SELECT` populates a `MergeTree` table without an intermediate staging step.
+    The `s3()` table function reads a single object or a set of objects matched by a glob pattern (`events/*.parquet`). An `INSERT ... SELECT` writes those rows directly into a `MergeTree` table.
 
-    This is the documented one-line import. It appends, without deduplication and without tracking what was already loaded.
+    The import is stateless: each `INSERT` reads every object matching the glob, including any already loaded, so running it twice inserts the rows twice.
   graph: |-
     load:
       client:orchestrator(label=orchestrator) -[stage files]-> minio:files(bucket=clickhouse,prefix=events/,format=Parquet,label=events/*.parquet) -[INSERT INTO events FROM s3()]-> mergetree:events(engine=MergeTree,label=demo.events)
