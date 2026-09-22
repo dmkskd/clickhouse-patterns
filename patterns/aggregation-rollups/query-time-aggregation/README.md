@@ -38,7 +38,7 @@ pre-aggregated data.
 
 `load.py` inserts the ticks in three separate batches, so a single bucket's
 ticks are split across three parts. Because this pattern reads the raw table
-directly, that split is irrelevant, because the GROUP BY sees every row. The split
+directly, that split is irrelevant, because the GROUP BY reads every row. The split
 becomes the point in the materialized-view patterns, where the rollup is
 assembled from pre-aggregated pieces stored in those parts.
 

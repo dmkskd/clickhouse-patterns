@@ -117,7 +117,7 @@ converge.
 
 Prefer the DDL position when the change is a type or a derived column, and the
 MV position when it is a rewrite or a reshape. The
-[PeerDB pattern](../cdc-postgres-peerdb/) lands in the same place, for the same
+[PeerDB pattern](../cdc-postgres-peerdb/) reaches the same result, for the same
 reason.
 
 [postgres-refreshable-pull](../postgres-refreshable-pull/) places the same three

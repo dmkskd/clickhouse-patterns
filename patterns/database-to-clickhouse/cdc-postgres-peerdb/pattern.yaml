@@ -63,7 +63,7 @@ metadata:
   tradeoffs:
     benefits:
       - The initial load is split into row ranges along an ordered column such as an id or a timestamp, and the ranges are copied in parallel, so a failure only repeats the ranges that had not finished.
-      - Once streaming, each batch is a recorded step, so a worker that dies picks up at the next unfinished batch instead of replaying from the last saved position in the WAL.
+      - Once streaming, each batch is a recorded step, so a worker that dies resumes at the next unfinished batch instead of replaying from the last saved position in the WAL.
       - A step that fails retries on its own, with its own backoff, rather than stalling the pipeline until someone restarts it. This and the two points above all follow from running replication as Temporal workflows, whose durable execution model records each completed step.
       - Reading the WAL and writing to ClickHouse are separate steps joined by a staging table, so a slow ClickHouse merge does not back up into the Postgres replication slot.
       - Workers hold no state, so capacity is added by running more of them.

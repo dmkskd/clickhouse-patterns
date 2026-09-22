@@ -88,7 +88,7 @@ duplicated for MySQL because the decision it documents is identical.
 ## When to leave
 
 Move to [postgres-refreshable-pull](../postgres-refreshable-pull/) when the read
-load grows heavy, or when the source rows should sit in a MergeTree so they
+load grows heavy, or when the source rows should be stored in a MergeTree so they
 can be indexed, compressed, and joined cheaply. Move to
 [cdc-mysql-clickhouse](../cdc-mysql-clickhouse/) or
 [cdc-postgres-peerdb](../cdc-postgres-peerdb/) when the table is too large to

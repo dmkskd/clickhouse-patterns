@@ -40,10 +40,10 @@ of a row, and a row deleted in Postgres is absent from the next result,
 so `verify.sql` is a plain `SELECT ... ORDER BY id`.
 
 The transformation is equally cheap, because `upper(customer)`, the
-`Decimal(12, 2)` cast, and the derived `amount_band` sit in the view's `SELECT`
-and are evaluated during the refresh. The CDC patterns need a separate materialized view and an
-explicit snapshot backfill for the same result, because their rows arrive one
-change at a time.
+`Decimal(12, 2)` cast, and the derived `amount_band` are defined in the view's
+`SELECT` and are evaluated during the refresh. The CDC patterns need a separate
+materialized view and an explicit snapshot backfill for the same result, because
+their rows arrive one change at a time.
 
 ## The staleness window
 
