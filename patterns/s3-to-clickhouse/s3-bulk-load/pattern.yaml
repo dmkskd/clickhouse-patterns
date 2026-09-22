@@ -30,7 +30,7 @@ metadata:
     limitations:
       - Nothing records which files were loaded, so re-running the same INSERT appends the rows again.
       - There is no deduplication or update handling; correcting a row needs a key and ReplacingMergeTree, or reloading a clean table.
-      - It is a one-shot pull, so files that arrive later are not picked up; the S3Queue engine loads new files as they land.
+      - It is a one-shot pull, so files added later are not picked up; the S3Queue engine loads new files as they are added.
 spec:
   profiles: [single, s3]
   driver_node: ch

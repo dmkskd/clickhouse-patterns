@@ -41,7 +41,7 @@ changes flow from PostgreSQL's logical replication slot through the CDC worker
 and use the same transient stage. PeerDB then issues the ClickHouse loads;
 ClickHouse reads the named Avro objects from MinIO through its `s3()` table
 function. Snapshot queries insert directly into the destination tables. Change
-batches first land in PeerDB's mirror-wide `_peerdb_raw_two_table_mirror`
+batches are first inserted into PeerDB's mirror-wide `_peerdb_raw_two_table_mirror`
 MergeTree, then PeerDB issues target-table inserts that decode the staged CDC
 records, so ClickHouse never polls the bucket on its own.
 
@@ -128,13 +128,13 @@ PeerDB has no per-message transform hook on the CDC path. The step that writes
 the targets decodes staged Avro into columns and evaluates no user expressions.
 The uppercase, `Decimal` cast, and `amount_band` derivation in `transform.sql`
 all run inside ClickHouse, in an incremental materialized view reading
-`test.orders`, after the row has landed.
+`test.orders`, after the row has been inserted.
 
 The `orders_existing` path shapes rows without a materialized view, in the
 target's own DDL. Widening `amount` to `Int64`, using
 `LowCardinality(String)`, and declaring `MATERIALIZED amount_band` are all
 evaluated by ClickHouse at insert time, on the CDC insert itself. That is
-transformation at landing rather than after it, and it costs nothing extra.
+transformation at insert rather than after it, and it costs nothing extra.
 
 A Kafka Connect deployment differs structurally, because an SMT can rewrite each
 message between source and sink, and removing the broker removes that stage.

@@ -9,7 +9,7 @@ metadata:
     Whole-part deletion drops the part once all of its rows are expired. ClickHouse
     removes its files instead of rewriting the survivors, so the cost does not
     depend on the part's size. A part stays until its newest row expires, so rows
-    with similar expiry times need to land in the same part. Enable it with
+    with similar expiry times need to be written to the same part. Enable it with
     `ttl_only_drop_parts = 1`.
 
     **When deletion happens.** DELETE TTL is asynchronous background work. When

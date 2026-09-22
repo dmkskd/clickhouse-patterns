@@ -48,7 +48,7 @@ spec:
     schema: schema.sql
     load: load.py      # insert raw ticks in three separate parts; MVs trigger per part
 
-    # 1. all nine ticks landed.
+    # 1. all nine ticks inserted.
     # 2. every one-minute bucket exists.
     # 3. the states merged back to exactly the query-time ground truth -- proving the
     #    per-part partial states recombined into the correct candle (zero mismatches).

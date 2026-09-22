@@ -35,14 +35,14 @@ metadata:
     limitations:
       - StorageKafka2 is experimental and not production ready, and it requires a nightly build plus the allow_experimental_kafka_offsets_storage_in_keeper flag.
       - Assignment is modulo only, so the partition-to-shard map is fixed by the shard count rather than chosen per shard.
-      - Dedup holds only if the producer keys each logical event to one partition; the same event split across two partitions still lands on two shards.
+      - Dedup holds only if the producer keys each logical event to one partition; the same event split across two partitions is still inserted on two shards.
 spec:
   profiles: [shards-v2, kafka]
   driver_node: ch-s1v2
 
   requires:
     clickhouse_min: '26.8'
-    note: StorageKafka2 static partition-to-shard affinity (kafka_partition_shard_num / kafka_shard_count) landed in ClickHouse 26.8 and is experimental.
+    note: StorageKafka2 static partition-to-shard affinity (kafka_partition_shard_num / kafka_shard_count) was added in ClickHouse 26.8 and is experimental.
 
   # One ON CLUSTER schema. The {shard} and {replica} server macros give each node
   # its shard number and replica name; the engine derives the partition set.

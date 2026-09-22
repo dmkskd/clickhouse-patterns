@@ -17,7 +17,7 @@ intro: |-
   record is held either by ClickHouse, as S3Queue's Keeper state, or by the
   orchestrator that stages each batch and issues the `INSERT`.
 
-  The imported rows land in a plain `MergeTree` when they only accumulate, or in
+  The imported rows are inserted into a plain `MergeTree` when they only accumulate, or in
   a `ReplacingMergeTree` keyed on a version column when later files correct
   earlier ones. Whole-table transfers skip row parsing entirely, moving MergeTree
   parts with `BACKUP`/`RESTORE`.

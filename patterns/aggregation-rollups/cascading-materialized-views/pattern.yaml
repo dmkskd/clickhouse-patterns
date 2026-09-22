@@ -45,7 +45,7 @@ spec:
     schema: schema.sql
     load: load.py      # insert raw ticks in three parts; cascade triggers per part
 
-    # 1. all nine ticks landed.
+    # 1. all nine ticks inserted.
     # 2. the 1m level was populated from raw.
     # 3. the single 5m bucket exists.
     # 4. the 5m candle, built only from the 1m states via -MergeState, equals the 5m

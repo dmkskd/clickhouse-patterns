@@ -43,7 +43,7 @@ spec:
     schema: schema.sql
     load: load.py      # insert raw ticks in three separate parts
 
-    # All nine ticks landed; the candles themselves are checked by verify.sql.
+    # All nine ticks inserted; the candles themselves are checked by verify.sql.
     ready_when:
       - query: SELECT count() FROM demo.ticks
         value: 9

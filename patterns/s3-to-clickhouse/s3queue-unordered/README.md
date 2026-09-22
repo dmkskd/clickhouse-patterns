@@ -17,7 +17,7 @@ file producer --drop (any order)--> S3: queue/*.parquet
 
 ## Why unordered
 
-Ordered mode's watermark skips files that land out of lexical order, so a writer
+Ordered mode's watermark skips files added out of lexical order, so a writer
 with key-order jitter loses them. Unordered mode tracks the **set** of processed
 files, so order is irrelevant. A file that sorts before an already-processed one
 is still ingested. The cost is that the set grows and must be bounded with
@@ -33,7 +33,7 @@ and `_file` records the source, so `uniqExact(source_file)` is 3.
 
 ## When to choose it
 
-When files do not arrive in key order (jittered writers, backfills, many
+When files are not added in key order (jittered writers, backfills, many
 producers). Use [ordered](../s3queue-ordered/) when names are ordered and the
 tracking state should stay small, or the [s3() bulk load](../s3-bulk-load/) for an
 externally driven, one-off load.

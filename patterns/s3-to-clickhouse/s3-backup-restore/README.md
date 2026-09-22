@@ -70,7 +70,7 @@ OPTIMIZE TABLE demo.events_staging FINAL;
 BACKUP TABLE demo.events_staging TO S3('.../backups/events-backfill', ...);
 ```
 
-`OPTIMIZE FINAL` collapses the data into one part so the restore lands few, large
+`OPTIMIZE FINAL` collapses the data into one part so the restore creates few, large
 parts rather than many small ones. The cluster side restores under a new name:
 
 ```sql
@@ -81,7 +81,7 @@ RESTORE TABLE demo.events_staging AS demo.events FROM S3('.../backups/events-bac
 
 ## Handling a large restore
 
-A restore that lands many small parts can hit too-many-parts pressure. Consolidate
+A restore that creates many small parts can hit too-many-parts pressure. Consolidate
 with `OPTIMIZE FINAL` before the backup, and for a large restore consider
 `SYSTEM STOP MERGES` on the target during the load and resuming after. Both sides
 need the same table structure. `BACKUP`/`RESTORE` can also scope to partitions

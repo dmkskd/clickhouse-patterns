@@ -4,7 +4,7 @@ metadata:
   description: |-
     ClickHouse watches an S3 prefix and reads new files itself with the `S3Queue` engine, with no external trigger. A materialized view writes their rows into a native `MergeTree` table.
 
-    In ordered mode it keeps only a watermark in Keeper, the highest filename processed, so a file whose name sorts after the watermark is picked up and a file that lands with an earlier name is skipped.
+    In ordered mode it keeps only a watermark in Keeper, the highest filename processed, so a file whose name sorts after the watermark is picked up and a file added with an earlier name is skipped.
 
     This is cheap and exactly-once, and it fits sources that write files in lexical order (a timestamp or sequence in the name).
   graph: |-
@@ -28,9 +28,9 @@ metadata:
     benefits:
       - ClickHouse owns the loop and the bookkeeping, so no orchestrator is needed to trigger loads or track which files were done.
       - Only a watermark is stored in Keeper, so the state stays tiny no matter how many files are processed.
-      - New files are picked up as they land, so ingestion is continuous rather than a one-off.
+      - New files are picked up as they are added, so ingestion is continuous rather than a one-off.
     limitations:
-      - A file that lands out of lexical order, after the watermark has passed its name, is skipped for good; a writer with key-order jitter loses those files.
+      - A file added out of lexical order, after the watermark has passed its name, is skipped for good; a writer with key-order jitter loses those files.
       - There is no clean way to recover skipped files; re-reading a range re-ingests files already loaded in it, so recovery leans on a deduplicating target or on using unordered mode from the start.
       - It requires Keeper, and control is inside ClickHouse, so an external orchestrator cannot decide what or when to load.
 spec:

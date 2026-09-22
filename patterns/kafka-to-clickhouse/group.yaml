@@ -38,7 +38,7 @@ intro: |-
   This catalog calls ClickHouse consuming from Kafka **pull**, and an external
   consumer writing into ClickHouse **push**.
 
-  Where the consumers run and where rows land is then decided by the target
+  Where the consumers run and where rows are inserted is then decided by the target
   layout, which may be a single node, a replicated table that Keeper keeps in
   sync across two nodes, or several shards that have to agree on which partition
   each of them owns. The following patterns show both approaches with each

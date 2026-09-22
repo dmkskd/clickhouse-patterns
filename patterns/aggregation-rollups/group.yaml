@@ -32,4 +32,4 @@ related:
   - group: kafka-to-clickhouse
     note: To stream the raw events into ClickHouse first
   - group: database-to-clickhouse
-    note: To land rows from a source database
+    note: To load rows from a source database

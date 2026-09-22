@@ -104,12 +104,12 @@ removes the place an SMT would run.
 All semantic work in this pattern therefore happens in ClickHouse, in two
 different positions.
 
-**At landing, in the target DDL.** `test.orders_existing` widens `amount`,
+**At insert, in the target DDL.** `test.orders_existing` widens `amount`,
 switches `customer` to `LowCardinality(Nullable(String))`, and declares a
 `MATERIALIZED` classification column. ClickHouse evaluates these on the
 connector's own insert, without an extra object or an extra pass.
 
-**After landing, in a materialized view.** `transform.sql` uppercases
+**After insert, in a materialized view.** `transform.sql` uppercases
 `customer`, casts `amount` to `Decimal(12, 2)`, and derives `amount_band` into
 `test.orders_transformed`. This needs an explicit backfill for snapshot rows and
 must carry `_version` and `is_deleted` through so updates and tombstones still

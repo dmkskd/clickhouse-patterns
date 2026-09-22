@@ -10,7 +10,7 @@ metadata:
 
     Before publishing, `ExtractNewRecordState` flattens Debezium's before/after envelope, rewrites deletes, and carries the LSN through as `__lsn`. On the sink side, a second transform adds the Kafka coordinates, so each row records the topic, partition, offset, and timestamp it arrived on.
 
-    Whether to transform in the connectors or after the rows land in ClickHouse is a design choice in its own right.
+    Whether to transform in the connectors or after the rows are inserted into ClickHouse is a design choice in its own right.
 
     This pattern runs the official **ClickHouse Kafka Connect Sink**. Anything that can consume the topic could take its place, including the **Altinity sink** in its Kafka mode and the **Kafka table engine**, where ClickHouse consumes the topic itself.
 

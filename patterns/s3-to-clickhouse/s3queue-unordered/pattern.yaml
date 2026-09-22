@@ -4,7 +4,7 @@ metadata:
   description: |-
     ClickHouse watches an S3 prefix and reads new files itself with the `S3Queue` engine, with no external trigger. A materialized view writes their rows into a native `MergeTree` table.
 
-    In unordered mode it keeps the full set of processed files in Keeper, so it ingests every new file regardless of name, including one that arrives out of lexical order.
+    In unordered mode it keeps the full set of processed files in Keeper, so it ingests every new file regardless of name, including one added out of lexical order.
 
     The cost is a tracked-file set that grows and must be bounded. The managed ClickPipes equivalent uses S3 event notifications.
   graph: |-
@@ -26,9 +26,9 @@ metadata:
 
   tradeoffs:
     benefits:
-      - It ingests files regardless of arrival order, so a writer with key-order jitter loses nothing.
+      - It ingests files regardless of the order they are added in, so a writer with key-order jitter loses nothing.
       - ClickHouse owns the loop and the exactly-once bookkeeping, so no orchestrator is needed.
-      - New files are picked up as they land, so ingestion is continuous.
+      - New files are picked up as they are added, so ingestion is continuous.
     limitations:
       - The processed-file set grows and must be bounded by s3queue_tracked_files_limit and a TTL, where ordered mode kept only a tiny watermark.
       - It requires Keeper, and control is inside ClickHouse, so an external orchestrator cannot decide what or when to load.

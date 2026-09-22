@@ -41,7 +41,7 @@ current rows as separate inserts, consolidated by `OPTIMIZE ... PARTITION
 FINAL` — forced rather than left to the background merger so the demonstration
 stays deterministic, exactly as `ALTER TABLE ... MATERIALIZE TTL` forces the
 move. The cold volume has `perform_ttl_move_on_insert = 0`, so an
-already-expired insert initially lands locally. The checks require one active
+already-expired insert is initially written locally. The checks require one active
 part on `cold_s3`, one on `default`, one `MovePart` entry, and one
 `MergeParts` entry in `system.part_log`. The verification then shows each
 active part with its disk, its TTL state based on its newest row, and its

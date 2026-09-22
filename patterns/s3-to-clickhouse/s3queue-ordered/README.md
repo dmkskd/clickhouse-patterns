@@ -21,11 +21,11 @@ file producer --drop--> S3: queue/*.parquet
 
 Ordered mode stores a single **watermark** in Keeper, the highest
 filename processed. A file whose name sorts *after* the watermark is picked up; a
-file that lands with an *earlier* name is skipped, because the watermark has
+file added with an *earlier* name is skipped, because the watermark has
 already moved past it. That keeps the state tiny, and it works when files are
 written in lexical order (a timestamp or sequence in the name).
 
-A writer with **key-order jitter**, meaning files that land minutes out of
+A writer with **key-order jitter**, meaning files added minutes out of
 order, loses the late ones, and there is no clean way to recover them.
 Recovery re-reads a range of the prefix from a starting point, which re-ingests
 the files already loaded in that range, so a full re-read duplicates the whole
@@ -40,9 +40,10 @@ engine picks them up and `_file` records each row's source, so
 
 ## When to choose it
 
-Filenames encode time or sequence and arrive roughly in order, and the tracking
-state should stay as small as possible. For out-of-order arrivals, use unordered; for an
-externally driven load, use the [s3() bulk load](../s3-bulk-load/).
+Filenames encode time or sequence and are added roughly in order, and the
+tracking state should stay as small as possible. For files added out of order,
+use unordered; for an externally driven load, use the
+[s3() bulk load](../s3-bulk-load/).
 
 ```bash
 just test s3queue-ordered

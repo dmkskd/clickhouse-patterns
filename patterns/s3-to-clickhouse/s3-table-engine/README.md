@@ -70,7 +70,7 @@ Where the same data is queried repeatedly, importing it into a MergeTree is
 worth the copy. The other patterns in this group cover that conversion under
 different conditions: a [one-off glob load](../s3-bulk-load/) and
 [S3Queue](../s3queue-unordered/) when new files should be imported as they
-arrive. Files that restate earlier rows need a deduplicating target, such as
+are added. Files that restate earlier rows need a deduplicating target, such as
 `ReplacingMergeTree(version)`.
 
 ```bash

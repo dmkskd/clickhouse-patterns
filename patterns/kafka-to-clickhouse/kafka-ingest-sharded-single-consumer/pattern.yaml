@@ -47,7 +47,7 @@ spec:
 
     load: load.py
 
-    # Convergence: all 8000 land cluster-wide, spread across the two shards
+    # Convergence: all 8000 are inserted cluster-wide, spread across the two shards
     # (Distributed inserts settle asynchronously - hence the poll).
     ready_when:
       - query: SELECT count() FROM demo.events_all

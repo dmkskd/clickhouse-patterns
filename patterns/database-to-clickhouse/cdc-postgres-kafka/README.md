@@ -60,8 +60,8 @@ available only to a sink connector, so this cannot be done upstream.
 ## Kafka metadata in the table
 
 `__topic`, `__partition`, `__offset` and `__timestamp` are stored alongside the
-row, which makes any row traceable to the exact record that produced it at very
-little storage cost.
+row, which makes any row traceable to the exact record that produced it, at the
+cost of four extra columns per row.
 
 ```sql
 __topic     LowCardinality(String),
@@ -73,7 +73,7 @@ __timestamp DateTime64(3) CODEC(DoubleDelta, ZSTD(1))
 Within a block the topic is constant, the partition is constant or nearly so,
 and offsets increase by one, so `DoubleDelta` reduces them to almost nothing.
 
-Note that the official sink does not supply these columns itself; the docs cover
+The official sink does not supply these columns itself; the docs cover
 only `KeyToValue` for the record key. They come from Kafka Connect's own
 `InsertField` transform.
 
