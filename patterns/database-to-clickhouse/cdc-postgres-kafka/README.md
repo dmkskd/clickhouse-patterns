@@ -60,8 +60,7 @@ available only to a sink connector, so this cannot be done upstream.
 ## Kafka metadata in the table
 
 `__topic`, `__partition`, `__offset` and `__timestamp` are stored alongside the
-row, which makes any row traceable to the exact record that produced it, at the
-cost of four extra columns per row.
+row, which makes any row traceable to the exact record that produced it.
 
 ```sql
 __topic     LowCardinality(String),

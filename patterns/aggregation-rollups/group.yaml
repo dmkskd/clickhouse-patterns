@@ -4,8 +4,8 @@ icon: rollup
 order: 1
 intro: |-
   A rollup is an aggregate over raw rows, grouped by a set of dimensions and a
-  time granularity, kept up to date as new data arrives. ClickHouse offers
-  several ways to build and maintain rollups:
+  time granularity. ClickHouse offers several ways to build and maintain
+  rollups:
 
   - **On read.** No stored rollup: a `GROUP BY` over the raw table at query time.
   - **At insert time.** As new rows arrive, a materialized view updates a stored rollup.

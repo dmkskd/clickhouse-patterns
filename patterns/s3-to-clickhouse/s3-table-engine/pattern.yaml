@@ -2,13 +2,16 @@ manifest_version: 2
 metadata:
   title: Reading and writing a bucket prefix with the S3 table engine
   description: |-
-    The `S3` table engine binds a ClickHouse table name to a path in object storage. The table holds no data of its own, and every `SELECT` reads the objects in the bucket. A glob in the path makes one table cover a whole prefix, including files that were already there before the table existed.
+    The `S3` table engine binds a ClickHouse table name to a path in object storage. No data is stored in ClickHouse, and every `SELECT` reads the objects in the bucket. A glob in the path matches every object under a prefix, resolved at `SELECT` time, so each query reads the objects present when it runs.
 
-    An `INSERT` into an `S3` engine table creates an object at the declared path, which makes the table an export route as well as an access route, subject to two constraints. A glob path is read-only, so a table covering a prefix cannot be inserted into, and a second `INSERT` into an existing key fails unless a setting says whether to replace the object or write alongside it.
+    An `S3` engine table can also be written to: an `INSERT` creates an object at the path in the table definition. Two constraints apply:
+
+    - **The path must have no glob.** A glob path is read-only.
+    - **The object must not already exist.** A second `INSERT` into the same key fails, unless `s3_truncate_on_insert` overwrites the object, or `s3_create_new_file_on_insert` writes a new one with an incrementing numeric suffix (`export_1.parquet`, `export_2.parquet`).
   graph: |-
     read:
       minio:existing(bucket=clickhouse,prefix=exports/,format=Parquet,label=exports/*.parquet,note=**The prefix**\nObjects written upstream before any ClickHouse table exists, plus everything written back into it later.\n- visible as soon as the table is declared\n- no load step, nothing to keep in sync)
-        -[objects matched by the glob]-> remote-table:reader(engine=S3,label=demo.exports_s3,note=**Read surface**\nA declaration over the whole prefix. Holds no data; every SELECT reads the objects.\n- the glob is what covers the prefix\n- a glob path is read-only)
+        -[objects matched by the glob]-> remote-table:reader(engine=S3,label=demo.exports_s3,note=**Read surface**\nA declaration over the whole prefix. Stores no data; every SELECT reads the objects.\n- the glob is what covers the prefix\n- a glob path is read-only)
         -> client:analyst(label=ClickHouse client)
 
     write:

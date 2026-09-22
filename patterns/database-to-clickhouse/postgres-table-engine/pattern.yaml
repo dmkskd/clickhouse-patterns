@@ -14,7 +14,7 @@ metadata:
   graph: |-
     query:
       postgres:orders(label=public.orders,note=**Live OLTP source**\nThe application writes here directly; ClickHouse only reads it.\n- every read sees the current state\n- no stale rows on a change)
-        -[rows returned per SELECT]-> remote-table:orders_table_engine@table-engine(label=test.orders_table_engine,note=**Postgres Table Engine**\nA declaration bound to one table. Holds no local data and is resolved on every read.)
+        -[rows returned per SELECT]-> remote-table:orders_table_engine@table-engine(label=test.orders_table_engine,note=**Postgres Table Engine**\nA declaration bound to one table. Stores no data locally and is resolved on every read.)
         -> client:analyst(label=ClickHouse client)
 
     query:

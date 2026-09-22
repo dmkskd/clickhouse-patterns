@@ -5,8 +5,8 @@ Profiles: `single`, `s3`. Driver: `ch`.
 The [`s3()` table function](../s3-bulk-load/) reads a path once, inside a single
 statement. The [`S3` table engine](https://clickhouse.com/docs/engines/table-engines/integrations/s3)
 binds that same access to a table name, so the path, credentials, and format are
-declared once and every later query refers to the table. The table holds no data
-of its own, and each `SELECT` reads the objects in the bucket.
+declared once and every later query refers to the table. No data is stored in
+ClickHouse, and each `SELECT` reads the objects in the bucket.
 
 ```
 upstream writer --> S3: exports/*.parquet <--INSERT-- demo.exports_write (S3, one key)
