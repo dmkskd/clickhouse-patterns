@@ -24,11 +24,10 @@ just setup      # install the Pattern Explorer and agent integrations
 just explore    # open the catalog at http://localhost:8765
 ```
 
-`just explore` serves the whole catalog with a local control plane. Patterns can
-be compared through their resource diagrams and trade-offs, started with the
-services they need, inspected while running through the SQL console and live
-table metadata, and torn down again from the same page. To make a pattern your
-own starting point, see [Create your own patterns](#create-your-own-patterns).
+`just explore` serves the catalog with a local control plane. Every pattern has a
+resource diagram and trade-offs, and starts its services from the browser, with a
+SQL console and live table metadata while they run. To start from an existing
+pattern, see [Create your own patterns](#create-your-own-patterns).
 
 ## Other ways to run it
 
