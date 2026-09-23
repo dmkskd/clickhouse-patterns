@@ -304,7 +304,7 @@
     key: "all",
     title: "All patterns",
     description: "In ClickHouse, architecting data pipelines is as challenging as data modelling and query design.",
-    intro: "These patterns are worked examples of ingestion, retention, and replication designs in ClickHouse, each with its benefits and limitations.\n\n"
+    intro: "These patterns are end-to-end examples of ingestion, retention, and replication designs in ClickHouse, each with its benefits and limitations.\n\n"
       + "Patterns can be run locally to see how each architecture behaves in practice, then cloned and edited to validate a new idea or a planned refactoring.\n\n"
       + "This catalog is a work in progress. Check each pattern's status before adapting it.\n\n"
       + "[How to run patterns locally](https://github.com/dmkskd/clickhouse-patterns#run-patterns-locally)"
