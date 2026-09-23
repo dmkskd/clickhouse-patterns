@@ -14,7 +14,7 @@ intro: |-
   ClickHouse ingests a Kafka topic in one of two ways:
 
   - ClickHouse is the consumer, through the **Kafka table engine**. This catalog calls it **pull mode**.
-  - An **external Kafka consumer** reads the topic and writes batches to ClickHouse, typically through the official **ClickHouse Kafka Connect Sink**. This catalog calls it **push mode**.
+  - An **external Kafka consumer** reads the topic and writes batches to ClickHouse. This catalog calls it **push mode**.
 
   The choice largely determines the offset owner and partition mapping.
   ClickHouse's
