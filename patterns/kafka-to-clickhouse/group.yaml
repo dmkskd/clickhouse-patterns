@@ -19,12 +19,13 @@ intro: |-
   The choice largely determines the offset owner and partition mapping.
   ClickHouse's
   [Kafka integrations guide](https://clickhouse.com/docs/integrations/connectors/data-ingestion/kafka/index)
-  covers both.
+  explains each approach.
 
   The **Kafka table engine** runs inside ClickHouse and owns its consumer groups
-  and offset handling. In a sharded deployment it cannot assign a topic partition
-  to a particular shard, and the sharded patterns work through the established
-  ways around that:
+  and offset handling. In a sharded deployment, partitions are assigned by Kafka's
+  consumer group protocol, which has no notion of shards. Each shard consumes the
+  partitions Kafka assigns to it, and the rows in them may belong to any shard in
+  the cluster. The sharded patterns work through the established ways around that:
 
   - every shard consumes the whole topic and keeps only the partitions it owns
   - every shard stores the whole topic, with duplicates removed by the query at read time
@@ -34,12 +35,13 @@ intro: |-
   and `kafka_shard_count` settings, gives each shard a fixed slice of the
   partitions natively.
 
-  An **external Kafka consumer** is a separate service to deploy and operate, and
-  it owns the consumer groups and the offsets. Many tools fill this role,
-  commercial and open source, differing in batching, delivery guarantees,
-  in-pipeline transformation, and schema-change handling. The **ClickHouse Kafka
-  Connect Sink** is the one used in these patterns, and the choice for production
-  warrants a comparison.
+  An **external Kafka consumer** is a service deployed and operated outside
+  ClickHouse, and it owns the consumer groups and the offsets. Many tools exist in
+  this active space, commercial and open source, differing in batching, delivery
+  guarantees, in-pipeline transformation, and schema-change handling; ClickHouse's
+  [Kafka integrations guide](https://clickhouse.com/docs/integrations/connectors/data-ingestion/kafka/index)
+  covers several of them. The **ClickHouse Kafka Connect Sink** is the one used in
+  these patterns, and the choice for production warrants a comparison.
 
   Where the Kafka consumers run and where rows are inserted depends on the
   ClickHouse topology: a single node, a ReplicatedMergeTree table that Keeper

@@ -2,7 +2,9 @@ manifest_version: 2
 metadata:
   title: CDC · Postgres WAL → PeerDB → ClickHouse
   description: |-
-    Self-hosted PeerDB, the open-source engine behind managed Postgres ClickPipes, replicating two Postgres tables into three ClickHouse targets. One is created by PeerDB, one is owned by the schema, and one is transformed by a materialized view.
+    PeerDB replicates Postgres tables into ClickHouse by reading the WAL through a logical replication slot. It is the open-source engine behind managed Postgres ClickPipes, and it runs self-hosted here.
+
+    This pattern replicates two Postgres tables into two ClickHouse destination tables: one that does not exist yet, so PeerDB creates it, and one already created in ClickHouse with its own DDL.
 
     Snapshot and change batches are staged as Avro objects in MinIO. PeerDB then issues `INSERT ... SELECT FROM s3()` statements, and ClickHouse pulls the named objects when they run. Ongoing changes are inserted first into `_peerdb_raw_two_table_mirror` and are decoded into the targets from there.
 
