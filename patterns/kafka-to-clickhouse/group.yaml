@@ -22,14 +22,17 @@ intro: |-
   covers both.
 
   The **Kafka table engine** runs inside ClickHouse and owns its consumer groups
-  and offset handling. In a sharded deployment, the Kafka table engine cannot
-  assign a topic partition to a particular shard. The sharded patterns work through the
-  three established ways around that: read every partition and filter down to
-  the ones a shard owns, store everything everywhere and deduplicate on read,
-  or route the whole topic through a single consumer. A recent experimental
-  addition, StorageKafka2 with the `kafka_partition_shard_num` and
-  `kafka_shard_count` settings, gives each shard a fixed slice of the partitions
-  natively, and one pattern demonstrates it.
+  and offset handling. In a sharded deployment it cannot assign a topic partition
+  to a particular shard, and the sharded patterns work through the established
+  ways around that:
+
+  - every shard consumes the whole topic and keeps only the partitions it owns
+  - every shard stores the whole topic, with duplicates removed by the query at read time
+  - one node consumes the whole topic and inserts into a Distributed table, which routes each row to its shard
+
+  **StorageKafka2**, an experimental addition with the `kafka_partition_shard_num`
+  and `kafka_shard_count` settings, gives each shard a fixed slice of the
+  partitions natively.
 
   An **external Kafka consumer** is a separate service to deploy and operate, and
   it owns the consumer groups and the offsets. Many tools fill this role,
