@@ -12,7 +12,7 @@ metadata:
 
     **Two Postgres instances run in this pattern.** `postgres` is the source database being replicated. `peerdb-catalog` stores PeerDB's own metadata and Temporal's workflow history, and takes no part in replication.
 
-    Beyond ClickHouse and the source database, the stack adds nine services, because replication runs as Temporal workflows. Nothing at this three-row scale exercises what that provides.
+    Replication runs as Temporal workflows, so the stack needs several services beyond ClickHouse and the source database.
   graph: |-
     snapshot:
       postgres:source_tables(label=public.orders + public.orders_existing,note=**Source Postgres** · service `postgres`\nThe replicated user data.\n- not the peerdb-catalog\n- read through a logical replication slot)
