@@ -162,6 +162,109 @@ class ClickHouseReader:
         }
 
 
+class DictionaryReader:
+    """Read a dictionary's definition, load state, and current contents.
+
+    A dictionary is not in `system.tables` unless it was created inside a
+    Dictionary-engine table, so its metadata comes from `system.dictionaries`.
+    Its contents are readable as a table, which is the only way to see what a
+    `dictGet` in a materialized view or a query would currently resolve to.
+    """
+
+    kinds = frozenset({"dictionary"})
+
+    def inspect(self, context: ReaderContext, object_key: str | None = None) -> dict[str, Any]:
+        if object_key:
+            raise ValueError("Dictionary inspection does not accept an object key")
+        resource = context.resource
+        declared = resource.properties.get("dictionary") or resource.properties.get("table") or resource.name
+        requested_database = None
+        requested_name = declared
+        if "." in declared:
+            requested_database, requested_name = declared.rsplit(".", 1)
+
+        node = resource.properties.get("node")
+        try:
+            client = context.clickhouse_client(node)
+        except KeyError as exc:
+            raise ValueError(f"resource declares `node={node}`, which is not a node in this session") from exc
+
+        metadata_query = """
+            SELECT database, name, status, type, key.names, key.types,
+                   attribute.names, attribute.types, element_count,
+                   bytes_allocated, lifetime_min, lifetime_max, source,
+                   last_successful_update_time, loading_duration, last_exception
+            FROM system.dictionaries
+            WHERE name = {name:String}
+        """
+        parameters = {"name": requested_name}
+        if requested_database:
+            metadata_query += " AND database = {database:String}"
+            parameters["database"] = requested_database
+        metadata_query += " ORDER BY database"
+        metadata = client.query(metadata_query, parameters=parameters).result_rows
+        if not metadata:
+            qualified = f"{requested_database}.{requested_name}" if requested_database else requested_name
+            where = f"on node {node}" if node else "in the live ClickHouse session"
+            detail = f"{qualified} is not present {where}"
+            if context.source_changed:
+                detail += "; this pattern changed after the session started—reload it to inspect the newly declared resource"
+            raise ValueError(detail)
+        if len(metadata) > 1:
+            databases = ", ".join(row[0] for row in metadata)
+            raise ValueError(f"{requested_name} exists in multiple databases ({databases}); qualify its name in the resource graph")
+
+        (
+            database, name, status, layout, key_names, key_types,
+            attribute_names, attribute_types, element_count, bytes_allocated,
+            lifetime_min, lifetime_max, source, last_update, loading_duration,
+            last_exception,
+        ) = metadata[0]
+
+        qualified = f"{quote_identifier(database)}.{quote_identifier(name)}"
+        try:
+            create_statement = client.query(f"SHOW CREATE DICTIONARY {qualified}").result_rows[0][0]
+        except Exception as exc:  # noqa: BLE001 - load state remains useful
+            create_statement = f"-- SHOW CREATE DICTIONARY failed: {type(exc).__name__}: {str(exc).splitlines()[0]}"
+
+        columns = [
+            {"name": column, "type": column_type, "role": "key"}
+            for column, column_type in zip(key_names, key_types)
+        ] + [
+            {"name": column, "type": column_type, "role": "attribute"}
+            for column, column_type in zip(attribute_names, attribute_types)
+        ]
+
+        sample = None
+        sample_error = None
+        # A dictionary that has never loaded has no contents to read, and
+        # selecting from it would trigger the load this inspection is reporting on.
+        if status == "NOT_LOADED":
+            sample_disabled = "This dictionary has not been loaded yet, so it holds no contents. A dictGet or a SELECT against it triggers its first load."
+        else:
+            sample_disabled = None
+            try:
+                result = client.query(f"SELECT * FROM {qualified} LIMIT {SAMPLE_LIMIT}")
+                sample = {"columns": list(result.column_names), "rows": [[json_value(value) for value in row] for row in result.result_rows], "limit": SAMPLE_LIMIT}
+            except Exception as exc:  # noqa: BLE001 - definition remains useful
+                sample_error = f"{type(exc).__name__}: {str(exc).splitlines()[0]}"
+
+        return {
+            "type": "clickhouse-dictionary",
+            "resource": {"key": resource.key, "kind": resource.kind, "declared_name": resource.name},
+            "database": database, "dictionary": name, "node": node,
+            "status": status, "layout": layout, "source": source,
+            "element_count": json_value(element_count),
+            "bytes_allocated": json_value(bytes_allocated),
+            "lifetime_min": json_value(lifetime_min), "lifetime_max": json_value(lifetime_max),
+            "last_successful_update_time": json_value(last_update),
+            "loading_duration": json_value(loading_duration),
+            "last_exception": last_exception or None,
+            "create_statement": create_statement, "columns": columns, "sample": sample,
+            "sample_error": sample_error, "sample_disabled": sample_disabled,
+        }
+
+
 class MinioReader:
     """List declared S3 prefixes and preview small Parquet or Avro objects."""
 
@@ -258,4 +361,4 @@ class ReaderRegistry:
         return frozenset(self._readers)
 
 
-RESOURCE_READERS = ReaderRegistry(ClickHouseReader(), MinioReader())
+RESOURCE_READERS = ReaderRegistry(ClickHouseReader(), DictionaryReader(), MinioReader())

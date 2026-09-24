@@ -1,0 +1,5 @@
+# reading	event_id	customer_name	customer_tier	amount
+STORED (dictGet at insert)	1	acme	gold	100
+STORED (dictGet at insert)	4	acme	platinum	400
+CURRENT (dictGet at read)	1	acme	platinum	100
+CURRENT (dictGet at read)	4	acme	platinum	400

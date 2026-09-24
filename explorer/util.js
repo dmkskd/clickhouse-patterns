@@ -29,6 +29,7 @@ window.PE.util = (() => {
     part: ["#fff0c8", "#e4a42b", "#a66c11"],
     keepermap: ["#d8caff", "#a78bfa", "#7054c8"],
     "remote-table": ["#cfe0ff", "#6f91d8", "#496bad"],
+    dictionary: ["#d8caff", "#8f7ae6", "#5f4aa8"],
     postgres: ["#c3d6ff", "#6f91d8", "#496bad"],
     mysql: ["#c8eaff", "#55bfe8", "#297ea6"],
     peerdb: ["#ffc9be", "#f47f6b", "#bd4b3b"],
@@ -42,7 +43,8 @@ window.PE.util = (() => {
     distributed: "Distributed table", mergetree: "MergeTree",
     "replicated-mergetree": "ReplicatedMergeTree", keepermap: "KeeperMap state",
     part: "MergeTree part",
-    "remote-table": "External table engine", postgres: "Postgres",
+    "remote-table": "External table engine", dictionary: "Dictionary",
+    postgres: "Postgres",
     mysql: "MySQL", peerdb: "PeerDB", minio: "Object storage", connector: "Connector",
     "consumer-group": "Kafka engine tables", s3queue: "S3Queue()"
   };
@@ -51,6 +53,7 @@ window.PE.util = (() => {
   const KIND_SHAPES = {
     mergetree: "table", "replicated-mergetree": "table", distributed: "table",
     part: "table", keepermap: "table", "remote-table": "table",
+    dictionary: "table",
     postgres: "table", mysql: "table",
     mv: "view", "refreshable-mv": "view",
     connector: "processor", peerdb: "processor",
@@ -74,7 +77,7 @@ window.PE.util = (() => {
   const REPEAT_Y = REPEAT * 0.42;
   const INSPECTABLE_KINDS = new Set([
     "kafka-table", "mv", "refreshable-mv", "distributed", "mergetree", "replicated-mergetree", "keepermap",
-    "remote-table", "minio"
+    "remote-table", "minio", "dictionary"
   ]);
   const TOPOLOGIES = {
     single: { label: "Single node", help: "One ClickHouse node" },

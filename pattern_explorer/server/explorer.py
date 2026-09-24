@@ -175,7 +175,7 @@ class ExplorerController:
                 object_key=object_key,
             )
         except ValueError as exc:
-            if resource.kind in {"kafka-table", "mv", "refreshable-mv", "distributed", "mergetree", "replicated-mergetree", "keepermap", "remote-table"} and "is not present " in str(exc):
+            if resource.kind in {"kafka-table", "mv", "refreshable-mv", "distributed", "mergetree", "replicated-mergetree", "keepermap", "remote-table", "dictionary"} and "is not present " in str(exc):
                 raise ExplorerConflict(str(exc)) from exc
             raise
 

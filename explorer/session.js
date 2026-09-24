@@ -523,9 +523,55 @@ window.PE.session = (() => {
       </section>`;
     }
 
+    // A dictionary is a lookup, not a table: what matters alongside its rows is
+    // whether it is loaded, how large it grew, and when it last refreshed, so the
+    // load state sits between the definition and the contents.
+    function renderDictionaryInspector(payload) {
+      $("resource-inspector-title").textContent = `${payload.database}.${payload.dictionary}`;
+      $("resource-inspector-subtitle").textContent = [
+        payload.layout,
+        payload.node ? `node ${payload.node}` : null
+      ].filter(Boolean).join(" · ");
+      const columnRows = payload.columns.map((column) => [column.name, column.type, column.role]);
+      const lifetime = payload.lifetime_min === payload.lifetime_max
+        ? `${payload.lifetime_max}s`
+        : `${payload.lifetime_min}-${payload.lifetime_max}s`;
+      const stateRows = [
+        ["Status", String(payload.status)],
+        ["Elements", String(payload.element_count)],
+        ["Bytes allocated", String(payload.bytes_allocated)],
+        ["LIFETIME", lifetime],
+        ["Last successful update", payload.last_successful_update_time ? String(payload.last_successful_update_time) : "never"],
+        ["Load duration", `${payload.loading_duration}s`],
+        ["Source", String(payload.source)]
+      ];
+      if (payload.last_exception) stateRows.push(["Last exception", String(payload.last_exception)]);
+      const sample = payload.sample;
+      resourceInspectorBody.innerHTML = `
+        <section class="resource-inspector-section">
+          <h3>Dictionary definition</h3>
+          <pre>${esc(payload.create_statement)}</pre>
+        </section>
+        <section class="resource-inspector-section">
+          <h3>Load state</h3>
+          ${window.PE.util.dataTable(["Property", "Value"], stateRows)}
+        </section>
+        <section class="resource-inspector-section">
+          <h3>Key and attributes</h3>
+          ${window.PE.util.dataTable(["Column", "Type", "Role"], columnRows)}
+        </section>
+        <section class="resource-inspector-section">
+          <h3>Contents</h3>
+          ${payload.sample_disabled ? `<p class="resource-inspector-note">${esc(payload.sample_disabled)}</p>` : ""}
+          ${payload.sample_error ? `<p class="resource-inspector-note">The definition loaded, but this dictionary could not be sampled: ${esc(payload.sample_error)}</p>` : ""}
+          ${sample ? `<p class="resource-sample-meta">Up to ${sample.limit} rows, as dictGet would resolve them now</p>${window.PE.util.dataTable(sample.columns, sample.rows)}` : ""}
+        </section>`;
+    }
+
     function renderResourceInspector(payload) {
       if (payload.type === "object-store") return renderObjectStoreInspector(payload);
       if (payload.type === "object-preview") return renderObjectPreviewInspector(payload);
+      if (payload.type === "clickhouse-dictionary") return renderDictionaryInspector(payload);
       return renderClickHouseInspector(payload);
     }
 

@@ -1,0 +1,115 @@
+manifest_version: 2
+metadata:
+  title: Dictionary enrichment at insert time (denormalize once, or resolve per read)
+  description: |-
+    ⚠️ **Demo pattern. Not for use.**
+
+    ⚠️ **Demo pattern. Not for use.**
+
+    A [dictionary](https://clickhouse.com/docs/dictionaries) holds a dimension table in ClickHouse memory, keyed for point lookups, and refreshes itself from its source on a `LIFETIME` schedule. `dictGet` resolves a key to an attribute without a join.
+
+    The same dictionary serves two different designs, and the difference is when the lookup runs.
+
+    A materialized view calls `dictGet` on each inserted block and stores the resolved attributes alongside the fact row. The dimension value is then frozen at the value it had when the event arrived, and every later read of that row is a single-table scan.
+
+    A view calls `dictGet` at read time instead. Nothing is stored, and every read resolves against the dictionary as it is now, so a corrected dimension row corrects the whole history at once.
+
+    Neither is a default. A fact that records what was true when it happened, such as the tier an order was priced under, belongs in the enriched table. A dimension that is a current description of an entity, such as a customer's country after a data fix, belongs in the view.
+
+    The dictionary is a cache, not a copy: it holds the source's current state and no history, so an enriched row cannot be recomputed for a past point in time once the source has moved on.
+  graph: |-
+    snapshot:
+      postgres:customers(label=public.customers,note=**Dimension source**\nThe OLTP system owns these rows.\n- ClickHouse reads it only on dictionary reload)
+        -[LIFETIME reload]-> dictionary:customers(label=test.customers_dict,dictionary=test.customers_dict,engine=HASHED,note=**In-memory lookup**\nKeyed by id for point lookups.\n- reloaded every 1-2s here\n- holds current state only\n- size bounded by the dimension)
+
+    ingestion:
+      client:producer(label=event producer)
+        -[INSERT]-> mergetree:events_raw(label=test.events_raw,engine=MergeTree,note=**Facts as received**\nCarries customer_id and nothing about the customer.)
+        -[MV insert]-> mv:enrich(label=test.events_enrich_mv,note=**dictGet per inserted block**\nResolves name and tier once, at insert.)
+        -> mergetree:events_enriched(label=test.events_enriched,engine=MergeTree,note=**Denormalized fact**\nStores the attribute values as of insert time.\n- reads need no join\n- ORDER BY can start with tier\n- a later dimension change does not reach it)
+        -[SELECT]-> client:stored_readers(label=readers · stored tier)
+
+    ingestion:
+      dictionary:customers
+        -[dictGet at insert]-> mv:enrich
+
+    query:
+      mergetree:events_raw
+        -> view:events_current_tier(label=test.events_current_tier,note=**dictGet per read**\nStores nothing; resolves on every SELECT.\n- always the current dimension value\n- lookup cost on every scan)
+        -[SELECT]-> client:live_readers(label=readers · current tier)
+
+    query:
+      dictionary:customers
+        -[dictGet at read]-> view:events_current_tier
+  status: wip
+  topology: single
+  tags: [demo, postgres, dictionary, denormalization, dimension-table, materialized-view]
+  references:
+    - label: 'ClickHouse: Dictionaries'
+      url: https://clickhouse.com/docs/dictionaries
+    - label: 'ClickHouse: CREATE DICTIONARY (LAYOUT, LIFETIME, SOURCE)'
+      url: https://clickhouse.com/docs/sql-reference/statements/create/dictionary
+    - label: 'ClickHouse: dictGet and related functions'
+      url: https://clickhouse.com/docs/sql-reference/functions/ext-dict-functions
+    - label: 'ClickHouse: system.dictionaries'
+      url: https://clickhouse.com/docs/operations/system-tables/dictionaries
+  related_patterns:
+    - slug: postgres-refreshable-pull
+      note: The alternative when the dimension is needed as a queryable table rather than a keyed lookup.
+  tradeoffs:
+    benefits:
+      - A dictGet is a hash lookup in memory, so enrichment adds no join to the insert path and no distributed shuffle on a sharded cluster.
+      - Attributes resolved at insert are stored, so the enriched table is read with a single-table scan and its ORDER BY can start with a dimension column such as tier.
+      - Resolving at insert pins the value that was true when the event happened, which is what a priced or billed fact has to record.
+      - The same dictionary also serves query-time lookups, so both designs can coexist over one definition and one refresh schedule.
+      - The dictionary refreshes itself on LIFETIME with no connector and no pipeline state, and system.dictionaries reports its load status, element count, and memory.
+    limitations:
+      - The dictionary is held in memory on every node that uses it, so a large dimension needs a different layout (SPARSE_HASHED, or CACHE with its own miss latency) or does not fit.
+      - A dictGet on a key the dictionary does not hold returns the attribute's default rather than failing, so a missing dimension row is silently stored as an empty or zero value.
+      - Enrichment at insert time cannot be corrected by fixing the source; the already-written rows keep the old value until they are rewritten.
+      - Rows inserted between a source change and the next LIFETIME reload are enriched with the previous value, so the write path has a staleness window the size of the reload interval.
+      - The query-time view pays a lookup per row scanned and its results change as the dictionary reloads, so the same query can return different attribute values minutes apart.
+      - The dictionary keeps no history, so an enriched value cannot be reconstructed for a past point in time from ClickHouse alone.
+
+spec:
+  profiles: [single, postgres]
+  driver_node: ch
+
+  services:
+    postgres:
+      init: seed.sql
+
+  steps:
+    schema: schema.sql
+    load: load.py
+
+    # load.py inserts three events, changes one customer's tier in Postgres,
+    # waits for the dictionary to reload, then inserts a fourth event for that
+    # same customer. The checks assert the split: the stored tier of the early
+    # event is the old value, the stored tier of the late event is the new one,
+    # and the query-time view reports the new value for both.
+    ready_when:
+      - query: SELECT count() FROM test.events_enriched
+        value: 4
+        node: ch
+        timeout: 60
+      - query: SELECT dictGetString('test.customers_dict', 'tier', toUInt64(1)) = 'platinum'
+        value: 1
+        node: ch
+        timeout: 60
+      - query: SELECT count() FROM test.events_enriched WHERE event_id = 1 AND customer_tier = 'gold'
+        value: 1
+        node: ch
+        timeout: 60
+      - query: SELECT count() FROM test.events_enriched WHERE event_id = 4 AND customer_tier = 'platinum'
+        value: 1
+        node: ch
+        timeout: 60
+      - query: SELECT uniqExact(customer_tier) FROM test.events_current_tier WHERE customer_id = 1
+        value: 1
+        node: ch
+        timeout: 60
+
+    verify:
+      sql: verify.sql
+      expected: expected.txt
