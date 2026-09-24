@@ -33,6 +33,10 @@ class Session:
     phase: str = "starting"
     error: str | None = None
     owner: str = "detached"
+    # Whether the driver serves the embedded SQL Console at /ui (ClickHouse
+    # 26.9+). Probed once the node is up, because the pinned image differs per
+    # profile: the CDC node still runs 25.3, which only has /play.
+    console: bool = False
 
     @property
     def driver_port(self) -> int:
@@ -50,8 +54,16 @@ class Session:
     def play_url(self) -> str:
         return f"{self.driver_url}/play"
 
+    @property
+    def console_url(self) -> str:
+        """The embedded SQL Console, or the Play UI on servers without it."""
+        return f"{self.driver_url}/ui" if self.console else self.play_url
+
     def with_phase(self, phase: str, error: str | None = None) -> Session:
         return replace(self, phase=phase, error=error)
+
+    def with_console(self, console: bool) -> Session:
+        return replace(self, console=console)
 
     def as_dict(self) -> dict:
         return {
@@ -60,6 +72,7 @@ class Session:
             "driver_url": self.driver_url,
             "schema_url": self.schema_url,
             "play_url": self.play_url,
+            "console_url": self.console_url,
         }
 
 

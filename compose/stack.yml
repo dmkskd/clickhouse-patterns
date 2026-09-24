@@ -18,7 +18,7 @@
 # Image versions are pinned for reproducibility. To upgrade, bump the tag here
 # (and ch-cdc below), then re-run the affected patterns.
 x-ch-node: &ch-node
-  image: clickhouse/clickhouse-server:26.7
+  image: clickhouse/clickhouse-server:26.9
   ulimits:
     nofile: { soft: 262144, hard: 262144 }
   healthcheck:
@@ -63,7 +63,7 @@ services:
 
   # ── cluster: Keeper + two replicas of one shard ────────────────────────────
   keeper:
-    image: clickhouse/clickhouse-keeper:26.7
+    image: clickhouse/clickhouse-keeper:26.9
     # Replicated patterns use Keeper for data replication. Sharded patterns
     # use it only for the distributed DDL queue behind ON CLUSTER. The
     # shards-v2 pattern also stores Kafka offsets and partition locks here.
@@ -136,7 +136,7 @@ services:
 
   # -- shards-v2: two data shards on ClickHouse head, for the experimental
   # StorageKafka2 partition-to-shard affinity pattern. Kept separate from the
-  # stable `shards` nodes (pinned 26.7) because the feature merged after 26.7
+  # stable `shards` nodes (pinned 26.9) because the feature merged after 26.7
   # and only exists in nightly master builds. Same topology and macros; the
   # only differences are the image and the cluster config's hostnames.
   ch-s1v2:
@@ -190,7 +190,7 @@ services:
   # cdc-mysql-clickhouse test failed during JDBC startup metadata reads against
   # ClickHouse 26.6.1.1193, while the same test passed on 25.3. See the pattern
   # README's Compatibility section; this service stays separate so other
-  # patterns can use 26.7.
+  # patterns can use 26.9.
   ch-cdc:
     <<: *ch-node
     image: clickhouse/clickhouse-server:25.3

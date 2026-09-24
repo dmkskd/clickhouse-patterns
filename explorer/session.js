@@ -25,6 +25,107 @@ window.PE.session = (() => {
     '.21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>' +
     '<span>Set up locally</span></a>';
 
+  // The SQL console control. ClickHouse 26.9 added the embedded SQL Console at
+  // /ui alongside the older Play UI at /play; both are useful, so the pill opens
+  // a choice that is remembered per browser and defaults to the SQL Console.
+  const CONSOLE_CHOICE_KEY = "pe.sql-console-choice";
+  let consoleSplit = null;  // reused across status polls, so an open menu survives
+
+  function consoleChoice() {
+    try {
+      return localStorage.getItem(CONSOLE_CHOICE_KEY) === "play" ? "play" : "ui";
+    } catch {  // private mode and blocked storage fall back to the default
+      return "ui";
+    }
+  }
+
+  function rememberConsoleChoice(choice) {
+    try {
+      localStorage.setItem(CONSOLE_CHOICE_KEY, choice);
+    } catch {  // a browser that refuses storage still opens the link
+    }
+  }
+
+  // One listener for the whole page: a click anywhere else closes the menu.
+  document.addEventListener("click", () => {
+    document.querySelectorAll(".console-menu").forEach((menu) => { menu.hidden = true; });
+    document.querySelectorAll(".console-caret").forEach((caret) => {
+      caret.setAttribute("aria-expanded", "false");
+    });
+  });
+
+  function plainLink(label, href) {
+    const link = document.createElement("a");
+    link.href = href; link.target = "_blank"; link.rel = "noreferrer"; link.textContent = label;
+    return link;
+  }
+
+  function consoleSplitLink(active) {
+    const targets = {
+      ui: { label: "SQL Console", href: active.console_url, hint: "The embedded SQL Console (/ui), ClickHouse 26.9+" },
+      play: { label: "Play", href: active.play_url, hint: "The Play UI (/play)" },
+    };
+    // The status poll re-renders this row every few seconds; keep the same node
+    // while it points at the same session so an open menu is not torn down.
+    const key = `${targets.ui.href}|${targets.play.href}`;
+    if (consoleSplit && consoleSplit.dataset.key === key) return consoleSplit;
+
+    // Every theme styles `.session-links a` as a standalone pill, so the parts
+    // inside this pill are buttons: nothing but .console-split then carries a
+    // border, background or shadow, whichever theme is active.
+    const open = (href) => window.open(href, "_blank", "noreferrer");
+    const part = (className) => {
+      const element = document.createElement("button");
+      element.type = "button";
+      element.className = className;
+      return element;
+    };
+
+    const wrap = document.createElement("div");
+    wrap.className = "console-split";
+    wrap.dataset.key = key;
+
+    const link = part("console-open");
+    const caret = part("console-caret");
+    // An SVG chevron rather than a glyph: it keeps its weight next to the
+    // 11px label and the CSS flips it while the menu is open.
+    caret.innerHTML = '<svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.5"'
+      + ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1.25 5 4.75 9 1.25"/></svg>';
+    caret.title = "Choose which console this opens";
+    caret.setAttribute("aria-haspopup", "true");
+    caret.setAttribute("aria-expanded", "false");
+    const menu = document.createElement("div");
+    menu.className = "console-menu";
+    menu.hidden = true;
+
+    const paint = () => {
+      const choice = consoleChoice();
+      link.textContent = targets[choice].label;
+      link.title = targets[choice].hint;
+      link.onclick = () => open(targets[choice].href);
+      menu.replaceChildren(...Object.entries(targets).map(([value, target]) => {
+        const item = part("console-item" + (value === choice ? " selected" : ""));
+        item.textContent = target.label;
+        item.title = target.hint;
+        // Picking an entry opens it and makes it what the pill opens next time.
+        item.onclick = () => { rememberConsoleChoice(value); menu.hidden = true; paint(); open(target.href); };
+        return item;
+      }));
+    };
+
+    caret.onclick = (event) => {
+      event.stopPropagation();
+      menu.hidden = !menu.hidden;
+      caret.setAttribute("aria-expanded", String(!menu.hidden));
+    };
+    menu.onclick = (event) => event.stopPropagation();
+
+    paint();
+    wrap.append(link, caret, menu);
+    consoleSplit = wrap;
+    return wrap;
+  }
+
   function create(ctx) {
     // ctx: getSelected(), getControl(), setControl(c), selectPattern(slug),
     //      renderList(), renderCatalogHome(), canInspect(), syncArchitecture(),
@@ -256,12 +357,15 @@ window.PE.session = (() => {
 
       const links = $("session-links");
       links.replaceChildren();
-      if (active?.play_url && active?.schema_url && !compact && !starting) {
-        [["SQL console", active.play_url], ["Schema", active.schema_url]].forEach(([label, href]) => {
-          const link = document.createElement("a");
-          link.href = href; link.target = "_blank"; link.rel = "noreferrer"; link.textContent = label;
-          links.append(link);
-        });
+      if (active?.console_url && active?.schema_url && !compact && !starting) {
+        // On ClickHouse 26.9+ the driver serves both the embedded SQL Console
+        // (/ui) and Play (/play), so the control is a split pill: it opens the
+        // remembered choice and the caret offers the other. Older pinned nodes
+        // (the 25.3 CDC one) only have /play, and the link is named for it.
+        links.append(active.console
+          ? consoleSplitLink(active)
+          : plainLink("Play", active.play_url));
+        links.append(plainLink("Schema", active.schema_url));
       }
 
       const canShowLogs = Boolean(messages.length && (active || operation?.status === "failed"));

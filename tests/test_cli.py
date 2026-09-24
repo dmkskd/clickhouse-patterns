@@ -97,6 +97,8 @@ def test_run_validates_waits_and_cleans_up(monkeypatch, capsys):
             phase=phase,
             error=error,
             play_url="http://localhost:8123/play",
+            console_url="http://localhost:8123/ui",
+            console=True,
             schema_url="http://localhost:8123/schema",
         )
         value.with_phase = lambda next_phase, next_error=None: active(
@@ -163,6 +165,8 @@ def test_run_requires_an_interactive_terminal(monkeypatch, capsys):
 def test_wait_prints_browse_with_architecture_link(monkeypatch, capsys, tmp_path):
     active = SimpleNamespace(
         play_url="http://localhost:8123/play",
+        console_url="http://localhost:8123/ui",
+        console=True,
         schema_url="http://localhost:8123/schema",
     )
     pattern = SimpleNamespace(slug="demo", graph="ingestion:\n  source -> target")
@@ -191,6 +195,8 @@ def test_run_waits_on_reachable_validation_failure_then_cleans_up(
             phase=phase,
             error=error,
             play_url="http://localhost:8123/play",
+            console_url="http://localhost:8123/ui",
+            console=True,
             schema_url="http://localhost:8123/schema",
         )
         value.with_phase = lambda next_phase, next_error=None: make_active(
@@ -261,6 +267,8 @@ def test_live_session_output_includes_schema_visualizer(monkeypatch, capsys):
         driver_url="http://localhost:8123",
         schema_url="http://localhost:8123/schema",
         play_url="http://localhost:8123/play",
+        console_url="http://localhost:8123/ui",
+        console=True,
         profiles=["single"],
         pattern_dir="/tmp/demo",
         pattern_location="library",
@@ -278,7 +286,8 @@ def test_live_session_output_includes_schema_visualizer(monkeypatch, capsys):
 
     output = capsys.readouterr().out
     assert output.count("BROWSE") == 2
-    assert output.count("SQL console        http://localhost:8123/play") == 2
+    assert output.count("SQL Console        http://localhost:8123/ui") == 2
+    assert output.count("Play               http://localhost:8123/play") == 2
     assert output.count("schema visualizer  http://localhost:8123/schema") == 2
     assert output.count("MANAGE") == 2
     assert "validate           just validate" in output

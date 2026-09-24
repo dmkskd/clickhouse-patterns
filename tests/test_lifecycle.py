@@ -44,6 +44,9 @@ def pattern(tmp_path):
 def isolated_session(tmp_path, monkeypatch):
     state_file = tmp_path / "runtime" / "session.json"
     monkeypatch.setattr(sessions, "STATE_FILE", state_file)
+    # No node is listening in tests; the probe defaults to "no /ui endpoint"
+    # unless a test says otherwise.
+    monkeypatch.setattr(lifecycle, "_probe_console", lambda session: False)
     return state_file
 
 
@@ -60,6 +63,7 @@ def test_start_status_and_stop_session(pattern, isolated_session, monkeypatch):
     monkeypatch.setattr(
         lifecycle, "connect", lambda node: SimpleNamespace(ping=lambda: True)
     )
+    monkeypatch.setattr(lifecycle, "_probe_console", lambda session: True)
 
     active = lifecycle.start_session(pattern)
 
@@ -67,8 +71,10 @@ def test_start_status_and_stop_session(pattern, isolated_session, monkeypatch):
     assert active.driver_url == "http://localhost:8123"
     assert active.schema_url == "http://localhost:8123/schema"
     assert active.play_url == "http://localhost:8123/play"
+    assert active.console_url == "http://localhost:8123/ui"
     assert active.as_dict()["schema_url"] == "http://localhost:8123/schema"
     assert active.as_dict()["play_url"] == "http://localhost:8123/play"
+    assert active.as_dict()["console_url"] == "http://localhost:8123/ui"
     assert active.pattern_dir == str(pattern.dir.resolve())
     assert active.pattern_location == "library"
     assert prepared == ["demo"]
@@ -156,6 +162,18 @@ def test_browser_run_records_owner_and_validation_phase(
     assert result.passed is True
     assert active.owner == "browser"
     assert active.phase == "validated"
+
+
+def test_sql_console_falls_back_to_play_without_the_ui_endpoint(
+    pattern, isolated_session, monkeypatch
+):
+    monkeypatch.setattr(lifecycle, "docker", lambda profiles, pattern=None: SimpleNamespace(compose=FakeCompose()))
+    monkeypatch.setattr(lifecycle, "prepare_pattern", lambda value, report=None: None)
+
+    active = lifecycle.start_session(pattern)
+
+    assert active.console is False
+    assert active.console_url == "http://localhost:8123/play"
 
 
 def test_operation_lock_rejects_a_second_mutation(isolated_session):

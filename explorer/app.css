@@ -174,8 +174,48 @@ button, input { font: inherit; }
    ellipsis, and renderSession keeps the full text in the hover tooltip. */
 .session-summary #session-title, .session-summary #session-detail { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .session-actions, .session-links { display: flex; align-items: center; gap: 8px; }
-.session-actions button, .session-links a, .definition-tabs button { padding: 7px 10px; border: 1px solid #303955; border-radius: 7px; background: #111526; color: #c9d0e4; font-size: 11px; text-decoration: none; cursor: pointer; white-space: nowrap; }
-.session-actions button:hover, .session-links a:hover, .definition-tabs button:hover { border-color: #526086; color: white; }
+.session-actions button, .session-links a, .session-links .console-split, .definition-tabs button { padding: 7px 10px; border: 1px solid #303955; border-radius: 7px; background: #111526; color: #c9d0e4; font-size: 11px; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.session-actions button:hover, .session-links a:hover, .session-links .console-split:hover, .definition-tabs button:hover { border-color: #526086; color: white; }
+/* SQL console split pill: the label opens the remembered console, the caret
+   opens the choice between the embedded SQL Console (/ui, 26.9+) and Play.
+   Its parts are buttons, not links, so only .console-split takes the pill's
+   border, background and hover from the .session-links rules above. */
+.session-links .console-split { position: relative; display: flex; align-items: stretch; padding: 0; }
+.session-links .console-open,
+.session-links .console-caret {
+  display: flex; align-items: center;
+  padding: 7px 10px;
+  border: 0; border-radius: 0; background: none; box-shadow: none;
+  color: inherit; font: inherit; font-size: 11px; line-height: 1;
+  cursor: pointer;
+}
+.session-links .console-open { padding-right: 6px; }
+.session-links .console-caret { padding: 7px 9px 7px 3px; border-radius: 0 7px 7px 0; }
+.session-links .console-caret:hover { background: var(--hover); }
+.session-links .console-caret svg { width: 9px; height: 9px; opacity: .7; transition: opacity .12s, transform .12s; }
+.session-links .console-caret:hover svg { opacity: 1; }
+.session-links .console-caret[aria-expanded="true"] svg { opacity: 1; transform: rotate(180deg); }
+
+.console-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
+  min-width: max(100%, 132px);
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 5px;
+  border: 1px solid var(--line); border-radius: 9px;
+  background: var(--panel);
+  box-shadow: 0 10px 28px #04060c66;
+}
+.session-links .console-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 6px 9px;
+  border: 0; border-radius: 6px; background: none; box-shadow: none;
+  color: var(--muted); font: inherit; font-size: 11px; line-height: 1.2; text-align: left;
+  cursor: pointer;
+}
+.session-links .console-item:hover { background: var(--hover); color: var(--text); }
+.session-links .console-item.selected { color: var(--text); }
+.session-links .console-item.selected::after { content: "✓"; color: var(--green); font-size: 10px; }
+
 .session-actions button.primary { border-color: #2d765b; background: #153729; color: #8ef0c1; }
 /* Play cue on the Launch button: a slow pulse that dips the glyph toward dark
    (and slightly enlarges it) so the control reads as the page's primary action. */
@@ -780,10 +820,10 @@ button, input { font: inherit; }
 /* ---------- session controls ---------- */
 [data-theme="soft"] .session-panel.catalog-only { opacity: 1; }
 [data-theme="soft"] .session-summary strong { color: var(--text); }
-[data-theme="soft"] .session-actions button, [data-theme="soft"] .session-links a, [data-theme="soft"] .definition-tabs button {
+[data-theme="soft"] .session-actions button, [data-theme="soft"] .session-links a, [data-theme="soft"] .session-links .console-split, [data-theme="soft"] .definition-tabs button {
   border: 0; background: var(--bg); box-shadow: var(--raised-sm); color: var(--muted);
 }
-[data-theme="soft"] .session-actions button:hover, [data-theme="soft"] .session-links a:hover { color: var(--text); }
+[data-theme="soft"] .session-actions button:hover, [data-theme="soft"] .session-links a:hover, [data-theme="soft"] .session-links .console-split:hover { color: var(--text); }
 [data-theme="soft"] .session-actions button.primary { color: var(--text); }
 [data-theme="soft"] .session-actions button.danger { color: #f2a1a8; }
 [data-theme="soft"] .explorer-mode { border: 0; background: var(--bg); box-shadow: var(--pressed-sm); color: var(--dim); }
@@ -1109,11 +1149,11 @@ button, input { font: inherit; }
 [data-theme="flat"][data-scheme="light"] .explorer-mode { border-color: var(--line); color: var(--muted); }
 [data-theme="flat"][data-scheme="light"] .explorer-mode i { background: var(--dim); }
 [data-theme="flat"][data-scheme="light"] .explorer-mode.local { border-color: #b8dcea; color: var(--blue); }
-[data-theme="flat"][data-scheme="light"] .session-actions button, [data-theme="flat"][data-scheme="light"] .session-links a, [data-theme="flat"][data-scheme="light"] .definition-tabs button {
+[data-theme="flat"][data-scheme="light"] .session-actions button, [data-theme="flat"][data-scheme="light"] .session-links a, [data-theme="flat"][data-scheme="light"] .session-links .console-split, [data-theme="flat"][data-scheme="light"] .definition-tabs button {
   border-color: var(--line); background: var(--panel); color: var(--muted);
 }
 [data-theme="flat"][data-scheme="light"] .session-actions button:hover,
-[data-theme="flat"][data-scheme="light"] .session-links a:hover,
+[data-theme="flat"][data-scheme="light"] .session-links a:hover, [data-theme="flat"][data-scheme="light"] .session-links .console-split:hover,
 [data-theme="flat"][data-scheme="light"] .definition-tabs button:hover { border-color: #b8c2d8; color: var(--text); }
 [data-theme="flat"][data-scheme="light"] .session-actions button.primary { border-color: #9fd8bf; background: #eafaf2; color: var(--text); }
 [data-theme="flat"][data-scheme="light"] .session-actions button.danger { border-color: #ecc5c8; color: #c14b47; }
@@ -1256,7 +1296,7 @@ button, input { font: inherit; }
 [data-theme="soft"][data-scheme="dark"] .tradeoffs,
 [data-theme="soft"][data-scheme="dark"] .filter-group button,
 [data-theme="soft"][data-scheme="dark"] .session-actions button,
-[data-theme="soft"][data-scheme="dark"] .session-links a,
+[data-theme="soft"][data-scheme="dark"] .session-links a, [data-theme="soft"][data-scheme="dark"] .session-links .console-split,
 [data-theme="soft"][data-scheme="dark"] .definition-tabs button,
 [data-theme="soft"][data-scheme="dark"] .export-button,
 [data-theme="soft"][data-scheme="dark"] .group-more-toggle,

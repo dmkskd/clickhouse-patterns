@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import logging
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 
 from . import session as sessions
@@ -66,6 +68,23 @@ class SessionStatus:
         }
 
 
+def _probe_console(session: sessions.Session) -> bool:
+    """Ask the driver whether it serves the embedded SQL Console at /ui.
+
+    Probing beats comparing `version()` against 26.9: the endpoint is what the
+    link needs, and a node built from `head` answers for itself.
+    """
+    request = urllib.request.Request(f"{session.driver_url}/ui", method="HEAD")
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return response.status == 200
+    except urllib.error.HTTPError:
+        return False
+    except Exception as exc:  # noqa: BLE001 - the link falls back to /play
+        _log.debug("SQL Console probe failed on %r: %s", session.driver_node, exc)
+        return False
+
+
 def _emit(report: Reporter | None, message: str) -> None:
     if report:
         report(message)
@@ -95,7 +114,7 @@ def _start_session(
         sessions.write_session(failed)
         raise
 
-    ready = current.with_phase("ready")
+    ready = current.with_console(_probe_console(current)).with_phase("ready")
     sessions.write_session(ready)
     return ready
 

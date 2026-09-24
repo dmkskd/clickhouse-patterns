@@ -387,7 +387,10 @@ def _print_started(active) -> None:
 
 def _print_browse(active) -> None:
     print("\n  BROWSE")
-    print(f"    SQL console        {active.play_url}")
+    # 26.9+ serves both the SQL Console and Play; older pinned nodes only Play.
+    if getattr(active, "console", False):
+        print(f"    SQL Console        {active.console_url}")
+    print(f"    Play               {active.play_url}")
     print(f"    schema visualizer  {active.schema_url}")
     try:
         pattern = sessions.load_session_pattern(active)
