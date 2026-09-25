@@ -8,7 +8,7 @@ metadata:
 
     Snapshot and change batches are staged as Avro objects in S3-compatible object storage (MinIO in this stack). PeerDB then issues `INSERT ... SELECT FROM s3()` statements, and ClickHouse reads the staged objects from the object store. Ongoing changes are inserted first into `_peerdb_raw_two_table_mirror` and are decoded into the targets from there.
 
-    PeerDB performs no in-flight transformation. It has no per-message transform hook on the CDC path, so all shaping happens in ClickHouse, either in the target DDL or in a materialized view.
+    PeerDB does not perform in-flight transformation. It has no per-message transform hook on the CDC path, so all transformation happens in ClickHouse, either in the target DDL or in a materialized view.
 
     **Two Postgres instances run in this pattern.** `postgres` is the source database being replicated. `peerdb-catalog` stores PeerDB's own metadata and Temporal's workflow history, and takes no part in replication.
 
