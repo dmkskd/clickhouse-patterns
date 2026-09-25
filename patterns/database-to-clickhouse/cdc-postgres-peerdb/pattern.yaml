@@ -10,7 +10,7 @@ metadata:
 
     PeerDB does not perform in-flight transformation. It has no per-message transform hook on the CDC path, so all transformation happens in ClickHouse, either in the target DDL or in a materialized view.
 
-    **Two Postgres instances run in this pattern.** `postgres` is the source database being replicated. `peerdb-catalog` stores PeerDB's own metadata and Temporal's workflow history, and takes no part in replication.
+    **Two Postgres instances run in this pattern.** `postgres` is the source database being replicated. `peerdb-catalog` stores PeerDB's own metadata and Temporal's workflow history.
 
     PeerDB runs replication as Temporal workflows, so the stack needs several services beyond ClickHouse and the source database.
   graph: |-
