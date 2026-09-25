@@ -6,13 +6,13 @@ metadata:
 
     This pattern replicates two Postgres tables into two ClickHouse destination tables: one that does not exist yet, so PeerDB creates it, and one already created in ClickHouse with its own DDL.
 
-    Snapshot and change batches are staged as Avro objects in MinIO. PeerDB then issues `INSERT ... SELECT FROM s3()` statements, and ClickHouse pulls the named objects when they run. Ongoing changes are inserted first into `_peerdb_raw_two_table_mirror` and are decoded into the targets from there.
+    Snapshot and change batches are staged as Avro objects in S3-compatible object storage (MinIO in this stack). PeerDB then issues `INSERT ... SELECT FROM s3()` statements, and ClickHouse reads the staged objects from the object store. Ongoing changes are inserted first into `_peerdb_raw_two_table_mirror` and are decoded into the targets from there.
 
     PeerDB performs no in-flight transformation. It has no per-message transform hook on the CDC path, so all shaping happens in ClickHouse, either in the target DDL or in a materialized view.
 
     **Two Postgres instances run in this pattern.** `postgres` is the source database being replicated. `peerdb-catalog` stores PeerDB's own metadata and Temporal's workflow history, and takes no part in replication.
 
-    Replication runs as Temporal workflows, so the stack needs several services beyond ClickHouse and the source database.
+    PeerDB runs replication as Temporal workflows, so the stack needs several services beyond ClickHouse and the source database.
   graph: |-
     snapshot:
       postgres:source_tables(label=public.orders + public.orders_existing,note=**Source Postgres** · service `postgres`\nThe replicated user data.\n- not the peerdb-catalog\n- read through a logical replication slot)
