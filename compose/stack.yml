@@ -375,8 +375,12 @@ services:
       peerdb-flow-api: { condition: service_started }
 
   # ── s3: MinIO ──────────────────────────────────────────────────────────────
+  # Bitnami's frozen build, not minio/minio. MinIO withdrew both official images:
+  # the `minio` Docker Hub namespace no longer lists `minio` or `mc`, and quay.io
+  # now refuses anonymous pulls for them. Bitnami's run.sh builds its own server
+  # args, hence no `command:`.
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: bitnamilegacy/minio:2025.7.23
     profiles: [s3]
     ports:
       - "9010:9000"   # S3 API (9000/9001 are taken by CH native ports)
@@ -384,7 +388,6 @@ services:
     environment:
       MINIO_ROOT_USER: clickhouse
       MINIO_ROOT_PASSWORD: clickhouse_secret
-    command: server /data --console-address ":9001"
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 5s
@@ -393,7 +396,7 @@ services:
       start_period: 5s
 
   minio-init:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: bitnamilegacy/minio-client:2025.7.21
     profiles: [s3]
     depends_on:
       minio: { condition: service_healthy }
