@@ -217,6 +217,10 @@ window.PE.session = (() => {
       const selected = ctx.getSelected();
       const snapshot = control.snapshot;
       const isLocal = control.mode === "local" && control.interactive;
+      // On a pattern page the bar sits under the title; elsewhere, under the top bar.
+      const bar = $("session-bar");
+      if (selected) $("pattern-body").before(bar);
+      else $("catalog-home").before(bar);
       panel.hidden = !isLocal;
       syncControlStrip();
       if (!isLocal) return;
@@ -250,6 +254,10 @@ window.PE.session = (() => {
       else if (active) panel.classList.add("active");
 
       const selectedDiffers = Boolean(active && selected && active.slug !== selected.slug);
+      // The pattern a running operation acts on (the target of a switch), and
+      // whether the page shown is a different one.
+      const busySlug = busy ? (operation.pattern || active?.slug) : null;
+      const busyElsewhere = Boolean(busySlug && busySlug !== selected?.slug);
       // Whenever the page shown is not the running pattern (the catalog home, or a
       // different pattern's page), the control row is compact: open the running
       // one or stop it. Full controls (SQL console, schema, logs, validate) live
@@ -263,7 +271,14 @@ window.PE.session = (() => {
       const latestProgress = [...messages].reverse().find((event) => event.type === "progress");
       if (busy) {
         $("session-eyebrow").textContent = starting ? "Starting services" : `${operation.name} in progress`;
-        $("session-title").textContent = operation.pattern || active?.slug || "Pattern session";
+        // Name the pattern being started by its title; when another page is shown,
+        // say so, since the bar is all that tells the two apart.
+        const opPattern = ctx.patterns.find((pattern) => pattern.slug === busySlug);
+        const opTitle = opPattern ? displayTitle(opPattern) : busySlug || "Pattern session";
+        // Elsewhere, the title is the link to that pattern (as for a running one).
+        $("session-title").innerHTML = busyElsewhere
+          ? `<span class="running-label">${starting ? "Starting" : esc(operation.name)}: </span><span class="title-link">${esc(opTitle)}</span>`
+          : esc(opTitle);
         $("session-detail").textContent = latestProgress
           ? `Latest: ${latestProgress.payload.message}`
           : "The page will remain connected while the lifecycle operation completes.";
@@ -325,7 +340,8 @@ window.PE.session = (() => {
       // confirms and performs the teardown before starting the selected pattern.
       setVisible("stop-session", Boolean(active) && !busy && !selectedDiffers
         && active.owner !== "terminal");
-      setVisible("view-running", (selectedDiffers || compact) && !busy);
+      // The running pattern's title is itself the link to it, so no separate button.
+      setVisible("view-running", false);
       // With a local server connected the whole bar already implies it (run button,
       // SQL console, Stop), so the "Local server" pill is redundant here. It stays
       // only as the "Static catalog" indicator when there is no server (static path).
@@ -333,8 +349,9 @@ window.PE.session = (() => {
       $("view-running").textContent = compact ? "Open running pattern" : "View running";
       // On the home, the whole running-session bar is a shortcut into the pattern.
       const summaryEl = document.querySelector(".session-summary");
-      summaryEl.classList.toggle("clickable", compact);
-      summaryEl.onclick = compact && active ? () => ctx.selectPattern(active.slug) : null;
+      summaryEl.classList.toggle("clickable", compact || busyElsewhere);
+      summaryEl.onclick = busyElsewhere ? () => ctx.selectPattern(busySlug)
+        : compact && active ? () => ctx.selectPattern(active.slug) : null;
       $("start-session").disabled = busy;
       const switching = Boolean(active && selectedDiffers);
       $("start-session").innerHTML = `<span class="play" aria-hidden="true">▶</span>${switching ? "Launch this pattern" : "Launch pattern"}`;
@@ -416,6 +433,16 @@ window.PE.session = (() => {
       const titleEl = $("session-title");
       if (!titleEl.title) titleEl.title = titleEl.textContent;
       $("session-detail").title = $("session-detail").textContent;
+
+      // On a runnable pattern, Launch (or "Launch this pattern" when another one
+      // runs) sits beside Clone. With nothing running the session bar is hidden.
+      const headerLaunch = Boolean(selected?.runnable) && !busy
+        && (!active || (selectedDiffers && active.owner !== "terminal"));
+      const startBtn = $("start-session");
+      startBtn.classList.toggle("export-button", headerLaunch);
+      if (headerLaunch) document.querySelector(".pattern-actions").prepend(startBtn);
+      else $("explorer-mode").before(startBtn);
+      if (headerLaunch && !active && !canShowLogs) panel.hidden = true;
     }
 
     async function refreshSession() {
@@ -716,7 +743,10 @@ window.PE.session = (() => {
       catch (error) { showToast(error.message, "error"); }
     });
     $("view-running").addEventListener("click", () => {
-      const slug = ctx.getControl().snapshot?.session?.slug;
+      const snapshot = ctx.getControl().snapshot;
+      const slug = snapshot?.operation?.status === "running"
+        ? (snapshot.operation.pattern || snapshot.session?.slug)
+        : snapshot?.session?.slug;
       if (slug) ctx.selectPattern(slug);
     });
     $("explorer-mode").addEventListener("click", () => {

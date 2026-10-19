@@ -100,7 +100,7 @@
       </section>
 
       <div id="pattern-detail" class="pattern-detail" hidden>
-        <header class="pattern-header">
+        <header class="pattern-header pattern-heading">
           <div>
             <nav id="pattern-breadcrumb" class="pattern-breadcrumb" aria-label="Breadcrumb"></nav>
             <div id="pattern-experimental" class="pattern-experimental" hidden></div>
@@ -110,6 +110,11 @@
                 <button id="clone-pattern" class="export-button" type="button">Clone</button>
               </div>
             </div>
+          </div>
+        </header>
+        <!-- The session bar (session-bar) is moved here by session.js while a pattern is shown. -->
+        <div id="pattern-body" class="pattern-header pattern-body">
+          <div>
             <div id="pattern-status-detail" class="pattern-status-detail" hidden></div>
             <div id="pattern-requires" class="pattern-requires" hidden></div>
             <div id="pattern-superseded" class="pattern-superseded" hidden></div>
@@ -179,7 +184,7 @@
 
             <div id="pattern-description" class="pattern-description"></div>
           </div>
-        </header>
+        </div>
 
         <section id="tradeoffs" class="tradeoffs" aria-labelledby="tradeoffs-title" hidden>
           <div class="section-heading"><div><span>Decision guide</span><h2 id="tradeoffs-title">Trade-offs</h2></div></div>

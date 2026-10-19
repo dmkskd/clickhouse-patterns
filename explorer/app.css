@@ -260,6 +260,15 @@ button, input { font: inherit; }
 .session-bar:empty, .session-bar:not(:has(> :not([hidden]))) { display: none; }
 .session-bar .session-panel { border: 0; background: none; padding: 10px 28px; border-radius: 0; }
 .session-bar .session-progress { margin: 0; border-radius: 0; padding: 11px 28px 14px; background: none; }
+/* On a pattern page the bar sits under the title and tags, and sticks under
+   the top bar once scrolled past. */
+.pattern-header.pattern-heading { margin-bottom: 0; }
+.pattern-header.pattern-body { padding-top: 0; }
+.pattern-detail > .session-bar { width: fit-content; max-width: 100%; margin: 0 0 12px max(0px, calc((100% - 1500px) / 2)); border: 1px solid var(--line); border-radius: 10px; }
+/* With the log open the bar takes the content width, so log lines are not cramped. */
+.pattern-detail > .session-bar:has(> .session-progress:not([hidden])) { width: auto; max-width: 1500px; margin-right: max(0px, calc((100% - 1500px) / 2)); }
+.pattern-detail > .session-bar .session-panel { padding: 8px 14px; }
+.pattern-detail > .session-bar .session-progress { padding: 11px 14px 14px; }
 
   radial-gradient(circle at 80% 22%, #293a6a55 0, transparent 34%),
   linear-gradient(135deg, #101526 0, #0b0e19 58%, #0a0c15 100%); }
@@ -521,6 +530,10 @@ button, input { font: inherit; }
 .export-button.icon-button { display: inline-grid; place-items: center; width: 32px; height: 30px; padding: 0; }
 .export-button.icon-button svg { display: block; }
 .export-button:hover { border-color: #4a587d; color: white; }
+/* Launch beside Clone (idle, runnable pattern): the one filled button in the header. */
+.pattern-actions #start-session { border-color: #1f8a5c; background: #1f8a5c; color: #fff; font-weight: 600; }
+.pattern-actions #start-session:hover { border-color: #187049; background: #187049; color: #fff; }
+.pattern-actions #start-session .play { display: inline-block; margin-right: 6px; font-size: 9px; }
 .clone-modal-body pre { margin: 4px 0 13px; padding: 9px 11px; border: 1px solid #23293f; border-radius: 7px; background: #0c1020; color: #cdd5ea; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-x: auto; }
 .clone-modal-body code { padding: 1px 5px; border-radius: 4px; background: #1a2033; color: #cdd5ea; font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .clone-modal-body pre code { padding: 0; background: none; }
