@@ -2,61 +2,56 @@ manifest_version: 2
 metadata:
   title: CDC · Postgres physical WAL → walshadow → ClickHouse
   description: |-
-    [walshadow](https://github.com/ClickHouse/walshadow) replicates Postgres tables into ClickHouse with a latency in the low hundreds of milliseconds, by streaming physical WAL records from the source Postgres server and decoding them directly into ClickHouse rows.
+    [walshadow](https://github.com/ClickHouse/walshadow) replicates **Postgres** tables into ClickHouse with a latency in the low hundreds of milliseconds, by streaming physical WAL records from the source **Postgres** server and decoding them directly into ClickHouse rows.
 
-    CDC tools such as PeerDB and Debezium use **logical decoding**, a Postgres feature in which the source Postgres server converts its WAL into row changes (INSERT, UPDATE, DELETE) and sends them to the client through a replication slot. walshadow receives the WAL records exactly as Postgres writes them to its WAL files, and converts them into row changes in its own process.
+    CDC tools such as PeerDB and Debezium use **logical decoding**, a **Postgres** feature in which the source **Postgres** server converts its WAL into row changes (INSERT, UPDATE, DELETE) and sends them to the client through a replication slot. **walshadow** receives the WAL records exactly as **Postgres** writes them to its WAL files, and converts them into row changes in its own process.
 
     Compared with logical decoding:
 
-    - A physical slot retains WAL on the source Postgres server like a logical slot, and leaves `catalog_xmin` unpinned.
-    - Logical decoding runs on the source Postgres server; walshadow decodes WAL outside the source Postgres server.
-    - With logical decoding, a client sees a renamed column as a dropped column plus a new column; walshadow applies each ADD COLUMN, RENAME COLUMN and DROP COLUMN to the ClickHouse table as executed on Postgres.
+    - A physical slot retains WAL on the source **Postgres** server like a logical slot, and leaves `catalog_xmin` unpinned.
+    - Logical decoding runs on the source **Postgres** server; **walshadow** decodes WAL outside the source **Postgres** server.
+    - With logical decoding, a client sees a renamed column as a dropped column plus a new column; **walshadow** applies each ADD COLUMN, RENAME COLUMN and DROP COLUMN to the ClickHouse table as executed on Postgres.
 
-    The pattern replicates `public.orders`, then applies an INSERT, an UPDATE, a DELETE and `ADD COLUMN status text DEFAULT 'new'` on the source Postgres server. walshadow creates `walshadow.public_orders` ordered by the primary key and adds the `status` column to it.
+    The pattern replicates `public.orders`, then applies an INSERT, an UPDATE, a DELETE and `ADD COLUMN status text DEFAULT 'new'` on the source **Postgres** server. **walshadow** creates `walshadow.public_orders` ordered by the primary key and adds the `status` column to it.
 
     ### Delivery guarantees
 
-    From walshadow's [ordering and consistency](https://github.com/ClickHouse/walshadow/blob/main/docs/limitations.md) and [destination tables](https://github.com/ClickHouse/walshadow/blob/main/docs/destination-tables.md) documentation:
+    From **walshadow**'s [ordering and consistency](https://github.com/ClickHouse/walshadow/blob/main/docs/limitations.md) and [destination tables](https://github.com/ClickHouse/walshadow/blob/main/docs/destination-tables.md) documentation:
 
     - Delivery is at-least-once; `ReplacingMergeTree(_lsn, _is_deleted)` removes rows resent after a restart at merge or `FINAL`.
-    - Rows from one Postgres transaction in different tables become visible in ClickHouse at different moments.
-    - walshadow confirms WAL to the source Postgres server only after ClickHouse acknowledges every earlier insert.
-    - When required WAL is missing, walshadow stops with an error at its last persisted position.
+    - Rows from one **Postgres** transaction in different tables become visible in ClickHouse at different moments.
+    - **walshadow** confirms WAL to the source **Postgres** server only after ClickHouse acknowledges every earlier insert.
+    - When required WAL is missing, **walshadow** stops with an error at its last persisted position.
     - Guaranteed WAL retention needs a physical slot or a WAL archive; this pattern uses neither and relies on `wal_keep_size`.
 
     ### Operational constraints
 
-    walshadow parses the physical WAL format and the heap tuple layout, and both can change in any Postgres major version. The daemon runs only on major versions that walshadow has audited, and the walshadow image must match the source Postgres server's major version ([limitations](https://github.com/ClickHouse/walshadow/blob/main/docs/limitations.md)).
-
-    Physical replication connections are available on self-managed Postgres and on ClickHouse Managed Postgres. Managed services such as [RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PostgreSQL.Replication.ReadReplicas.Configuration.html) document physical replication for their own read replicas and logical replication for external consumers; the [walshadow launch post](https://clickhouse.com/blog/introducing-walshadow) states that most managed Postgres services keep physical WAL internal.
-
-    The source Postgres server needs a `pg_hba` rule for replication connections and `max_wal_senders` of at least 2: one WAL sender streams WAL while another serves the base backup ([getting started](https://github.com/ClickHouse/walshadow/blob/main/docs/getting-started.md)).
-
-    WAL retention is guaranteed only with a physical slot (`slot=` in the source URL) or a WAL archive (`s3://`, `gs://`, `file://`). Without either, Postgres recycles WAL older than `wal_keep_size`, and walshadow stops if it falls further behind. A WAL archive in object storage holds WAL outside the source Postgres server. PeerDB also holds a replication slot and offloads each batch of WAL changes to S3, which keeps retained WAL small while PeerDB is running ([[cdc-postgres-peerdb|Postgres WAL → PeerDB → ClickHouse]]). This pattern relies on `wal_keep_size` ([configuration](https://github.com/ClickHouse/walshadow/blob/main/docs/configuration.md), [switchover](https://github.com/ClickHouse/walshadow/blob/main/docs/failover.md)).
-
-    walshadow stores its resume LSN in `manifest.toml` in its spill directory and writes it with an atomic rename. The manifest, the shadow data directory and the filtered WAL must survive a restart together; losing them forces a full initial load ([operations](https://github.com/ClickHouse/walshadow/blob/main/docs/operations.md), [recovery](https://github.com/ClickHouse/walshadow/blob/main/architecture/recovery.md)).
-
-    Sequence values remain on the source Postgres server. Partitioned tables replicate through their root table. Source switchover works only when planned: walshadow verifies that the new primary holds the required WAL before it resumes ([limitations](https://github.com/ClickHouse/walshadow/blob/main/docs/limitations.md), [switchover](https://github.com/ClickHouse/walshadow/blob/main/docs/failover.md)).
+    - **walshadow** parses the physical WAL format and the heap tuple layout, and both can change in any **Postgres** major version. The daemon runs only on major versions that **walshadow** has audited, and the **walshadow** image must match the source **Postgres** server's major version ([limitations](https://github.com/ClickHouse/walshadow/blob/main/docs/limitations.md)).
+    - Physical replication connections are available on self-managed **Postgres** and on ClickHouse Managed Postgres. Managed services such as [RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PostgreSQL.Replication.ReadReplicas.Configuration.html) document physical replication for their own read replicas and logical replication for external consumers; the [walshadow launch post](https://clickhouse.com/blog/introducing-walshadow) states that most managed **Postgres** services keep physical WAL internal.
+    - The source **Postgres** server needs a `pg_hba` rule for replication connections and `max_wal_senders` of at least 2: one WAL sender streams WAL while another serves the base backup ([getting started](https://github.com/ClickHouse/walshadow/blob/main/docs/getting-started.md)).
+    - WAL retention is guaranteed only with a physical slot (`slot=` in the source URL) or a WAL archive (`s3://`, `gs://`, `file://`). Without either, **Postgres** recycles WAL older than `wal_keep_size`, and **walshadow** stops if it falls further behind ([configuration](https://github.com/ClickHouse/walshadow/blob/main/docs/configuration.md), [switchover](https://github.com/ClickHouse/walshadow/blob/main/docs/failover.md)).
+    - **walshadow** stores its resume LSN in `manifest.toml` in its spill directory and writes it with an atomic rename. The manifest, the shadow data directory and the filtered WAL must survive a restart together; losing them forces a full initial load ([operations](https://github.com/ClickHouse/walshadow/blob/main/docs/operations.md), [recovery](https://github.com/ClickHouse/walshadow/blob/main/architecture/recovery.md)).
+    - After an unplanned failover of the source **Postgres** server, **walshadow** stops replicating and ClickHouse must be reloaded ([unsupported failover](https://github.com/ClickHouse/walshadow/blob/main/docs/failover.md#unsupported-failover)). A planned switchover needs no reload ([switchover](https://github.com/ClickHouse/walshadow/blob/main/docs/failover.md)).
 
     ### walshadow internals
 
-    The source Postgres server runs with `wal_level = logical`, the same setting logical decoding requires. At this level, WAL records contain the row data walshadow decodes:
+    The source **Postgres** server runs with `wal_level = logical`, the same setting logical decoding requires. At this level, WAL records contain the row data **walshadow** decodes:
 
     - the complete new tuple of each INSERT and UPDATE
     - the old replica identity columns of each DELETE, and of each UPDATE that changes them
 
     At the default `wal_level = replica`, an UPDATE record can contain only the changed bytes of the new tuple, and a DELETE record contains only the tuple's location.
 
-    A client reads this WAL through physical replication (WAL records as written to the WAL files) or logical decoding (rows decoded by Postgres). Both use the streaming replication protocol, and the replication command the client sends selects the mode:
+    A client reads this WAL through physical replication (WAL records as written to the WAL files) or logical decoding (rows decoded by **Postgres**). Both use the streaming replication protocol, and the replication command the client sends selects the mode:
 
     - PeerDB and Debezium send `START_REPLICATION SLOT <slot> LOGICAL`. The server runs logical decoding and sends row changes.
-    - walshadow sends `START_REPLICATION PHYSICAL`. The server sends the WAL records as written.
+    - **walshadow** sends `START_REPLICATION PHYSICAL`. The server sends the WAL records as written.
 
-    A physical WAL record describes a change to a heap page: relfilenode, block number, item offset and tuple data. Decoding the record requires the table catalog as of the record's LSN. walshadow runs a **shadow Postgres** in its container and streams WAL to it with user-table records replaced by no-ops. The shadow replays catalog changes and by default stores only catalog data. walshadow reads table descriptors from the shadow at the replay LSN, decodes rows from the original WAL records, and inserts them into ClickHouse over the Native protocol.
+    A physical WAL record describes a change to a heap page: relfilenode, block number, item offset and tuple data. Decoding the record requires the table catalog as of the record's LSN. **walshadow** runs a **shadow Postgres** in its container and streams WAL to it with user-table records replaced by no-ops. The shadow replays catalog changes and by default stores only catalog data. **walshadow** reads table descriptors from the shadow at the replay LSN, decodes rows from the original WAL records, and inserts them into ClickHouse over the Native protocol.
 
-    The initial load reads the heap pages of a base backup of the source Postgres server and inserts the tuples visible at the end of the backup. Row changes in the WAL written during the backup are inserted with a higher `_lsn` than the tuples from the backup. The destination engine is `ReplacingMergeTree(_lsn, _is_deleted)`, and `FINAL` returns the row with the highest `_lsn` per sorting key, excluding rows with `_is_deleted = true`.
+    The initial load reads the heap pages of a base backup of the source **Postgres** server and inserts the tuples visible at the end of the backup. Row changes in the WAL written during the backup are inserted with a higher `_lsn` than the tuples from the backup. The destination engine is `ReplacingMergeTree(_lsn, _is_deleted)`, and `FINAL` returns the row with the highest `_lsn` per sorting key, excluding rows with `_is_deleted = true`.
 
-    The shadow is a physical clone of the source Postgres server, which requires the same Postgres major version. The pattern builds the walshadow image from upstream commit `97f9305` for Postgres 16. The walshadow repository is licensed AGPL-3.0.
+    The shadow is a physical clone of the source **Postgres** server, which requires the same **Postgres** major version. The pattern builds the **walshadow** image from upstream commit `97f9305` for **Postgres** 16. The **walshadow** repository is licensed AGPL-3.0.
   graph: |-
     snapshot:
       postgres:orders(label=public.orders,note=**Source Postgres server** · service `postgres`\n- wal_level = logical\n- pg_hba allows replication connections)
