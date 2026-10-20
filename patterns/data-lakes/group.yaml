@@ -1,0 +1,16 @@
+title: Data lakes
+description: Query, copy, and write tables in open formats such as Iceberg in object storage
+icon: s3
+order: 7
+intro: |-
+  ClickHouse reads and writes Apache Iceberg tables in object storage. A lake
+  table is either a source, which ClickHouse queries in place or copies into
+  MergeTree, or a destination, which ClickHouse writes for other engines to
+  read.
+
+  - **Incremental export to Iceberg.** A refreshable materialized view appends rows committed to a MergeTree table after its previous refresh to an Iceberg table.
+related:
+  - group: s3-to-clickhouse
+    note: For plain files in S3 without a table format
+  - group: retention-and-tiering
+    note: For moving older MergeTree parts to S3 inside ClickHouse

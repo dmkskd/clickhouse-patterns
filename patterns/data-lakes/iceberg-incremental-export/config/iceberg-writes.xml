@@ -1,0 +1,9 @@
+<clickhouse>
+    <!-- users.d fragment: the refreshable view's background INSERT runs with the
+         default profile, so Iceberg writes must be allowed at profile level. -->
+    <profiles>
+        <default>
+            <allow_insert_into_iceberg>1</allow_insert_into_iceberg>
+        </default>
+    </profiles>
+</clickhouse>

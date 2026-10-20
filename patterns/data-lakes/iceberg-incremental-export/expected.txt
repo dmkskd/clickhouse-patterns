@@ -1,0 +1,3 @@
+# operation	added_records	total_records	has_cursor
+APPEND	4	4	1
+APPEND	3	7	1

@@ -1,3 +1,4 @@
+import io
 import json
 import threading
 from types import SimpleNamespace
@@ -293,6 +294,30 @@ def test_minio_reader_lists_only_the_declared_prefix(monkeypatch):
 
     assert result["type"] == "object-store"
     assert result["objects"] == [{"key": "events/batch-1.parquet", "size": 42, "modified": "2026-08-13T00:00:00", "format": "Parquet"}]
+
+
+def test_minio_reader_previews_json_object_as_indented_text(monkeypatch):
+    payload = b'{"format-version":2,"current-snapshot-id":7}'
+
+    class FakeS3:
+        def head_object(self, **kwargs):
+            return {"ContentLength": len(payload)}
+
+        def get_object(self, **kwargs):
+            return {"Body": io.BytesIO(payload)}
+
+    reader = MinioReader()
+    monkeypatch.setattr(reader, "_client", lambda _resource: FakeS3())
+    resource = Resource(
+        key="minio:lake", kind="minio", name="lake",
+        properties={"bucket": "clickhouse", "prefix": "lake/"},
+    )
+
+    result = reader.inspect(ReaderContext(resource, None, False, lambda: None), "lake/metadata/v1.metadata.json")
+
+    assert result["subtitle"] == "JSON"
+    assert result["text"] == '{\n  "format-version": 2,\n  "current-snapshot-id": 7\n}'
+    assert result["sample_error"] is None
 
 
 def test_minio_reader_refuses_object_outside_declared_prefix(monkeypatch):

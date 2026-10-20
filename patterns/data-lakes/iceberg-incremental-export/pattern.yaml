@@ -1,0 +1,106 @@
+manifest_version: 2
+metadata:
+  title: 'Incremental export: MergeTree to Iceberg'
+  description: |-
+    A refreshable materialized view with `APPEND INCREMENTAL` (ClickHouse 26.9)
+    copies rows from a MergeTree table to an Iceberg table in MinIO. Each
+    refresh selects the rows committed after the previous refresh and appends
+    them to the Iceberg table in one Iceberg snapshot. An Iceberg snapshot is a
+    version of the table, recorded in the table's metadata files in object
+    storage, with a summary of key-value pairs. Spark, Trino, DuckDB, and other
+    Iceberg readers query the table from object storage.
+
+    `APPEND INCREMENTAL` records the position of the last exported row of
+    `demo.order_events` as a cursor. The position is the pair of virtual columns
+    `_block_number`, which identifies the insert block, and `_block_offset`,
+    which identifies the row in that block. The first two settings listed below
+    store both columns in each part.
+
+    The cursor is stored in the Iceberg table, in the `clickhouse.refresh-cursor`
+    key of the summary of the snapshot that contains the exported rows.
+
+    - A failed commit leaves the cursor unchanged.
+    - After a restart, the server reads the cursor from the latest snapshot.
+    - Merges keep both column values. Merged rows are not exported again.
+    - A refresh with no new rows commits no snapshot.
+
+    **Source table settings** (`SETTINGS` clause of `CREATE TABLE demo.order_events`):
+
+    - `enable_block_number_column = 1`, `enable_block_offset_column = 1`: store `_block_number` and `_block_offset` in each part.
+    - `add_minmax_index_for_block_number_column = 1`, `add_minmax_index_for_block_offset_column = 1`, `part_minmax_index_columns = 'with_block_number_offset'`: per-part min/max indexes on both columns. Not required by `APPEND INCREMENTAL`; set as in the 26.9 release example.
+
+    The refresh interval sets two values: the maximum delay between an insert
+    into `demo.order_events` and its export, and the maximum number of snapshots
+    per hour. The view uses `REFRESH EVERY 1 MINUTE`. The load step inserts two
+    batches of 4 and 3 events and runs `SYSTEM REFRESH VIEW` and
+    `SYSTEM WAIT VIEW` after each, without waiting for the schedule.
+    `system.iceberg_history` then lists two `APPEND` snapshots with
+    `added-records` 4 and 3.
+
+    Iceberg writes require `allow_insert_into_iceberg = 1`, which the pattern
+    sets in the default user profile.
+  graph: |-
+    ingest:
+      client:writer -[INSERT]-> mergetree:order_events(label=demo.order_events,engine=MergeTree,settings=block number/offset columns)
+
+    export:
+      mergetree:order_events -[REFRESH EVERY 1 MINUTE · APPEND INCREMENTAL]-> refreshable-mv:order_events_to_iceberg(label=demo.order_events_to_iceberg,note=**APPEND INCREMENTAL**\n- selects rows after the cursor\n- appends them as one snapshot\n- writes the new cursor to that snapshot)
+        -[INSERT · one snapshot per refresh]-> remote-table:lake_order_events(label=demo.lake_order_events,engine=IcebergS3)
+        -[Parquet data files · Iceberg metadata files]-> minio:lake(bucket=clickhouse,prefix=lake/order_events/,label=Iceberg table)
+
+    query:
+      minio:lake -[reads Iceberg metadata and Parquet files]-> client:lake_engines(label=Spark · Trino · DuckDB)
+  status: wip
+  topology: single
+  order: 1
+  tags: [iceberg, data-lake, refreshable-mv, incremental, export, minio]
+  references:
+    - label: 'ClickHouse 26.9 release: APPEND INCREMENTAL'
+      url: https://clickhouse.com/blog/clickhouse-release-26-09
+    - label: 'ClickHouse: CREATE VIEW (APPEND INCREMENTAL requirements)'
+      url: https://clickhouse.com/docs/sql-reference/statements/create/view#refreshable-materialized-view
+    - label: 'ClickHouse: Refreshable materialized views'
+      url: https://clickhouse.com/docs/concepts/features/materialized-views/refreshable-materialized-view
+  related_patterns:
+    - slug: refreshable-materialized-views
+      note: The full-recompute form of a refreshable view, for results that change with corrections.
+  tradeoffs:
+    benefits:
+      - A refresh reads only rows committed after the cursor. In the demo, with 100,004 rows in `demo.order_events`, a refresh after a one-row insert reads 1 row (`system.query_log.read_rows`).
+      - The cursor is stored in the snapshot that contains the exported rows. Restarts and failed refreshes do not duplicate or skip rows.
+      - The export is a ClickHouse view. It needs no external scheduler or connector.
+    limitations:
+      - Each inserted row is exported once. `ALTER TABLE ... UPDATE/DELETE`, lightweight `UPDATE`, and lightweight `DELETE` on `demo.order_events` do not change rows already in the Iceberg table. A row deleted before the next refresh is not exported.
+      - The source must be a single plain MergeTree table. `CREATE` fails for ReplacingMergeTree and other merging engines, and for queries with `JOIN`, `UNION`, subqueries, views, or table functions.
+      - The Iceberg table lags the source by up to one refresh interval plus the refresh duration.
+      - Requires ClickHouse 26.9 or later, and `enable_block_number_column = 1` and `enable_block_offset_column = 1` on the source table.
+      - Each refresh with new rows commits one snapshot and at least one Parquet file. Short intervals accumulate small files and snapshots, which require compaction and snapshot expiry.
+spec:
+  profiles: [single, s3]
+  driver_node: ch
+  requires:
+    clickhouse_min: "26.9"
+  services:
+    clickhouse:
+      config:
+        - node: ch
+          file: config/iceberg-writes.xml
+          directory: users.d
+          depends_on: [minio-init]
+  steps:
+    schema: schema.sql
+    load: load.py      # two batches, a forced refresh after each
+
+    # Convergence: both batches are in the Iceberg table, 7 rows, no duplicates.
+    ready_when:
+      - query: SELECT count() FROM demo.lake_order_events
+        value: 7
+        node: ch
+        timeout: 90
+      - query: SELECT uniqExact(event_id) FROM demo.lake_order_events
+        value: 7
+        node: ch
+        timeout: 30
+    verify:
+      sql: verify.sql
+      expected: expected.txt

@@ -513,20 +513,50 @@ window.PE.session = (() => {
         </section>`;
     }
 
-    function renderObjectStoreInspector(payload) {
-      $("resource-inspector-title").textContent = payload.title;
-      $("resource-inspector-subtitle").textContent = payload.subtitle;
-      const rows = payload.objects.map((object) => [
+    // Object paths render as a breadcrumb: each folder at or below the
+    // resource's declared prefix reopens the object list filtered to it. Folders
+    // above the prefix stay plain text, since the server refuses them.
+    function renderObjectBreadcrumb(resourceKey, prefix, path, isObject) {
+      const title = $("resource-inspector-title");
+      const parts = path.split("/").filter(Boolean);
+      title.replaceChildren(parts.length ? "" : "/");
+      parts.forEach((part, index) => {
+        const last = index === parts.length - 1;
+        const folder = `${parts.slice(0, index + 1).join("/")}/`;
+        const label = last && isObject ? part : `${part}/`;
+        if (!last && folder.startsWith(prefix)) {
+          // A link, not a button: the header styles every button as the close box.
+          const link = document.createElement("a");
+          link.href = "#";
+          link.className = "resource-breadcrumb-link";
+          link.textContent = label;
+          link.addEventListener("click", (event) => {
+            event.preventDefault();
+            openResourceInspector(resourceKey, null, folder);
+          });
+          title.append(link);
+        } else {
+          title.append(label);
+        }
+      });
+    }
+
+    function renderObjectStoreInspector(payload, folder = null) {
+      const current = folder || payload.prefix;
+      const objects = payload.objects.filter((object) => object.key.startsWith(current));
+      renderObjectBreadcrumb(payload.resource.key, payload.prefix, current, false);
+      $("resource-inspector-subtitle").textContent = `s3://${payload.bucket}/${current}`;
+      const rows = objects.map((object) => [
         object.key, String(object.size), object.modified, object.format
       ]);
       resourceInspectorBody.innerHTML = `<section class="resource-inspector-section">
         <h3>Objects</h3>
-        <p class="resource-sample-meta">${esc(payload.bucket)} · ${esc(payload.prefix || "/")} · up to ${payload.object_limit} objects${payload.truncated ? " (more available)" : ""}</p>
+        <p class="resource-sample-meta">${esc(payload.bucket)} · ${esc(current || "/")} · up to ${payload.object_limit} objects${payload.truncated ? " (more available)" : ""}</p>
         ${rows.length ? window.PE.util.dataTable(["Object", "Bytes", "Modified", "Format"], rows) : '<p class="resource-inspector-note">No objects match this prefix.</p>'}
       </section>`;
       resourceInspectorBody.querySelectorAll("tbody tr").forEach((row, index) => {
         const cell = row.querySelector("td");
-        const object = payload.objects[index];
+        const object = objects[index];
         if (!cell || !object) return;
         const button = document.createElement("button");
         button.className = "resource-object-link";
@@ -537,8 +567,16 @@ window.PE.session = (() => {
       });
     }
 
-    function renderObjectPreviewInspector(payload) {
-      $("resource-inspector-title").textContent = payload.title;
+    // Highlight.js escapes its input; the fallback is escaped too.
+    function highlightJson(text) {
+      return window.hljs?.getLanguage("json")
+        ? window.hljs.highlight(text, { language: "json", ignoreIllegals: true }).value
+        : esc(text);
+    }
+
+    function renderObjectPreviewInspector(payload, resourceKey) {
+      const resource = ctx.getSelected()?.graph?.resources?.find((item) => item.key === resourceKey);
+      renderObjectBreadcrumb(resourceKey, resource?.properties?.prefix || "", payload.object.key, true);
       $("resource-inspector-subtitle").textContent = payload.subtitle;
       const sample = payload.sample;
       resourceInspectorBody.innerHTML = `<section class="resource-inspector-section">
@@ -547,6 +585,7 @@ window.PE.session = (() => {
         ${payload.sample_disabled ? `<p class="resource-inspector-note">${esc(payload.sample_disabled)}</p>` : ""}
         ${payload.sample_error ? `<p class="resource-inspector-note">This object could not be decoded: ${esc(payload.sample_error)}</p>` : ""}
         ${sample ? `<p class="resource-sample-meta">Read-only sample · up to ${sample.limit} rows</p>${window.PE.util.dataTable(sample.columns, sample.rows)}` : ""}
+        ${payload.text ? `<pre class="code lang-json object-text"><code class="hljs language-json">${highlightJson(payload.text)}</code></pre>` : ""}
       </section>`;
     }
 
@@ -636,14 +675,14 @@ window.PE.session = (() => {
         </section>`;
     }
 
-    function renderResourceInspector(payload) {
+    function renderResourceInspector(payload, resourceKey, folder) {
       $("resource-inspector-kicker").textContent = payload.type === "database-tables"
         ? `Live ${payload.system} resource`
         : payload.type === "kafka-topic" ? "Live Kafka resource" : "Live ClickHouse resource";
       if (payload.type === "kafka-topic") return renderKafkaTopicInspector(payload);
       if (payload.type === "database-tables") return renderDatabaseInspector(payload);
-      if (payload.type === "object-store") return renderObjectStoreInspector(payload);
-      if (payload.type === "object-preview") return renderObjectPreviewInspector(payload);
+      if (payload.type === "object-store") return renderObjectStoreInspector(payload, folder);
+      if (payload.type === "object-preview") return renderObjectPreviewInspector(payload, resourceKey);
       if (payload.type === "clickhouse-dictionary") return renderDictionaryInspector(payload);
       return renderClickHouseInspector(payload);
     }
@@ -654,7 +693,7 @@ window.PE.session = (() => {
       resourceInspectorBody.innerHTML = `<div class="resource-inspector-message"><div>${esc(detail)}</div></div>`;
     }
 
-    async function openResourceInspector(resourceKey, objectKey = null) {
+    async function openResourceInspector(resourceKey, objectKey = null, folder = null) {
       const selected = ctx.getSelected();
       const resource = selected?.graph?.resources?.find((item) => item.key === resourceKey);
       if (!resource || !ctx.canInspect()) return;
@@ -672,7 +711,7 @@ window.PE.session = (() => {
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || `request failed (${response.status})`);
-        renderResourceInspector(payload);
+        renderResourceInspector(payload, resourceKey, folder);
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         showResourceInspectorMessage(resource.name, `Live inspection failed: ${detail}`);

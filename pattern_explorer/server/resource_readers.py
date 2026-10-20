@@ -268,7 +268,7 @@ class DictionaryReader:
 
 
 class MinioReader:
-    """List declared S3 prefixes and preview small Parquet or Avro objects."""
+    """List declared S3 prefixes and preview small Parquet, Avro, or JSON objects."""
 
     kinds = frozenset({"minio"})
 
@@ -317,7 +317,7 @@ class MinioReader:
         if configured:
             return configured
         suffix = PurePosixPath(object_key).suffix.lower()
-        return {".parquet": "Parquet", ".avro": "Avro"}.get(suffix, "Unknown")
+        return {".parquet": "Parquet", ".avro": "Avro", ".json": "JSON"}.get(suffix, "Unknown")
 
     def _preview_object(self, resource: Resource, bucket: str, object_key: str) -> dict[str, Any]:
         client = self._client(resource)
@@ -329,6 +329,14 @@ class MinioReader:
         if len(payload) > OBJECT_PREVIEW_BYTES:
             raise ValueError("object exceeded the preview limit while reading")
         format_name = self._format(resource, object_key)
+        if format_name.lower() == "json":
+            # Documents such as Iceberg table metadata are nested, not tabular,
+            # so they are shown as indented text instead of a sample table.
+            try:
+                text, error = json.dumps(json.loads(payload), indent=2), None
+            except ValueError as exc:
+                text, error = None, f"{type(exc).__name__}: {str(exc).splitlines()[0]}"
+            return {"type": "object-preview", "title": object_key, "subtitle": format_name, "object": {"key": object_key, "size": size}, "text": text, "sample": None, "sample_error": error}
         try:
             columns, rows = self._decode(format_name, payload)
             sample = {"columns": columns, "rows": rows, "limit": SAMPLE_LIMIT}
