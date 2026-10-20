@@ -4,6 +4,13 @@ from pattern_explorer.orchestration.nodes import connect
 ch = connect("ch")
 
 
+def check_drift(stage, stage_name):
+    ch.command(
+        "INSERT INTO demo.drift_check "
+        f"SELECT {stage}, '{stage_name}', * FROM demo.lake_drift"
+    )
+
+
 def refresh():
     # Deterministic demonstration control: production waits for the
     # one-minute schedule instead of forcing the refresh.
@@ -29,3 +36,15 @@ ch.command(
 )
 refresh()
 print("batch 2: 3 events inserted; the refresh appends only these")
+check_drift(1, "after export")
+print("stage 1: source and Iceberg compared")
+
+# Change exported rows in the source. The next refresh selects no rows: the
+# cursor is past both rows, and an update or delete does not change a row's
+# _block_number or _block_offset.
+ch.command("UPDATE demo.order_events SET amount = 45.00 WHERE event_id = 1")
+ch.command("DELETE FROM demo.order_events WHERE event_id = 2")
+refresh()
+print("updated event 1 and deleted event 2 in the source; the refresh exported nothing")
+check_drift(2, "after update and delete")
+print("stage 2: source and Iceberg compared")

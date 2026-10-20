@@ -663,7 +663,7 @@
     ["config", "Configuration", "Configuration: ClickHouse and service config files"],
     ["structure", "DDL", "DDL: table and view definitions"],
     ["load", "Loader", "Loader: data load script"],
-    ["verify", "Verification", "Verification: check query and expected output"]
+    ["verify", "Validation", "Validation: check query and expected output"]
   ];
 
   function showDefinition(pattern, key) {

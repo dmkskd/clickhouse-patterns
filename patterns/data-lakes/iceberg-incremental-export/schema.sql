@@ -40,3 +40,36 @@ REFRESH EVERY 1 MINUTE APPEND INCREMENTAL
 TO demo.lake_order_events
 AS SELECT event_id, event_time, order_id, event_type, country, amount
 FROM demo.order_events;
+
+-- Row-by-row comparison of the source with the Iceberg table, read back from
+-- MinIO with the icebergS3() table function. Iceberg has no unsigned types, so
+-- event_id is read back as Int64 and cast for the join.
+CREATE VIEW demo.lake_drift AS
+SELECT
+    coalesce(s.event_id, l.event_id) AS event_id,
+    s.amount AS clickhouse_amount,
+    l.amount AS iceberg_amount,
+    multiIf(s.event_id IS NULL, 'deleted in source, still in Iceberg',
+            l.event_id IS NULL, 'in source, not in Iceberg',
+            s.amount != l.amount, 'updated in source, old value in Iceberg',
+            'same') AS state
+FROM demo.order_events AS s
+FULL OUTER JOIN
+(
+    SELECT toUInt64(event_id) AS event_id, amount
+    FROM icebergS3('http://minio:9000/clickhouse/lake/order_events/', 'clickhouse', 'clickhouse_secret')
+) AS l ON s.event_id = l.event_id
+SETTINGS join_use_nulls = 1;
+
+-- The load step saves the comparison after each stage of the demo.
+CREATE TABLE demo.drift_check
+(
+    stage UInt8,
+    stage_name String,
+    event_id UInt64,
+    clickhouse_amount Nullable(Decimal(10, 2)),
+    iceberg_amount Nullable(Decimal(10, 2)),
+    state String
+)
+ENGINE = MergeTree
+ORDER BY (stage, event_id);

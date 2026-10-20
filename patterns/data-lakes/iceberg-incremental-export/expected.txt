@@ -1,3 +1,15 @@
-# operation	added_records	total_records	has_cursor
-APPEND	4	4	1
-APPEND	3	7	1
+# stage_name	event_id	clickhouse_amount	iceberg_amount	state
+after export	1	40.00	40.00	same
+after export	2	15.50	15.50	same
+after export	3	40.00	40.00	same
+after export	4	99.90	99.90	same
+after export	5	15.50	15.50	same
+after export	6	99.90	99.90	same
+after export	7	40.00	40.00	same
+after update and delete	1	45.00	40.00	updated in source, old value in Iceberg
+after update and delete	2		15.50	deleted in source, still in Iceberg
+after update and delete	3	40.00	40.00	same
+after update and delete	4	99.90	99.90	same
+after update and delete	5	15.50	15.50	same
+after update and delete	6	99.90	99.90	same
+after update and delete	7	40.00	40.00	same

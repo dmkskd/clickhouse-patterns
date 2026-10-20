@@ -37,6 +37,14 @@ metadata:
     `system.iceberg_history` then lists two `APPEND` snapshots with
     `added-records` 4 and 3.
 
+    The view `demo.lake_drift` compares the two tables row by row. It reads the
+    Iceberg table back with the `icebergS3()` table function and joins it to
+    `demo.order_events` on `event_id`. The load step saves its output twice in
+    `demo.drift_check`:
+
+    - After the export: all 7 rows are the same.
+    - After an update of `amount` for event 1 and a delete of event 2 in `demo.order_events`, and one more refresh: event 1 has the old `amount` in Iceberg, and event 2 exists only in Iceberg. That refresh commits no snapshot.
+
     Iceberg writes require `allow_insert_into_iceberg = 1`, which the pattern
     sets in the default user profile.
   graph: |-
@@ -50,6 +58,9 @@ metadata:
 
     query:
       minio:lake -[reads Iceberg metadata and Parquet files]-> client:lake_engines(label=Spark · Trino · DuckDB)
+
+    compare:
+      {mergetree:order_events, minio:lake} -[FULL OUTER JOIN · icebergS3()]-> client:lake_drift(label=demo.lake_drift,note=**After update and delete**\n- event 1: old amount in Iceberg\n- event 2: only in Iceberg)
   status: wip
   topology: single
   order: 1
@@ -89,7 +100,7 @@ spec:
           depends_on: [minio-init]
   steps:
     schema: schema.sql
-    load: load.py      # two batches, a forced refresh after each
+    load: load.py      # two batches, then an update and a delete; a forced refresh after each step
 
     # Convergence: both batches are in the Iceberg table, 7 rows, no duplicates.
     ready_when:
@@ -99,6 +110,13 @@ spec:
         timeout: 90
       - query: SELECT uniqExact(event_id) FROM demo.lake_order_events
         value: 7
+        node: ch
+        timeout: 30
+      # Two APPEND snapshots: the refresh after the update and delete commits none.
+      - query: >-
+          SELECT count() FROM system.iceberg_history
+          WHERE database = 'demo' AND table = 'lake_order_events' AND operation = 'APPEND'
+        value: 2
         node: ch
         timeout: 30
     verify:
