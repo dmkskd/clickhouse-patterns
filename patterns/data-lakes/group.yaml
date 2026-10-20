@@ -1,6 +1,6 @@
 title: Data lakes
 description: Query, copy, and write tables in open formats such as Iceberg in object storage
-icon: s3
+icon: lake
 order: 7
 intro: |-
   ClickHouse reads and writes Apache Iceberg tables in object storage. A lake

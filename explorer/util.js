@@ -261,6 +261,7 @@ window.PE.util = (() => {
         clone: '<rect x="6" y="6" width="14" height="14" rx="2.5"/><rect x="12" y="12" width="14" height="14" rx="2.5"/>',
         "kafka-in": kafkaGlyph,
         "kafka-out": kafkaGlyph,
+        lake: '<g class="source"><ellipse cx="16" cy="8" rx="7" ry="3"/><path d="M9 8v10c0 1.7 3.1 3 7 3s7-1.3 7-3V8M9 13c0 1.7 3.1 3 7 3s7-1.3 7-3M5 23q2.75-2 5.5 0t5.5 0 5.5 0 5.5 0M5 27.5q2.75-2 5.5 0t5.5 0 5.5 0 5.5 0"/></g>',
       };
       return `<svg class="pattern-group-icon compact" viewBox="0 0 32 32" aria-hidden="true">${glyphs[kind] || kafkaGlyph}</svg>`;
     }
@@ -273,6 +274,13 @@ window.PE.util = (() => {
       // Object storage as a bucket (tapered pail) feeding ClickHouse.
       const bucket = '<g class="source"><ellipse cx="10" cy="8" rx="6.5" ry="2.5"/><path d="M3.5 8 6 24 Q10 26 14 24 L16.5 8"/></g>';
       return `<svg class="pattern-group-icon" viewBox="0 0 58 32" aria-hidden="true">${bucket}${arrow}${clickhouse}</svg>`;
+    }
+    if (kind === "lake") {
+      // Data lakes: a database in water, read and written in both directions
+      // (two-headed arrow).
+      const waves = '<g class="source"><ellipse cx="10" cy="7" rx="5.5" ry="2.3"/><path d="M4.5 7v9c0 1.3 2.5 2.3 5.5 2.3s5.5-1 5.5-2.3V7M4.5 11.5c0 1.3 2.5 2.3 5.5 2.3s5.5-1 5.5-2.3M1.5 21.5q2-1.6 4 0t4 0 4 0 4 0M1.5 25.5q2-1.6 4 0t4 0 4 0 4 0"/></g>';
+      const twoWay = '<path class="group-arrow" d="M21 16h10m-3-3 3 3-3 3m-7-6-3 3 3 3"/>';
+      return `<svg class="pattern-group-icon" viewBox="0 0 58 32" aria-hidden="true">${waves}${twoWay}${clickhouse}</svg>`;
     }
     if (kind === "clone") {
       return '<svg class="pattern-group-icon" viewBox="0 0 58 32" aria-hidden="true"><rect x="12" y="7" width="18" height="18" rx="3"/><rect x="24" y="11" width="18" height="18" rx="3"/></svg>';
