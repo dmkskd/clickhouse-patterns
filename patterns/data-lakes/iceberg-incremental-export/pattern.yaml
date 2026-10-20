@@ -10,11 +10,12 @@ metadata:
     storage, with a summary of key-value pairs. Spark, Trino, DuckDB, and other
     Iceberg readers query the table from object storage.
 
+    ### Cursor
+
     `APPEND INCREMENTAL` records the position of the last exported row of
     `demo.order_events` as a cursor. The position is the pair of virtual columns
     `_block_number`, which identifies the insert block, and `_block_offset`,
-    which identifies the row in that block. The first two settings listed below
-    store both columns in each part.
+    which identifies the row in that block.
 
     The cursor is stored in the Iceberg table, in the `clickhouse.refresh-cursor`
     key of the summary of the snapshot that contains the exported rows.
@@ -24,29 +25,38 @@ metadata:
     - Merges keep both column values. Merged rows are not exported again.
     - A refresh with no new rows commits no snapshot.
 
-    **Source table settings** (`SETTINGS` clause of `CREATE TABLE demo.order_events`):
+    ### Settings
 
-    - `enable_block_number_column = 1`, `enable_block_offset_column = 1`: store `_block_number` and `_block_offset` in each part.
-    - `add_minmax_index_for_block_number_column = 1`, `add_minmax_index_for_block_offset_column = 1`, `part_minmax_index_columns = 'with_block_number_offset'`: per-part min/max indexes on both columns. Not required by `APPEND INCREMENTAL`; set as in the 26.9 release example.
+    - `enable_block_number_column = 1`, `enable_block_offset_column = 1` on `demo.order_events`: store `_block_number` and `_block_offset` in each part. Required by `APPEND INCREMENTAL`.
+    - `add_minmax_index_for_block_number_column = 1`, `add_minmax_index_for_block_offset_column = 1`, `part_minmax_index_columns = 'with_block_number_offset'` on `demo.order_events`: per-part min/max indexes on both columns. Not required; set as in the 26.9 release example.
+    - `allow_insert_into_iceberg = 1` in the default user profile: required for writes to Iceberg tables.
+
+    ### Refresh schedule
 
     The refresh interval sets two values: the maximum delay between an insert
     into `demo.order_events` and its export, and the maximum number of snapshots
     per hour. The view uses `REFRESH EVERY 1 MINUTE`. The load step inserts two
     batches of 4 and 3 events and runs `SYSTEM REFRESH VIEW` and
     `SYSTEM WAIT VIEW` after each, without waiting for the schedule.
-    `system.iceberg_history` then lists two `APPEND` snapshots with
-    `added-records` 4 and 3.
+    `system.iceberg_history` then lists two snapshots, with 4 and 3 added
+    records.
 
-    The view `demo.lake_drift` compares the two tables row by row. It reads the
-    Iceberg table back with the `icebergS3()` table function and joins it to
-    `demo.order_events` on `event_id`. The load step saves its output twice in
-    `demo.drift_check`:
+    ### Updates and deletes in the MergeTree table
+
+    Each refresh exports the rows whose position is after the cursor. `INSERT` and
+    `ALTER TABLE ... ATTACH PARTITION ... FROM` add rows with new positions.
+    `ALTER TABLE ... UPDATE/DELETE`, lightweight `UPDATE`, lightweight `DELETE`,
+    and merges change existing rows and add no new positions. In ClickHouse 26.9
+    they do not change the Iceberg table. The ClickHouse documentation does not
+    describe this case. A row attached from another table is exported also when
+    the Iceberg table already contains it.
+
+    The view `demo.lake_drift` shows this by comparing the two tables row by
+    row. It reads the Iceberg table back with the `icebergS3()` table function
+    and joins it to `demo.order_events` on `event_id`. The comparison runs at two points:
 
     - After the export: all 7 rows are the same.
     - After an update of `amount` for event 1 and a delete of event 2 in `demo.order_events`, and one more refresh: event 1 has the old `amount` in Iceberg, and event 2 exists only in Iceberg. That refresh commits no snapshot.
-
-    Iceberg writes require `allow_insert_into_iceberg = 1`, which the pattern
-    sets in the default user profile.
   graph: |-
     ingest:
       client:writer -[INSERT]-> mergetree:order_events(label=demo.order_events,engine=MergeTree,settings=block number/offset columns)
@@ -81,10 +91,11 @@ metadata:
       - The cursor is stored in the snapshot that contains the exported rows. Restarts and failed refreshes do not duplicate or skip rows.
       - The export is a ClickHouse view. It needs no external scheduler or connector.
     limitations:
-      - Each inserted row is exported once. `ALTER TABLE ... UPDATE/DELETE`, lightweight `UPDATE`, and lightweight `DELETE` on `demo.order_events` do not change rows already in the Iceberg table. A row deleted before the next refresh is not exported.
+      - Only rows inserted or attached after the cursor are exported. In 26.9, updates and deletes of exported rows do not change the Iceberg table, and a row deleted before the next refresh is not exported.
+      - `ATTACH PARTITION ... FROM` another table exports the attached rows, including rows the Iceberg table already contains.
       - The source must be a single plain MergeTree table. `CREATE` fails for ReplacingMergeTree and other merging engines, and for queries with `JOIN`, `UNION`, subqueries, views, or table functions.
       - The Iceberg table lags the source by up to one refresh interval plus the refresh duration.
-      - Requires ClickHouse 26.9 or later, and `enable_block_number_column = 1` and `enable_block_offset_column = 1` on the source table.
+      - Requires ClickHouse 26.9 or later, and `enable_block_number_column = 1` and `enable_block_offset_column = 1` on the MergeTree table.
       - Each refresh with new rows commits one snapshot and at least one Parquet file. Short intervals accumulate small files and snapshots, which require compaction and snapshot expiry.
 spec:
   profiles: [single, s3]

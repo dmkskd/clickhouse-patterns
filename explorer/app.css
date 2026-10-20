@@ -507,7 +507,7 @@ button, input { font: inherit; }
   border-radius: 2px;
   background: color-mix(in srgb, var(--text) 6%, transparent);
   color: var(--text);
-  font: 600 .9em ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 400 .9em ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .pattern-description strong { color: var(--text); font-weight: 600; }
 .pattern-description-heading { margin: 28px 0 10px; color: var(--text); font-size: 16px; font-weight: 600; }
