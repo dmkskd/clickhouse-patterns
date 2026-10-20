@@ -92,7 +92,7 @@ metadata:
       - The export is a ClickHouse view. It needs no external scheduler or connector.
     limitations:
       - Only rows inserted or attached after the cursor are exported. In 26.9, updates and deletes of exported rows do not change the Iceberg table, and a row deleted before the next refresh is not exported.
-      - `ATTACH PARTITION ... FROM` another table exports the attached rows, including rows the Iceberg table already contains.
+      - Rows attached with `ATTACH PARTITION ... FROM` another table are exported, including rows the Iceberg table already contains.
       - The source must be a single plain MergeTree table. `CREATE` fails for ReplacingMergeTree and other merging engines, and for queries with `JOIN`, `UNION`, subqueries, views, or table functions.
       - The Iceberg table lags the source by up to one refresh interval plus the refresh duration.
       - Requires ClickHouse 26.9 or later, and `enable_block_number_column = 1` and `enable_block_offset_column = 1` on the MergeTree table.
