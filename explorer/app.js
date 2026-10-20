@@ -1312,10 +1312,7 @@
     provenance.className = "pattern-provenance";
     provenance.textContent = pattern.location === "workspace" ? "Workspace" : "Curated";
     const status = patternStatusBadge(pattern.status);
-    const experimental = pattern.experimental ? [Object.assign(document.createElement("span"), {
-      className: "experimental-badge", textContent: "Experimental",
-    })] : [];
-    el.replaceChildren(provenance, ...(status ? [status] : []), ...experimental);
+    el.replaceChildren(provenance, ...(status ? [status] : []));
     el.hidden = false;
   }
 
