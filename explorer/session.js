@@ -595,7 +595,34 @@ window.PE.session = (() => {
         </section>`;
     }
 
+    function renderPostgresInspector(payload) {
+      $("resource-inspector-title").textContent = payload.title;
+      $("resource-inspector-subtitle").textContent = payload.subtitle;
+      const several = payload.tables.length > 1;
+      resourceInspectorBody.innerHTML = payload.tables.map((table) => {
+        const name = several ? ` · ${esc(table.schema)}.${esc(table.table)}` : "";
+        const sample = table.sample;
+        return `
+        <section class="resource-inspector-section">
+          <h3>Table definition${name}</h3>
+          <pre>${esc(table.create_statement)}</pre>
+        </section>
+        <section class="resource-inspector-section">
+          <h3>Columns${name}</h3>
+          ${window.PE.util.dataTable(["Column", "Type", "Default"], table.columns.map((c) => [c.name, c.type, c.default]))}
+        </section>
+        <section class="resource-inspector-section">
+          <h3>Contents${name}</h3>
+          ${table.sample_error ? `<p class="resource-inspector-note">The definition loaded, but this table could not be sampled: ${esc(table.sample_error)}</p>` : ""}
+          ${sample ? `<p class="resource-sample-meta">Up to ${sample.limit} rows</p>${window.PE.util.dataTable(sample.columns, sample.rows)}` : ""}
+        </section>`;
+      }).join("");
+    }
+
     function renderResourceInspector(payload) {
+      $("resource-inspector-kicker").textContent = payload.type === "postgres-table"
+        ? "Live Postgres resource" : "Live ClickHouse resource";
+      if (payload.type === "postgres-table") return renderPostgresInspector(payload);
       if (payload.type === "object-store") return renderObjectStoreInspector(payload);
       if (payload.type === "object-preview") return renderObjectPreviewInspector(payload);
       if (payload.type === "clickhouse-dictionary") return renderDictionaryInspector(payload);

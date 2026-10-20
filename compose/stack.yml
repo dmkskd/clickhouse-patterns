@@ -14,6 +14,7 @@
 #   s3        - MinIO + bucket bootstrap                     (minio, minio-init)
 #   kafka    - single-node Kafka in KRaft mode              (kafka)
 #   peerdb   - self-hosted PeerDB control plane and workers
+#   walshadow - walshadow daemon + managed shadow Postgres (built from source)
 
 # Image versions are pinned for reproducibility. To upgrade, bump the tag here
 # (and ch-cdc below), then re-run the affected patterns.
@@ -262,6 +263,7 @@ services:
       - max_replication_slots=4
     volumes:
       - ./cdc/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./cdc/postgres-replication-hba.sh:/docker-entrypoint-initdb.d/00-replication-hba.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d test || exit 1"]
       interval: 5s
@@ -281,6 +283,34 @@ services:
       - sh
       - -c
       - "java -Xms256m -Xmx1g -jar /app.jar /config.yml com.altinity.clickhouse.debezium.embedded.ClickHouseDebeziumEmbeddedApplication"
+
+  # -- walshadow: Postgres physical WAL -> ClickHouse ---------------------------
+  # No published image: built from a pinned commit of the upstream repo. The
+  # shadow is a physical clone of the source, so PG_MAJOR must match the
+  # `postgres` service major. `init` writes the config, then the entrypoint
+  # starts the daemon, which owns a shadow Postgres inside the container.
+  walshadow:
+    build:
+      context: https://github.com/ClickHouse/walshadow.git#97f9305316eb5ff89cb3e0071eff095722db4143
+      dockerfile: docker/Dockerfile
+      args:
+        PG_MAJOR: "16"
+    image: chp/walshadow:97f9305-pg16
+    profiles: [walshadow]
+    depends_on:
+      postgres: { condition: service_healthy }
+      ch: { condition: service_healthy }
+    environment:
+      RUST_LOG: warn,walshadow=info
+      WALSHADOW_PG_URL: postgres://postgres:postgres@postgres:5432/test?sslmode=disable
+      WALSHADOW_CH_URL: clickhouse://default@ch:9000/walshadow
+    ports:
+      - "9484:9484"   # Prometheus metrics
+    entrypoint:
+      - sh
+      - -c
+      - "walshadow-stream init --table public orders && exec walshadow-entrypoint"
+    stop_grace_period: 30s
 
   # -- peerdb: self-hosted Postgres CDC (the engine behind ClickPipes) --------
   # PeerDB uses its own catalog plus Temporal for durable workflow state. The

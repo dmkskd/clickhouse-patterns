@@ -44,7 +44,7 @@ def test_describe_explains_pattern_without_execution_details(capsys):
     normalized = " ".join(output.split())
     assert " ".join(pattern.description.split()) in normalized
     assert " ".join(cli._flow_summary(pattern).split()) in normalized
-    assert "DATABASES → CLICKHOUSE  (5 patterns)" in output
+    assert "DATABASES → CLICKHOUSE  (6 patterns)" in output
     assert "\n    profiles" not in output
     assert "\n    driver" not in output
     assert "\n    schema" not in output

@@ -75,6 +75,7 @@ _PROFILE_NAMES = {
     "postgres": "Postgres",
     "s3": "MinIO staging",
     "peerdb": "PeerDB",
+    "walshadow": "walshadow (built from source)",
     "cdc-mysql": "the MySQL CDC sink",
     "cdc-postgres": "the Postgres CDC sink",
 }

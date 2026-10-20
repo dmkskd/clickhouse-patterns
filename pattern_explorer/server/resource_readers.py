@@ -349,6 +349,101 @@ class MinioReader:
         raise ValueError(f"No reader is registered for {format_name} objects")
 
 
+class PostgresReader:
+    """Read source Postgres tables: definition, replica identity, and contents.
+
+    The table list comes from `table=` or, failing that, the label, with
+    several tables joined by `+` (`public.orders + public.orders_existing`).
+    Postgres has no SHOW CREATE TABLE, so each definition is reconstructed
+    from the catalog: columns, defaults, NOT NULL, and constraints.
+    """
+
+    kinds = frozenset({"postgres"})
+    _NAME = re.compile(r"^[A-Za-z_][\w$]*(\.[A-Za-z_][\w$]*)?$")
+
+    def inspect(self, context: ReaderContext, object_key: str | None = None) -> dict[str, Any]:
+        if object_key:
+            raise ValueError("Postgres table inspection does not accept an object key")
+        resource = context.resource
+        declared = resource.properties.get("table") or resource.properties.get("label") or resource.name
+        names = [part.strip() for part in declared.split("+") if part.strip()]
+        if not names or not all(self._NAME.match(name) for name in names):
+            raise ValueError("Postgres resources need `table=<schema.table>` (several joined by `+`) to be inspected")
+        import psycopg
+
+        with psycopg.connect(
+            host=resource.properties.get("host", "localhost"),
+            port=int(resource.properties.get("port", 5432)),
+            user=os.environ.get("CLICKHOUSE_PATTERN_PG_USER", "postgres"),
+            password=os.environ.get("CLICKHOUSE_PATTERN_PG_PASSWORD", "postgres"),
+            dbname=resource.properties.get("database", "test"),
+            autocommit=True,
+            connect_timeout=3,
+        ) as conn:
+            wal_level = conn.execute("SHOW wal_level").fetchone()[0]
+            tables = [self._table(conn, *(name.rsplit(".", 1) if "." in name else ("public", name))) for name in names]
+        return {
+            "type": "postgres-table",
+            "resource": {"key": resource.key, "kind": resource.kind, "declared_name": resource.name},
+            "title": " + ".join(f"{t['schema']}.{t['table']}" for t in tables),
+            "subtitle": f"Postgres · wal_level = {wal_level}",
+            "tables": tables,
+        }
+
+    def _table(self, conn, schema: str, table: str) -> dict[str, Any]:
+        meta = conn.execute(
+            """
+            SELECT c.oid, c.relreplident
+            FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = %s AND c.relname = %s
+            """,
+            (schema, table),
+        ).fetchone()
+        if not meta:
+            raise ValueError(f"{schema}.{table} is not present in the live Postgres session")
+        oid, replident = meta
+        column_rows = conn.execute(
+            """
+            SELECT a.attname, format_type(a.atttypid, a.atttypmod), a.attnotnull,
+                   pg_get_expr(d.adbin, d.adrelid)
+            FROM pg_attribute a
+            LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+            WHERE a.attrelid = %s AND a.attnum > 0 AND NOT a.attisdropped
+            ORDER BY a.attnum
+            """,
+            (oid,),
+        ).fetchall()
+        constraints = [row[0] for row in conn.execute(
+            "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = %s ORDER BY contype",
+            (oid,),
+        ).fetchall()]
+        sample = None
+        sample_error = None
+        try:
+            quoted = ".".join('"' + part.replace('"', '""') + '"' for part in (schema, table))
+            cursor = conn.execute(f"SELECT * FROM {quoted} LIMIT {SAMPLE_LIMIT}")
+            sample = {
+                "columns": [column.name for column in cursor.description],
+                "rows": [[json_value(value) for value in row] for row in cursor.fetchall()],
+                "limit": SAMPLE_LIMIT,
+            }
+        except Exception as exc:  # noqa: BLE001 - definition remains useful
+            sample_error = f"{type(exc).__name__}: {str(exc).splitlines()[0]}"
+        lines = [
+            f"    {name} {column_type}{' NOT NULL' if not_null else ''}{f' DEFAULT {default}' if default else ''}"
+            for name, column_type, not_null, default in column_rows
+        ] + [f"    {constraint}" for constraint in constraints]
+        identity = {"d": "DEFAULT", "f": "FULL", "i": "USING INDEX", "n": "NOTHING"}.get(replident, replident)
+        return {
+            "schema": schema, "table": table, "replica_identity": identity,
+            "create_statement": f"CREATE TABLE {schema}.{table} (\n" + ",\n".join(lines) + f"\n);\n-- REPLICA IDENTITY {identity}",
+            "columns": [
+                {"name": name, "type": column_type, "default": default or ""}
+                for name, column_type, _not_null, default in column_rows
+            ],
+            "sample": sample, "sample_error": sample_error,
+        }
+
 class ReaderRegistry:
     def __init__(self, *readers: ResourceReader):
         self._readers = {kind: reader for reader in readers for kind in reader.kinds}
@@ -361,4 +456,4 @@ class ReaderRegistry:
         return frozenset(self._readers)
 
 
-RESOURCE_READERS = ReaderRegistry(ClickHouseReader(), DictionaryReader(), MinioReader())
+RESOURCE_READERS = ReaderRegistry(ClickHouseReader(), DictionaryReader(), MinioReader(), PostgresReader())

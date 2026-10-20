@@ -1262,6 +1262,13 @@
     const blocks = String(text ?? "").split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
     const nodes = blocks.map((block) => {
       const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+      // A "### " block is a section heading within the description.
+      if (lines.length === 1 && lines[0].startsWith("### ")) {
+        const heading = document.createElement("h3");
+        heading.className = "pattern-description-heading";
+        heading.innerHTML = formatDescInline(lines[0].slice(4));
+        return heading;
+      }
       if (!lines[0]?.startsWith("- ")) {
         const para = document.createElement("p");
         para.innerHTML = formatDescInline(block);
@@ -1305,7 +1312,10 @@
     provenance.className = "pattern-provenance";
     provenance.textContent = pattern.location === "workspace" ? "Workspace" : "Curated";
     const status = patternStatusBadge(pattern.status);
-    el.replaceChildren(provenance, ...(status ? [status] : []));
+    const experimental = pattern.experimental ? [Object.assign(document.createElement("span"), {
+      className: "experimental-badge", textContent: "Experimental",
+    })] : [];
+    el.replaceChildren(provenance, ...(status ? [status] : []), ...experimental);
     el.hidden = false;
   }
 
