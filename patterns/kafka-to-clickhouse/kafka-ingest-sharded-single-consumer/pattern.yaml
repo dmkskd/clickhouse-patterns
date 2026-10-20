@@ -16,7 +16,7 @@ metadata:
         -[cityHash64(id)]-> mergetree:events@shards
 
     query:
-      client -> distributed:events_all -> mergetree:events@shards
+      distributed:events_all -[SELECT · reads both shards]-> client:reader(label=query client)
   status: wip
   topology: sharded
   order: 4

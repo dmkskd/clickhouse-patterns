@@ -15,8 +15,8 @@ metadata:
         -[writes local replica]-> replicated-mergetree:events@replicas(mode=active-active,sync=Keeper,data=full-copy)
 
     query:
-      client(protocol=HTTP/native,target=either-replica)
-        -> replicated-mergetree:events@replicas
+      replicated-mergetree:events@replicas
+        -> client:reader(label=query client,protocol=HTTP/native,target=either-replica)
   status: wip
   topology: replicated
   order: 1

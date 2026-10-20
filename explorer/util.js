@@ -77,7 +77,7 @@ window.PE.util = (() => {
   const REPEAT_Y = REPEAT * 0.42;
   const INSPECTABLE_KINDS = new Set([
     "kafka-table", "mv", "refreshable-mv", "distributed", "mergetree", "replicated-mergetree", "keepermap",
-    "remote-table", "minio", "dictionary", "postgres"
+    "remote-table", "minio", "dictionary", "postgres", "mysql", "topic"
   ]);
   const TOPOLOGIES = {
     single: { label: "Single node", help: "One ClickHouse node" },

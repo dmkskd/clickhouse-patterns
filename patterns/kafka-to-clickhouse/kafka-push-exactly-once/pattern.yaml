@@ -19,8 +19,8 @@ metadata:
         -[offset range · BEFORE / AFTER]-> keepermap:connect_state(label=demo.connect_state,role=connector batch state)
 
     query:
-      client:reader(label=query client)
-        -[8000 rows · 8000 distinct]-> replicated-mergetree:events@replicas
+      replicated-mergetree:events@replicas
+        -[8000 rows · 8000 distinct]-> client:reader(label=query client)
   status: wip
   topology: replicated
   order: 7

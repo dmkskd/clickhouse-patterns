@@ -595,7 +595,7 @@ window.PE.session = (() => {
         </section>`;
     }
 
-    function renderPostgresInspector(payload) {
+    function renderDatabaseInspector(payload) {
       $("resource-inspector-title").textContent = payload.title;
       $("resource-inspector-subtitle").textContent = payload.subtitle;
       const several = payload.tables.length > 1;
@@ -619,10 +619,29 @@ window.PE.session = (() => {
       }).join("");
     }
 
+    function renderKafkaTopicInspector(payload) {
+      $("resource-inspector-title").textContent = payload.title;
+      $("resource-inspector-subtitle").textContent = payload.subtitle;
+      const partitionRows = payload.partitions.map((p) => [String(p.partition), String(p.low), String(p.high), String(p.messages)]);
+      const sample = payload.sample;
+      resourceInspectorBody.innerHTML = `
+        <section class="resource-inspector-section">
+          <h3>Partitions</h3>
+          ${window.PE.util.dataTable(["Partition", "Low offset", "High offset", "Messages"], partitionRows)}
+        </section>
+        <section class="resource-inspector-section">
+          <h3>Latest messages</h3>
+          <p class="resource-sample-meta">Up to ${sample.limit} most recent, read without a consumer group or offset commits</p>
+          ${sample.rows.length ? window.PE.util.dataTable(sample.columns, sample.rows) : '<p class="resource-inspector-note">The topic holds no messages.</p>'}
+        </section>`;
+    }
+
     function renderResourceInspector(payload) {
-      $("resource-inspector-kicker").textContent = payload.type === "postgres-table"
-        ? "Live Postgres resource" : "Live ClickHouse resource";
-      if (payload.type === "postgres-table") return renderPostgresInspector(payload);
+      $("resource-inspector-kicker").textContent = payload.type === "database-tables"
+        ? `Live ${payload.system} resource`
+        : payload.type === "kafka-topic" ? "Live Kafka resource" : "Live ClickHouse resource";
+      if (payload.type === "kafka-topic") return renderKafkaTopicInspector(payload);
+      if (payload.type === "database-tables") return renderDatabaseInspector(payload);
       if (payload.type === "object-store") return renderObjectStoreInspector(payload);
       if (payload.type === "object-preview") return renderObjectPreviewInspector(payload);
       if (payload.type === "clickhouse-dictionary") return renderDictionaryInspector(payload);
@@ -736,6 +755,28 @@ window.PE.session = (() => {
     }
 
     // Session controls (moved from app.js wiring).
+    // In-page confirmation. A native window.confirm() can be muted by the
+    // browser ("prevent this page from creating additional dialogs"), after
+    // which it returns false silently and the button appears to do nothing.
+    function confirmAction(message, confirmLabel) {
+      return new Promise((resolve) => {
+        const dialog = document.createElement("dialog");
+        dialog.className = "confirm-dialog";
+        dialog.innerHTML = `<p></p><div class="confirm-actions">
+          <button type="button" data-answer="no">Cancel</button>
+          <button type="button" data-answer="yes" class="danger"></button></div>`;
+        dialog.querySelector("p").textContent = message;
+        dialog.querySelector("[data-answer=yes]").textContent = confirmLabel;
+        const finish = (answer) => { dialog.close(); dialog.remove(); resolve(answer); };
+        dialog.querySelectorAll("[data-answer]").forEach((button) =>
+          button.addEventListener("click", () => finish(button.dataset.answer === "yes")));
+        dialog.addEventListener("cancel", (event) => { event.preventDefault(); finish(false); });
+        document.body.append(dialog);
+        dialog.showModal();
+        dialog.querySelector("[data-answer=yes]").focus();
+      });
+    }
+
     $("start-session").addEventListener("click", async () => {
       const selected = ctx.getSelected();
       if (!selected) return;
@@ -746,7 +787,7 @@ window.PE.session = (() => {
         if (active && active.slug !== selected.slug) {
           // The server performs teardown + launch as one ordered operation so the
           // new run cannot race the asynchronous stop.
-          if (!window.confirm(`Stop ${active.slug} and launch ${selected.slug}?\nThe ${active.slug} environment (containers and volumes) will be removed.`)) return;
+          if (!await confirmAction(`Stop ${active.slug} and launch ${selected.slug}? The ${active.slug} containers and volumes will be removed.`, "Stop and launch")) return;
           await command(apiUrl("api/session/switch"), { pattern: selected.slug });
           return;
         }
@@ -765,7 +806,7 @@ window.PE.session = (() => {
     });
     $("stop-session").addEventListener("click", async () => {
       const slug = ctx.getControl().snapshot?.session?.slug || "this pattern";
-      if (!window.confirm(`Stop ${slug} and remove its containers and volumes?`)) return;
+      if (!await confirmAction(`Stop ${slug} and remove its containers and volumes?`, "Stop")) return;
       try { await command(apiUrl("api/session/stop")); }
       catch (error) { showToast(error.message, "error"); }
     });

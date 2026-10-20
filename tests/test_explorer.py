@@ -270,10 +270,10 @@ def test_broken_manifest_returns_an_error_not_a_traceback(explorer_server, monke
     assert "broken/pattern.yaml" in script
 
 
-def test_reader_registry_registers_clickhouse_and_minio():
-    assert RESOURCE_READERS.reader_for("mergetree") is not None
-    assert RESOURCE_READERS.reader_for("minio") is not None
-    assert RESOURCE_READERS.reader_for("topic") is None
+def test_reader_registry_registers_every_live_reader():
+    for kind in ("mergetree", "minio", "postgres", "mysql", "topic"):
+        assert RESOURCE_READERS.reader_for(kind) is not None
+    assert RESOURCE_READERS.reader_for("client") is None
 
 
 def test_minio_reader_lists_only_the_declared_prefix(monkeypatch):

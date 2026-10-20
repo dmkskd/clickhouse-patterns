@@ -502,7 +502,7 @@ services:
       - bash
       - -c
       - |
-        confluent-hub install --no-prompt clickhouse/clickhouse-kafka-connect:v1.3.9
+        confluent-hub install --no-prompt clickhouse/clickhouse-kafka-connect:v1.7.0
         confluent-hub install --no-prompt debezium/debezium-connector-postgresql:2.5.4
         /etc/confluent/docker/run
     healthcheck:

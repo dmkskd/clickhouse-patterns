@@ -15,7 +15,7 @@ metadata:
         -> mergetree:events@shards
 
     query:
-      client -> distributed:events_all -> mergetree:events@shards
+      mergetree:events@shards -> distributed:events_all -> client:reader(label=query client)
   status: wip
   topology: sharded
   order: 5

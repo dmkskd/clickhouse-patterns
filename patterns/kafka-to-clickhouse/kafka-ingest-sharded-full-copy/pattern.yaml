@@ -15,9 +15,9 @@ metadata:
         -[complete copy per shard]-> mergetree:events@shards(copy=full topic)
 
     query:
-      client:reader(label=query client)
-        -[count + uniqExact(id)]-> distributed:events_all(label=demo.events_all)
-        -[read both shards]-> mergetree:events@shards
+      mergetree:events@shards
+        -[read both shards]-> distributed:events_all(label=demo.events_all)
+        -[count + uniqExact(id)]-> client:reader(label=query client)
   status: wip
   topology: sharded
   order: 3

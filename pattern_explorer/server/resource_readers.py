@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import re
+import time
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -349,29 +351,93 @@ class MinioReader:
         raise ValueError(f"No reader is registered for {format_name} objects")
 
 
-class PostgresReader:
-    """Read source Postgres tables: definition, replica identity, and contents.
+class SourceDatabaseReader:
+    """Shared reader for source OLTP databases (Postgres, MySQL).
 
-    The table list comes from `table=` or, failing that, the label, with
-    several tables joined by `+` (`public.orders + public.orders_existing`).
-    Postgres has no SHOW CREATE TABLE, so each definition is reconstructed
-    from the catalog: columns, defaults, NOT NULL, and constraints.
+    A graph resource names its tables with `table=`, `tables=`, or its label,
+    several joined by `+` (`public.orders + public.orders_existing`). For each
+    table the reader returns a definition, its columns, and up to
+    SAMPLE_LIMIT rows. A subclass supplies the database-specific hooks:
+    `connect`, `subtitle`, `describe`, and `quote`.
     """
 
-    kinds = frozenset({"postgres"})
+    kinds: frozenset[str] = frozenset()
+    system = ""
+    default_schema = ""
     _NAME = re.compile(r"^[A-Za-z_][\w$]*(\.[A-Za-z_][\w$]*)?$")
+
+    def connect(self, resource: Resource): ...
+    def subtitle(self, conn) -> str: ...
+    def describe(self, conn, schema: str, table: str) -> tuple[str, list[dict[str, str]]]: ...
+    def quote(self, schema: str, table: str) -> str: ...
+
+    def schema_for(self, resource: Resource) -> str:
+        """Schema an unqualified table name resolves to."""
+        return self.default_schema
 
     def inspect(self, context: ReaderContext, object_key: str | None = None) -> dict[str, Any]:
         if object_key:
-            raise ValueError("Postgres table inspection does not accept an object key")
+            raise ValueError(f"{self.system} table inspection does not accept an object key")
         resource = context.resource
-        declared = resource.properties.get("table") or resource.properties.get("label") or resource.name
+        declared = (resource.properties.get("table") or resource.properties.get("tables")
+                    or resource.properties.get("label") or resource.name)
         names = [part.strip() for part in declared.split("+") if part.strip()]
         if not names or not all(self._NAME.match(name) for name in names):
-            raise ValueError("Postgres resources need `table=<schema.table>` (several joined by `+`) to be inspected")
-        import psycopg
+            raise ValueError(
+                f"{self.system} resources need `tables=<schema.table>` (several joined by `+`) to be inspected"
+            )
+        default_schema = self.schema_for(resource)
+        conn = self.connect(resource)
+        try:
+            subtitle = self.subtitle(conn)
+            tables = []
+            for name in names:
+                schema, table = name.split(".", 1) if "." in name else (default_schema, name)
+                create_statement, columns = self.describe(conn, schema, table)
+                tables.append({
+                    "schema": schema, "table": table, "create_statement": create_statement,
+                    "columns": columns, **self._sample(conn, schema, table),
+                })
+        finally:
+            conn.close()
+        return {
+            "type": "database-tables", "system": self.system,
+            "resource": {"key": resource.key, "kind": resource.kind, "declared_name": resource.name},
+            "title": " + ".join(f"{t['schema']}.{t['table']}" for t in tables),
+            "subtitle": subtitle, "tables": tables,
+        }
 
-        with psycopg.connect(
+    def _sample(self, conn, schema: str, table: str) -> dict[str, Any]:
+        try:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT * FROM {self.quote(schema, table)} LIMIT {SAMPLE_LIMIT}")
+            return {"sample": {
+                "columns": [column[0] for column in cursor.description],
+                "rows": [[json_value(value) for value in row] for row in cursor.fetchall()],
+                "limit": SAMPLE_LIMIT,
+            }, "sample_error": None}
+        except Exception as exc:  # noqa: BLE001 - definition remains useful
+            return {"sample": None, "sample_error": f"{type(exc).__name__}: {str(exc).splitlines()[0]}"}
+
+    @staticmethod
+    def _query(conn, sql: str, params: tuple = ()) -> list[tuple]:
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        return cursor.fetchall()
+
+
+class PostgresReader(SourceDatabaseReader):
+    """Postgres has no SHOW CREATE TABLE, so the definition is reconstructed
+    from the catalog: columns, defaults, NOT NULL, constraints, and replica
+    identity."""
+
+    kinds = frozenset({"postgres"})
+    system = "Postgres"
+    default_schema = "public"
+
+    def connect(self, resource: Resource):
+        import psycopg
+        return psycopg.connect(
             host=resource.properties.get("host", "localhost"),
             port=int(resource.properties.get("port", 5432)),
             user=os.environ.get("CLICKHOUSE_PATTERN_PG_USER", "postgres"),
@@ -379,70 +445,168 @@ class PostgresReader:
             dbname=resource.properties.get("database", "test"),
             autocommit=True,
             connect_timeout=3,
-        ) as conn:
-            wal_level = conn.execute("SHOW wal_level").fetchone()[0]
-            tables = [self._table(conn, *(name.rsplit(".", 1) if "." in name else ("public", name))) for name in names]
-        return {
-            "type": "postgres-table",
-            "resource": {"key": resource.key, "kind": resource.kind, "declared_name": resource.name},
-            "title": " + ".join(f"{t['schema']}.{t['table']}" for t in tables),
-            "subtitle": f"Postgres · wal_level = {wal_level}",
-            "tables": tables,
-        }
+        )
 
-    def _table(self, conn, schema: str, table: str) -> dict[str, Any]:
-        meta = conn.execute(
-            """
+    def subtitle(self, conn) -> str:
+        return f"Postgres · wal_level = {self._query(conn, 'SHOW wal_level')[0][0]}"
+
+    def quote(self, schema: str, table: str) -> str:
+        return ".".join('"' + part.replace('"', '""') + '"' for part in (schema, table))
+
+    def describe(self, conn, schema: str, table: str):
+        meta = self._query(conn, """
             SELECT c.oid, c.relreplident
             FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = %s AND c.relname = %s
-            """,
-            (schema, table),
-        ).fetchone()
+        """, (schema, table))
         if not meta:
             raise ValueError(f"{schema}.{table} is not present in the live Postgres session")
-        oid, replident = meta
-        column_rows = conn.execute(
-            """
+        oid, replident = meta[0]
+        column_rows = self._query(conn, """
             SELECT a.attname, format_type(a.atttypid, a.atttypmod), a.attnotnull,
                    pg_get_expr(d.adbin, d.adrelid)
             FROM pg_attribute a
             LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
             WHERE a.attrelid = %s AND a.attnum > 0 AND NOT a.attisdropped
             ORDER BY a.attnum
-            """,
-            (oid,),
-        ).fetchall()
-        constraints = [row[0] for row in conn.execute(
-            "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = %s ORDER BY contype",
-            (oid,),
-        ).fetchall()]
-        sample = None
-        sample_error = None
-        try:
-            quoted = ".".join('"' + part.replace('"', '""') + '"' for part in (schema, table))
-            cursor = conn.execute(f"SELECT * FROM {quoted} LIMIT {SAMPLE_LIMIT}")
-            sample = {
-                "columns": [column.name for column in cursor.description],
-                "rows": [[json_value(value) for value in row] for row in cursor.fetchall()],
-                "limit": SAMPLE_LIMIT,
-            }
-        except Exception as exc:  # noqa: BLE001 - definition remains useful
-            sample_error = f"{type(exc).__name__}: {str(exc).splitlines()[0]}"
+        """, (oid,))
+        constraints = [row[0] for row in self._query(
+            conn, "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = %s ORDER BY contype", (oid,)
+        )]
         lines = [
             f"    {name} {column_type}{' NOT NULL' if not_null else ''}{f' DEFAULT {default}' if default else ''}"
             for name, column_type, not_null, default in column_rows
         ] + [f"    {constraint}" for constraint in constraints]
         identity = {"d": "DEFAULT", "f": "FULL", "i": "USING INDEX", "n": "NOTHING"}.get(replident, replident)
+        create_statement = (f"CREATE TABLE {schema}.{table} (\n" + ",\n".join(lines)
+                            + f"\n);\n-- REPLICA IDENTITY {identity}")
+        columns = [{"name": name, "type": column_type, "default": default or ""}
+                   for name, column_type, _not_null, default in column_rows]
+        return create_statement, columns
+
+
+class MySQLReader(SourceDatabaseReader):
+    """MySQL returns its own definition through SHOW CREATE TABLE."""
+
+    kinds = frozenset({"mysql"})
+    system = "MySQL"
+    default_schema = "test"
+
+    def connect(self, resource: Resource):
+        import pymysql
+        return pymysql.connect(
+            host=resource.properties.get("host", "127.0.0.1"),
+            port=int(resource.properties.get("port", 3306)),
+            user=os.environ.get("CLICKHOUSE_PATTERN_MYSQL_USER", "root"),
+            password=os.environ.get("CLICKHOUSE_PATTERN_MYSQL_PASSWORD", "root"),
+            database=resource.properties.get("database", "test"),
+            connect_timeout=3,
+        )
+
+    def schema_for(self, resource: Resource) -> str:
+        # A MySQL database is the schema, so the connection's database qualifies bare names.
+        return resource.properties.get("database", self.default_schema)
+
+    def subtitle(self, conn) -> str:
+        binlog_format, row_image = self._query(conn, "SELECT @@binlog_format, @@binlog_row_image")[0]
+        return f"MySQL · binlog_format = {binlog_format} · binlog_row_image = {row_image}"
+
+    def quote(self, schema: str, table: str) -> str:
+        return ".".join("`" + part.replace("`", "``") + "`" for part in (schema, table))
+
+    def describe(self, conn, schema: str, table: str):
+        column_rows = self._query(conn, """
+            SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_DEFAULT
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
+            ORDER BY ORDINAL_POSITION
+        """, (schema, table))
+        if not column_rows:
+            raise ValueError(f"{schema}.{table} is not present in the live MySQL session")
+        create_statement = self._query(conn, f"SHOW CREATE TABLE {self.quote(schema, table)}")[0][1]
+        columns = [{"name": name, "type": column_type, "default": "" if default is None else str(default)}
+                   for name, column_type, default in column_rows]
+        return create_statement, columns
+
+class KafkaTopicReader:
+    """Read a topic's partition offsets and its most recent messages.
+
+    Partitions are assigned directly and read from `high - SAMPLE_LIMIT`, with
+    no consumer group membership and no offset commits, so inspection leaves
+    every real consumer's position (Kafka engine, sink connectors) untouched.
+    """
+
+    kinds = frozenset({"topic"})
+
+    def inspect(self, context: ReaderContext, object_key: str | None = None) -> dict[str, Any]:
+        if object_key:
+            raise ValueError("Kafka topic inspection does not accept an object key")
+        from confluent_kafka import Consumer, TopicPartition
+
+        resource = context.resource
+        topic = resource.properties.get("topic") or resource.properties.get("label") or resource.name
+        consumer = Consumer({
+            "bootstrap.servers": resource.properties.get("bootstrap", "localhost:9092"),
+            "group.id": "pattern-explorer-inspect",
+            "enable.auto.commit": False,
+            "socket.timeout.ms": 3000,
+        })
+        try:
+            metadata = consumer.list_topics(topic, timeout=5).topics.get(topic)
+            if metadata is None or metadata.error is not None or not metadata.partitions:
+                raise ValueError(f"topic {topic} is not present in the live Kafka session")
+            partitions = []
+            assignment = []
+            for partition in sorted(metadata.partitions):
+                low, high = consumer.get_watermark_offsets(TopicPartition(topic, partition), timeout=5)
+                partitions.append({"partition": partition, "low": low, "high": high, "messages": high - low})
+                if high > low:
+                    assignment.append(TopicPartition(topic, partition, max(low, high - SAMPLE_LIMIT)))
+            expected = sum(min(SAMPLE_LIMIT, item["messages"]) for item in partitions)
+            messages = []
+            if assignment:
+                consumer.assign(assignment)
+                deadline = time.monotonic() + 5
+                while len(messages) < expected and time.monotonic() < deadline:
+                    message = consumer.poll(0.5)
+                    if message is None or message.error():
+                        continue
+                    messages.append(message)
+        finally:
+            consumer.close()
+        messages.sort(key=lambda message: (message.timestamp()[1], message.partition(), message.offset()), reverse=True)
+        rows = [
+            [
+                message.partition(), message.offset(),
+                datetime.fromtimestamp(message.timestamp()[1] / 1000).isoformat(timespec="milliseconds")
+                if message.timestamp()[1] > 0 else "",
+                json_value(self._decode(message.key())), json_value(self._decode(message.value())),
+            ]
+            for message in messages[:SAMPLE_LIMIT]
+        ]
         return {
-            "schema": schema, "table": table, "replica_identity": identity,
-            "create_statement": f"CREATE TABLE {schema}.{table} (\n" + ",\n".join(lines) + f"\n);\n-- REPLICA IDENTITY {identity}",
-            "columns": [
-                {"name": name, "type": column_type, "default": default or ""}
-                for name, column_type, _not_null, default in column_rows
-            ],
-            "sample": sample, "sample_error": sample_error,
+            "type": "kafka-topic",
+            "resource": {"key": resource.key, "kind": resource.kind, "declared_name": resource.name},
+            "title": topic,
+            "subtitle": f"Kafka · {len(partitions)} partition{'s' if len(partitions) != 1 else ''} · "
+                        f"{sum(item['messages'] for item in partitions)} messages retained",
+            "partitions": partitions,
+            "sample": {"columns": ["partition", "offset", "timestamp", "key", "value"], "rows": rows, "limit": SAMPLE_LIMIT},
         }
+
+    @staticmethod
+    def _decode(payload: bytes | None) -> str | None:
+        """Bytes as compact JSON when they parse, else as UTF-8 text, else hex."""
+        if payload is None:
+            return None
+        try:
+            text = payload.decode()
+        except UnicodeDecodeError:
+            return payload.hex()
+        try:
+            return json.dumps(json.loads(text), separators=(", ", ": "))
+        except ValueError:
+            return text
 
 class ReaderRegistry:
     def __init__(self, *readers: ResourceReader):
@@ -456,4 +620,4 @@ class ReaderRegistry:
         return frozenset(self._readers)
 
 
-RESOURCE_READERS = ReaderRegistry(ClickHouseReader(), DictionaryReader(), MinioReader(), PostgresReader())
+RESOURCE_READERS = ReaderRegistry(ClickHouseReader(), DictionaryReader(), MinioReader(), PostgresReader(), MySQLReader(), KafkaTopicReader())

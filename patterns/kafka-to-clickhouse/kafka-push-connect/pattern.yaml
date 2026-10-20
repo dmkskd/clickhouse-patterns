@@ -14,8 +14,8 @@ metadata:
         -[HTTP insert batches]-> mergetree:events(label=demo.events,owner=pattern schema)
 
     query:
-      client:reader(label=query client)
-        -[SELECT rows + distinct ids]-> mergetree:events
+      mergetree:events
+        -[SELECT rows + distinct ids]-> client:reader(label=query client)
   status: wip
   topology: single
   order: 6
