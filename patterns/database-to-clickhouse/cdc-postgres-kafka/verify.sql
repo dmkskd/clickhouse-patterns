@@ -3,7 +3,8 @@
 -- than removed, so the table still records that the row was deleted.
 --
 -- __offset and __timestamp are real but vary per run, so they are checked for
--- presence rather than value.
+-- presence and plausibility rather than value: a timestamp written in the wrong
+-- unit lands centuries away from now().
 SELECT
     id,
     customer,
@@ -11,7 +12,7 @@ SELECT
     __topic,
     __partition,
     __offset >= 0        AS has_offset,
-    __timestamp > 0      AS has_timestamp
+    abs(dateDiff('hour', __timestamp, now64(3))) < 24 AS has_timestamp
 FROM test.orders FINAL
 WHERE __deleted = 'false'
 ORDER BY id;

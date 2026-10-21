@@ -68,12 +68,19 @@ SINK = {
     # Kafka's own coordinates, added on the sink side. topic/partition/offset
     # are only available to a sink connector, so this cannot be done upstream.
     # They make every ClickHouse row traceable to the exact record it came from.
-    "transforms": "insertMeta",
+    # The sink is schemaless, so InsertField writes the timestamp as epoch
+    # milliseconds, which ClickHouse would read into DateTime64 as seconds.
+    # TimestampConverter formats it as a UTC string ClickHouse parses exactly.
+    "transforms": "insertMeta,formatTimestamp",
     "transforms.insertMeta.type": "org.apache.kafka.connect.transforms.InsertField$Value",
     "transforms.insertMeta.topic.field": "__topic",
     "transforms.insertMeta.partition.field": "__partition",
     "transforms.insertMeta.offset.field": "__offset",
     "transforms.insertMeta.timestamp.field": "__timestamp",
+    "transforms.formatTimestamp.type": "org.apache.kafka.connect.transforms.TimestampConverter$Value",
+    "transforms.formatTimestamp.field": "__timestamp",
+    "transforms.formatTimestamp.target.type": "string",
+    "transforms.formatTimestamp.format": "yyyy-MM-dd HH:mm:ss.SSS",
 }
 
 

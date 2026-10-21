@@ -64,9 +64,9 @@ row, which makes any row traceable to the exact record that produced it.
 
 ```sql
 __topic     LowCardinality(String),
-__partition UInt32        CODEC(DoubleDelta, ZSTD(1)),
-__offset    UInt64        CODEC(DoubleDelta, ZSTD(1)),
-__timestamp DateTime64(3) CODEC(DoubleDelta, ZSTD(1))
+__partition UInt32               CODEC(DoubleDelta, ZSTD(1)),
+__offset    UInt64               CODEC(DoubleDelta, ZSTD(1)),
+__timestamp DateTime64(3, 'UTC') CODEC(DoubleDelta, ZSTD(1))
 ```
 
 Within a block the topic is constant, the partition is constant or nearly so,

@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS test.orders
     __topic     LowCardinality(String),
     __partition UInt32 CODEC(DoubleDelta, ZSTD(1)),
     __offset    UInt64 CODEC(DoubleDelta, ZSTD(1)),
-    __timestamp DateTime64(3) CODEC(DoubleDelta, ZSTD(1))
+    __timestamp DateTime64(3, 'UTC') CODEC(DoubleDelta, ZSTD(1))
 )
 ENGINE = ReplacingMergeTree(__lsn)
 ORDER BY id;
