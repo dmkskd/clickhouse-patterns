@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import re
 from functools import lru_cache
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal
 
 import yaml
@@ -280,6 +280,31 @@ class ServiceInitOverride(BaseModel):
         return self.name or Path(self.file).name
 
 
+class ServiceConfigOverride(BaseModel):
+    """A pattern-owned configuration file mounted read-only into a service."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    service: str
+    file: str = Field(min_length=1)
+    target: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate(self):
+        if self.service not in known_services():
+            raise ValueError(f"unknown configuration service {self.service!r}")
+        if self.service in known_nodes():
+            raise ValueError("use services.clickhouse.config for additive ClickHouse XML fragments")
+        source = Path(self.file)
+        if source.is_absolute() or ".." in source.parts or self.file == ".":
+            raise ValueError("config file must be relative to the pattern directory")
+        destination = PurePosixPath(self.target)
+        if (not destination.is_absolute() or ".." in destination.parts
+                or not destination.name or self.target.endswith("/")):
+            raise ValueError("config target must be an absolute container file path")
+        return self
+
+
 class Pattern(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -315,6 +340,9 @@ class Pattern(BaseModel):
 
     # Init scripts run by database services (postgres, mysql) on container init.
     service_init: list[ServiceInitOverride] = Field(default_factory=list)
+
+    # Native service configuration, mounted only for this pattern.
+    service_config: list[ServiceConfigOverride] = Field(default_factory=list)
 
     ready_when: list[Expectation] = Field(default_factory=list)
 
@@ -394,6 +422,18 @@ class Pattern(BaseModel):
         if len(init_destinations) != len(set(init_destinations)):
             raise ValueError("services init cannot mount two scripts at the same destination")
 
+        config_destinations = [(item.service, item.target) for item in self.service_config]
+        existing_destinations = {
+            (item.node, f"/etc/clickhouse-server/{item.directory}/99-pattern-{item.destination_name}")
+            for item in self.clickhouse_config
+        } | {
+            (item.service, f"/docker-entrypoint-initdb.d/zz-pattern-{item.destination_name}")
+            for item in self.service_init
+        }
+        if (len(config_destinations) != len(set(config_destinations))
+                or existing_destinations.intersection(config_destinations)):
+            raise ValueError("services config cannot mount two files at the same destination")
+
         # Only check single-file fields the author set explicitly. Defaults that
         # happen to be absent are fine; the runner skips them.
         if self.dir != Path():
@@ -411,6 +451,9 @@ class Pattern(BaseModel):
                 if not (self.dir / item.file).is_file():
                     missing.append(item.file)
             for item in self.service_init:
+                if not (self.dir / item.file).is_file():
+                    missing.append(item.file)
+            for item in self.service_config:
                 if not (self.dir / item.file).is_file():
                     missing.append(item.file)
             if missing:
@@ -441,6 +484,121 @@ class GroupExternalLink(BaseModel):
     note: str = ""
 
 
+class GuideMechanism(BaseModel):
+    """One limit a guide can lead to. Its facet values are what the guide's
+    steps filter on; `pattern` is the slug of the pattern that demonstrates it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    title: str
+    stage: list[str] = Field(default_factory=list)  # GuideStage keys, for the pipeline view
+    where: list[str] = Field(default_factory=list)  # GuidePlacement keys, for the cluster view
+    facets: dict[str, list[str]]
+    errors: list[str] = Field(default_factory=list)
+    settings: list[str] = Field(default_factory=list)
+    since: str = ""
+    note: str = ""
+    pattern: str = ""
+    docs: str = ""
+
+
+class GuideStep(BaseModel):
+    """One question of an entry point: which facet it filters and how each
+    facet value is worded for this entry point."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    facet: str
+    question: str
+    options: dict[str, str] = Field(default_factory=dict)  # value -> label; empty = raw values
+
+
+class GuideEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    label: str
+    prompt: str
+    # pipeline: mechanisms laid out by stage; matrix: the first two steps' facets
+    # as rows and columns.
+    view: Literal["pipeline", "matrix", ""] = ""
+    steps: list[GuideStep]
+
+
+class GuideGap(BaseModel):
+    """A facet combination with no mechanism, and what to use instead."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    when: dict[str, str]
+    note: str
+    see: list[str] = Field(default_factory=list)  # mechanism ids
+
+
+class GuidePlacement(BaseModel):
+    """Where a limit is enforced when a query runs on several nodes."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    label: str
+    note: str = ""
+
+
+class GuideStage(BaseModel):
+    """One stage in the life of a query, in order, for the pipeline view."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    label: str
+    note: str = ""
+    wide: bool = False  # takes a full row in the pipeline view, nodes laid out across
+
+
+class Guide(BaseModel):
+    """A group's decision guide, defined by an optional `guide.yaml` next to
+    `group.yaml`: mechanism records plus entry points that filter them."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    stages: list[GuideStage] = Field(default_factory=list)
+    placements: list[GuidePlacement] = Field(default_factory=list)
+    entries: list[GuideEntry]
+    mechanisms: list[GuideMechanism]
+    gaps: list[GuideGap] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate(self):
+        ids = [item.id for item in self.mechanisms]
+        if len(ids) != len(set(ids)):
+            raise ValueError("guide mechanism ids must be unique")
+        facets = {facet for item in self.mechanisms for facet in item.facets} | {"errors"}
+        for entry in self.entries:
+            for step in entry.steps:
+                if step.facet not in facets:
+                    raise ValueError(f"guide step facet {step.facet!r} is not used by any mechanism")
+        stage_keys = {stage.key for stage in self.stages}
+        for item in self.mechanisms:
+            unknown_stages = set(item.stage) - stage_keys
+            if unknown_stages:
+                raise ValueError(f"guide mechanism {item.id!r} has unknown stage(s) {sorted(unknown_stages)}")
+            unknown_places = set(item.where) - {place.key for place in self.placements}
+            if unknown_places:
+                raise ValueError(f"guide mechanism {item.id!r} has unknown placement(s) {sorted(unknown_places)}")
+        for entry in self.entries:
+            if entry.view == "pipeline" and not self.stages:
+                raise ValueError(f"guide entry {entry.key!r} uses the pipeline view but no stages are defined")
+            if entry.view == "matrix" and len(entry.steps) < 2:
+                raise ValueError(f"guide entry {entry.key!r} uses the matrix view but has fewer than two steps")
+        for gap in self.gaps:
+            unknown = set(gap.see) - set(ids)
+            if unknown:
+                raise ValueError(f"guide gap refers to unknown mechanism(s) {sorted(unknown)}")
+        return self
+
+
 class Group(BaseModel):
     """A family of patterns, defined by a `group.yaml` in a group folder."""
 
@@ -452,17 +610,24 @@ class Group(BaseModel):
     icon: str = "database"
     order: int = 1000
     intro: str = ""
+    notice: str = ""         # visible group-level status notice, outside collapsed prose
     related: list[GroupLink] = Field(default_factory=list)
     links: list[GroupExternalLink] = Field(default_factory=list)
+    guide: Guide | None = None  # filled by the loader from guide.yaml
     key: str = ""    # filled by the loader (the group folder name)
+
+
+def _load_group(group_yaml: Path) -> Group:
+    data = yaml.safe_load(group_yaml.read_text()) or {}
+    guide_yaml = group_yaml.with_name("guide.yaml")
+    if guide_yaml.is_file():
+        data["guide"] = yaml.safe_load(guide_yaml.read_text())
+    return Group(key=group_yaml.parent.name, **data)
 
 
 def discover_groups() -> list[Group]:
     """Discover curated group definitions from patterns/<group>/group.yaml."""
-    groups = [
-        Group(key=gy.parent.name, **(yaml.safe_load(gy.read_text()) or {}))
-        for gy in sorted(PATTERNS_DIR.glob("*/group.yaml"))
-    ]
+    groups = [_load_group(gy) for gy in sorted(PATTERNS_DIR.glob("*/group.yaml"))]
     return sorted(groups, key=lambda group: (group.order, group.title))
 
 
@@ -531,6 +696,7 @@ def _normalize_manifest(manifest: Path, data: dict) -> dict:
         raise PatternManifestError(f"{_manifest_path(manifest)}: `spec.services` must be a mapping")
     clickhouse_config: list = []
     service_init: list = []
+    service_config: list = []
     for name, config in services.items():
         config = config or {}
         if not isinstance(config, dict):
@@ -545,24 +711,32 @@ def _normalize_manifest(manifest: Path, data: dict) -> dict:
                     f"{sorted(unknown)}; known: ['config']"
                 )
             clickhouse_config.extend(config.get("config") or [])
-        elif name in INITDB_SERVICES:
-            unknown = set(config) - {"init"}
+        elif name in known_services():
+            allowed = {"config", "init"} if name in INITDB_SERVICES else {"config"}
+            unknown = set(config) - allowed
             if unknown:
                 raise PatternManifestError(
                     f"{_manifest_path(manifest)}: unknown spec.services.{name} key(s) "
-                    f"{sorted(unknown)}; known: ['init']"
+                    f"{sorted(unknown)}; known: {sorted(allowed)}"
                 )
             scripts = config.get("init") or []
             if isinstance(scripts, str):
                 scripts = [scripts]
             service_init.extend({"service": name, "file": script} for script in scripts)
+            mounts = config.get("config") or []
+            if not isinstance(mounts, list) or any(not isinstance(item, dict) for item in mounts):
+                raise PatternManifestError(
+                    f"{_manifest_path(manifest)}: spec.services.{name}.config must be a list of file/target mappings"
+                )
+            service_config.extend({**item, "service": name} for item in mounts)
         else:
             raise PatternManifestError(
                 f"{_manifest_path(manifest)}: unknown service {name!r} in spec.services; "
-                f"known: {['clickhouse', *sorted(INITDB_SERVICES)]}"
+                f"known: {['clickhouse', *sorted(known_services())]}"
             )
     flat["clickhouse_config"] = clickhouse_config
     flat["service_init"] = service_init
+    flat["service_config"] = service_config
 
     steps = spec.get("steps") or {}
     if not isinstance(steps, dict):

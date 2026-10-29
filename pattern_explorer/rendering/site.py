@@ -34,6 +34,11 @@ def _definition(pattern) -> dict:
         code = _read_pattern_file(pattern, name)
         return {"file": name, "code": code, "lang": lang} if code is not None else None
 
+    config_languages = {
+        ".xml": "xml", ".sql": "sql", ".json": "json", ".toml": "toml",
+        ".yaml": "yaml", ".yml": "yaml", ".properties": "properties", ".conf": "text",
+    }
+
     load_lang = "python" if (pattern.load or "").endswith(".py") else "sql"
     verify_sql = _read_pattern_file(pattern, pattern.verify.sql)
     verify_expected = _read_pattern_file(pattern, pattern.verify.expected)
@@ -63,7 +68,28 @@ def _definition(pattern) -> dict:
             "dependsOn": [],
         }
         for item in pattern.service_init
+    ] + [
+        {
+            "file": item.file,
+            "code": _read_pattern_file(pattern, item.file),
+            "lang": config_languages.get(Path(item.file).suffix, "text"),
+            "node": item.service,
+            "mountPath": item.target,
+            "dependsOn": [],
+        }
+        for item in pattern.service_config
     ]
+    # Loaders can also read native settings from config/ on the host, for
+    # example Kafka Connect REST payloads or PeerDB's CREATE MIRROR statement.
+    listed = {item["file"] for item in config}
+    for path in sorted((pattern.dir / "config").rglob("*")):
+        name = str(path.relative_to(pattern.dir))
+        if path.is_file() and path.suffix in config_languages and name not in listed:
+            config.append({
+                "file": name, "code": path.read_text(),
+                "lang": config_languages[path.suffix],
+                "reader": pattern.load, "mountPath": None,
+            })
     return {
         "manifest": block("pattern.yaml", "yaml"),
         "structure": block(pattern.schema_sql, "sql"),
@@ -131,11 +157,13 @@ def _browser_group(group) -> dict:
         "icon": group.icon,
         "order": group.order,
         "intro": group.intro,
+        "notice": group.notice,
         "related": [{"group": link.group, "note": link.note} for link in group.related],
         "links": [
             {"label": link.label, "url": link.url, "note": link.note}
             for link in group.links
         ],
+        "guide": group.guide.model_dump() if group.guide else None,
     }
 
 

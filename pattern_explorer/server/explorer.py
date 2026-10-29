@@ -48,17 +48,27 @@ _BROWSER_SOURCES = (
     "session.js", "app.js",
 )
 
-_revision_cache: tuple[tuple[float, ...], str] | None = None
+_revision_cache: tuple[tuple[tuple[str, int, int], ...], str] | None = None
 _last_catalog_error: str | None = None
 
 
-def _catalog_mtimes() -> tuple[float, ...]:
-    """Cheap change signal for the browser sources and every manifest."""
+def _catalog_mtimes() -> tuple[tuple[str, int, int], ...]:
+    """Cheap change signal for browser sources, group metadata and pattern files."""
     sources = [EXPLORER_DIR / name for name in _BROWSER_SOURCES]
     manifests = sorted(PATTERNS_DIR.glob("*/*/pattern.yaml"))
     for root in workspace_pattern_dirs():
         manifests.extend(sorted(root.glob("*/pattern.yaml")))
-    return tuple(path.stat().st_mtime for path in [*sources, *manifests] if path.exists())
+    group_files = sorted(PATTERNS_DIR.glob("*/group.yaml")) + sorted(PATTERNS_DIR.glob("*/guide.yaml"))
+    config_files = [
+        path for manifest in manifests
+        for path in sorted((manifest.parent / "config").rglob("*")) if path.is_file()
+    ]
+    signatures = []
+    for path in [*sources, *group_files, *manifests, *config_files]:
+        if path.exists():
+            stat = path.stat()
+            signatures.append((str(path), stat.st_mtime_ns, stat.st_size))
+    return tuple(signatures)
 
 
 def _browser_revision() -> str:

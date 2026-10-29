@@ -149,7 +149,10 @@ class ClickHouseReader:
             sample_disabled = "Live rows are intentionally not read from Kafka-engine tables because a SELECT can consume messages. Inspect the durable destination instead."
         else:
             try:
-                result = client.query(f"SELECT * FROM {quote_identifier(database)}.{quote_identifier(table)} LIMIT {SAMPLE_LIMIT}")
+                result = client.query(
+                    f"SELECT * FROM {quote_identifier(database)}.{quote_identifier(table)} "
+                    f"LIMIT {SAMPLE_LIMIT} SETTINGS asterisk_include_materialized_columns = 1"
+                )
                 sample = {"columns": list(result.column_names), "rows": [[json_value(value) for value in row] for row in result.result_rows], "limit": SAMPLE_LIMIT}
             except Exception as exc:  # noqa: BLE001 - definition remains useful
                 sample_error = f"{type(exc).__name__}: {str(exc).splitlines()[0]}"

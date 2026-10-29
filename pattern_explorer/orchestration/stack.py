@@ -21,12 +21,11 @@ Reporter = Callable[[str], None]
 def pattern_compose_file(pattern: "Pattern") -> Path | None:
     """Write a small Compose overlay for a pattern's additive service customizations.
 
-    Carries two kinds of mounts, both additive to the shared stack:
-    CH XML fragments into config.d/users.d, and database init scripts into a
-    service's /docker-entrypoint-initdb.d (run once on a fresh container, after
-    the stack's shared init.sql seed thanks to the zz- sort prefix).
+    Supports CH XML fragments, database init scripts, and native service configuration
+    files. Configuration mounts are read-only; a matching target replaces the
+    shared stack's mount through Compose's volume merge rules.
     """
-    if not pattern.clickhouse_config and not pattern.service_init:
+    if not pattern.clickhouse_config and not pattern.service_init and not pattern.service_config:
         return None
     services: dict[str, dict] = {}
     for item in pattern.clickhouse_config:
@@ -41,6 +40,10 @@ def pattern_compose_file(pattern: "Pattern") -> Path | None:
         target = f"/docker-entrypoint-initdb.d/zz-pattern-{item.destination_name}"
         service = services.setdefault(item.service, {"volumes": [], "depends_on": {}})
         service["volumes"].append(f"{source}:{target}:ro")
+    for item in pattern.service_config:
+        source = (pattern.dir / item.file).resolve()
+        service = services.setdefault(item.service, {"volumes": [], "depends_on": {}})
+        service["volumes"].append(f"{source}:{item.target}:ro")
     path = RUNTIME_OVERRIDES / f"{pattern.slug}.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump({"services": services}, sort_keys=True))
