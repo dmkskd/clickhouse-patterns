@@ -372,6 +372,34 @@ Database services follow the same overlay path: `spec.services.postgres.init`
 `/docker-entrypoint-initdb.d`, where it runs after the stack's shared seed on
 every fresh container (sessions always `down -v` between runs).
 
+Connector services can mount native configuration files from the pattern
+directory. Each entry names a source file and an absolute container path:
+
+```yaml
+spec:
+  services:
+    walshadow:
+      config:
+        - file: config/latency.toml
+          target: /etc/walshadow/ch-config.d/10-pattern.toml
+```
+
+The runner mounts these files read-only. A mount with the same container path
+as a shared-stack mount replaces it for that pattern; for example, the Altinity
+pattern supplies its own `/config.yml`. ClickHouse services continue to use
+the additive XML fragment mechanism above.
+
+Some connectors receive configuration through an API rather than a mounted
+file. The Kafka pattern reads `config/source.json` and `config/sink.json` and
+submits the JSON to Kafka Connect. The PeerDB pattern reads `config/mirror.sql`
+and submits the SQL to PeerDB. Configuration files under a pattern's `config/`
+directory appear in the Explorer's **Configuration** panel, with their mount
+paths or the name of the loader that reads them.
+
+Edit a file, run `just reload`, then `just validate`. Reload rebuilds the demo
+and clears its data. Changes to configuration files are included in the source
+fingerprint reported by `just status`.
+
 ## Isolation
 
 Pattern Explorer orchestration runs under the Compose project name `chp` (see
