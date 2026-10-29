@@ -2,19 +2,30 @@ manifest_version: 2
 metadata:
   title: CDC · Postgres WAL → Debezium → Kafka → ClickHouse
   description: |-
-    A **Kafka topic** holds the change stream so that several systems can consume it independently. **Debezium** reads the Postgres WAL and publishes each change to that topic. The official **ClickHouse Sink** consumes that topic and writes to a MergeTree. Both connectors run on one Kafka Connect worker with the broker between them.
+    **Debezium** receives logically decoded row changes from Postgres and publishes them to the Kafka topic `pg.public.orders`. The **ClickHouse Kafka Connect Sink** reads `pg.public.orders` and inserts each change as a new version in `test.orders`. In this demo, both connectors run on one Kafka Connect worker.
 
-    ClickHouse is one consumer of that topic. A search index, a cache invalidator, or another team's service can consume the same records, each at its own pace. Postgres still serves a single replication slot.
+    The ClickHouse Kafka Connect Sink is one consumer of `pg.public.orders`. A search index, a cache invalidator, or another team's service can consume the same records, each at its own pace. Postgres still serves a single replication slot.
 
     Each connector runs its own chain of **single-message transforms**, and any SMT can be added to either chain, whether one of Kafka Connect's built-ins for filtering, renaming, masking, and routing, or a custom one. On the **source side** an added transform applies to every consumer; on the **sink side** it applies only to the ClickHouse copy.
 
-    Before publishing, `ExtractNewRecordState` flattens Debezium's before/after envelope, rewrites deletes, and carries the LSN through as `__lsn`. On the sink side, a second transform adds the Kafka coordinates, so each row records the topic, partition, offset, and timestamp it arrived on.
+    Before publishing, `ExtractNewRecordState` flattens Debezium's before/after envelope, rewrites deletes, and includes the LSN in the `__lsn` field. On the sink side, a second transform adds the Kafka coordinates, so each row records the topic, partition, offset, and timestamp it arrived on.
 
     Whether to transform in the connectors or after the rows are inserted into ClickHouse is a design choice in its own right.
 
     This pattern runs the official **ClickHouse Kafka Connect Sink**. Anything that can consume the topic could take its place, including the **Altinity sink** in its Kafka mode and the **Kafka table engine**, where ClickHouse consumes the topic itself.
 
     The cost is two services to operate instead of one, plus topic retention and consumer offsets to manage.
+
+    ### Following a row through the pipeline
+
+    `replication_latency_ms` measures source row write → ClickHouse insert in milliseconds, using `updated_at` and `ch_inserted_at`. Snapshot and delete rows show `NULL`.
+
+    Lower latency: reduce `poll.interval.ms` in `config/source.json` (default: 500 ms) to shorten idle polling delays, at the cost of increased CPU use.
+
+    Edit the files in `config/`, then run `just reload` to rebuild the demo with the new settings. The **Configuration** panel displays the files.
+
+    Inspect `test.orders` in **Contents** to follow `updated_at` → `__source_ts_ms` (Debezium source-event time, epoch milliseconds) → `__timestamp` (Kafka record time) → `ch_inserted_at`. The source SMT preserves Debezium's snapshot marker as `__snapshot` as well as its event timestamp. The Kafka topic, partition and offset identify the intermediate record. These connector timestamps are kept separate from the source business write time.
+
   graph: |-
     changes:
       postgres:orders(label=public.orders,note=**Live OLTP source**\nOne replication slot serves every consumer downstream.)
@@ -38,6 +49,8 @@ metadata:
   order: 5
   tags: [cdc, postgres, kafka, debezium, kafka-connect]
   references:
+    - label: Debezium polling interval (2.5.4)
+      url: https://github.com/debezium/debezium/blob/v2.5.4.Final/debezium-core/src/main/java/io/debezium/config/CommonConnectorConfig.java#L477
     - label: Debezium connector for PostgreSQL
       url: https://debezium.io/documentation/reference/stable/connectors/postgresql.html
     - label: 'Debezium: New Record State Extraction (the unwrap SMT)'
@@ -67,13 +80,17 @@ spec:
   profiles: [single, postgres, kafka, connect]
   driver_node: ch
 
+  services:
+    postgres:
+      init: source-init.sql
+
   steps:
     schema: schema.sql
     load: load.py
 
     ready_when:
       - query: SELECT count() FROM test.orders FINAL WHERE __deleted = 'false'
-        value: 3
+        value: 5
         node: ch
         timeout: 180
       - query: SELECT count() FROM test.orders FINAL WHERE id = 4 AND __deleted = 'false'
@@ -85,6 +102,21 @@ spec:
         node: ch
         timeout: 180
       - query: SELECT count() FROM test.orders FINAL WHERE id = 3 AND __deleted = 'false'
+        value: 0
+        node: ch
+        timeout: 180
+
+      - query: SELECT count() FROM test.orders FINAL WHERE id IN (2, 4, 5, 6) AND replication_stage = 'CDC change' AND ch_inserted_at IS NOT NULL AND replication_latency_ms = dateDiff('microsecond', updated_at, ch_inserted_at) / 1000.0 AND updated_at >= created_at
+        value: 4
+        node: ch
+        timeout: 180
+      - query: SELECT count() FROM test.orders FINAL WHERE id = 1 AND replication_stage = 'Initial snapshot' AND ch_inserted_at IS NULL AND replication_latency_ms IS NULL
+        value: 1
+        node: ch
+        timeout: 180
+
+
+      - query: SELECT count() FROM test.orders WHERE __deleted = 'true' AND replication_latency_ms IS NOT NULL
         value: 0
         node: ch
         timeout: 180

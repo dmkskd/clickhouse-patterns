@@ -2,9 +2,9 @@
 
 Profiles: `single`, `postgres`, `s3`, `peerdb`. Driver: `ch`.
 
-Level 4 of this group. This runs PeerDB locally as the open-source engine behind
-managed Postgres ClickPipes. A single mirror captures two equivalent source
-tables and compares three ClickHouse target choices.
+Level 4 of this group. PeerDB is the open-source replication engine used by
+Postgres ClickPipes. A single mirror captures two equivalent source tables and
+compares three ClickHouse target choices.
 
 ## Two Postgres instances
 
@@ -113,7 +113,7 @@ What the extra services actually buy:
 | Postgres instances to operate | 2 (source + catalog) | 1 (source only), or 0 with a MySQL source |
 | ClickHouse version | Native + `s3()`, runs 26.7 | JDBC 0.6.5, pinned to 25.3 |
 
-At this pattern's scale the two stacks produce identical results on three rows.
+At this pattern's scale the two stacks produce identical results on five orders.
 The lightweight sink's limitations do not apply, and PeerDB's extra machinery is
 never used. They diverge where a single Debezium process no longer fits in one
 container's memory during the initial load, which is also where managed
@@ -163,3 +163,15 @@ To leave the result available to the ClickHouse MCP:
 just start cdc-postgres-peerdb
 just validate
 ```
+
+## Following a row through the pipeline
+
+`replication_latency_ms` measures source row write → ClickHouse insert in milliseconds, using `updated_at` and `ch_inserted_at`. Snapshot and delete rows show `NULL`.
+
+Lower latency: reduce `sync_interval` in `config/mirror.sql` (seconds; default: 10); this demo already sets 1 second, at the cost of more frequent MinIO and ClickHouse loads.
+
+Inspect `test.orders` and `test.orders_existing` in **Contents**: source write times sit alongside `_peerdb_synced_at` (PeerDB metadata) and `ch_inserted_at` (destination execution). The raw mirror table and MinIO objects expose the intermediate CDC batch. `_peerdb_synced_at` is kept separate from the source write time and is not treated as a Postgres commit timestamp. The transformation carries the landing timestamps through unchanged, so its latency still describes arrival at the landing table.
+
+## Editing connector settings
+
+Edit the files in `config/`, then run `just reload` and `just validate`. The Explorer’s **Configuration** panel displays the same files. Reload rebuilds the demo and clears its data.

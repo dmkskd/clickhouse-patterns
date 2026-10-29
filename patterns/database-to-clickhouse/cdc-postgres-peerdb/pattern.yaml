@@ -2,17 +2,28 @@ manifest_version: 2
 metadata:
   title: CDC · Postgres WAL → PeerDB → ClickHouse
   description: |-
-    PeerDB replicates Postgres tables into ClickHouse by reading the WAL through a logical replication slot. It is the open-source engine behind managed Postgres ClickPipes, and it runs self-hosted here.
+    PeerDB replicates Postgres tables into ClickHouse through a logical replication slot. PeerDB is the open-source replication engine used by Postgres ClickPipes.
 
-    This pattern replicates two Postgres tables into two ClickHouse destination tables: one that does not exist yet, so PeerDB creates it, and one already created in ClickHouse with its own DDL.
+    PeerDB can create the ClickHouse destination table automatically or replicate into an existing table. PeerDB creates `test.orders` automatically; `schema.sql` creates `test.orders_existing` before replication starts.
 
     Snapshot and change batches are staged as Avro objects in S3-compatible object storage (MinIO in this stack). PeerDB then issues `INSERT ... SELECT FROM s3()` statements, and ClickHouse reads the staged objects from the object store. Ongoing changes are inserted first into `_peerdb_raw_two_table_mirror`, then decoded from that table into their respective destination tables.
 
-    PeerDB does not perform in-flight transformation. It has no per-message transform hook on the CDC path, so all transformation happens in ClickHouse, either in the target DDL or in a materialized view.
+    PeerDB replicates source values unchanged. ClickHouse applies transformations through target-table expressions and materialized views.
 
     **Two Postgres instances run in this pattern.** `postgres` is the source database being replicated. `peerdb-catalog` stores PeerDB's own metadata and Temporal's workflow history.
 
     PeerDB runs replication as Temporal workflows, so the stack needs several services beyond ClickHouse and the source database.
+
+    ### Following a row through the pipeline
+
+    `replication_latency_ms` measures source row write → ClickHouse insert in milliseconds, using `updated_at` and `ch_inserted_at`. Snapshot and delete rows show `NULL`.
+
+    Lower latency: reduce `sync_interval` in `config/mirror.sql` (seconds; default: 10); this demo already sets 1 second, at the cost of more frequent MinIO and ClickHouse loads.
+
+    Edit the files in `config/`, then run `just reload` to rebuild the demo with the new settings. The **Configuration** panel displays the files.
+
+    Inspect `test.orders` and `test.orders_existing` in **Contents**: source write times sit alongside `_peerdb_synced_at` (PeerDB metadata) and `ch_inserted_at` (destination execution). The raw mirror table and MinIO objects expose the intermediate CDC batch. `_peerdb_synced_at` is kept separate from the source write time and is not treated as a Postgres commit timestamp. The transformation carries the landing timestamps through unchanged, so its latency still describes arrival at the landing table.
+
   graph: |-
     snapshot:
       postgres:source_tables(label=public.orders + public.orders_existing,note=**Source Postgres** · service `postgres`\nThe replicated user data.\n- not the peerdb-catalog\n- read through a logical replication slot)
@@ -47,6 +58,8 @@ metadata:
   order: 4
   tags: [cdc, postgres, peerdb, clickpipes]
   references:
+    - label: PeerDB default CDC batch interval (v0.37.0)
+      url: https://github.com/PeerDB-io/peerdb/blob/v0.37.0/flow/activities/flowable.go#L63
     - label: PeerDB self-hosted quickstart
       url: https://docs.peerdb.io/quickstart/quickstart
     - label: PeerDB ClickHouse data modeling
@@ -80,6 +93,10 @@ spec:
   profiles: [single, postgres, s3, peerdb]
   driver_node: ch
 
+  services:
+    postgres:
+      init: source-init.sql
+
   steps:
     # schema.sql provides orders_existing; PeerDB creates orders. load.py installs
     # the transformation after the initial snapshot creates its source table.
@@ -92,7 +109,7 @@ spec:
         node: ch
         timeout: 180
       - query: SELECT count() FROM test._peerdb_raw_two_table_mirror
-        value: 6
+        value: 18
         node: ch
         timeout: 180
       - query: SELECT engine FROM system.tables WHERE database = 'test' AND name = 'orders'
@@ -116,6 +133,45 @@ spec:
         node: ch
         timeout: 180
       - query: SELECT count() FROM test.orders_existing FINAL WHERE id = 3 AND _peerdb_is_deleted = 0
+        value: 0
+        node: ch
+        timeout: 180
+
+      - query: SELECT count() FROM test.orders FINAL WHERE id IN (2, 4, 5, 6) AND replication_stage = 'CDC change' AND ch_inserted_at IS NOT NULL AND replication_latency_ms = dateDiff('microsecond', updated_at, ch_inserted_at) / 1000.0 AND updated_at >= created_at
+        value: 4
+        node: ch
+        timeout: 180
+      - query: SELECT count() FROM test.orders FINAL WHERE id = 1 AND replication_stage = 'Initial snapshot' AND ch_inserted_at IS NULL AND replication_latency_ms IS NULL
+        value: 1
+        node: ch
+        timeout: 180
+      - query: SELECT count() FROM test.orders_existing FINAL WHERE id IN (2, 4, 5, 6) AND replication_stage = 'CDC change' AND ch_inserted_at IS NOT NULL AND replication_latency_ms = dateDiff('microsecond', updated_at, ch_inserted_at) / 1000.0 AND updated_at >= created_at
+        value: 4
+        node: ch
+        timeout: 180
+      - query: SELECT count() FROM test.orders_existing FINAL WHERE id = 1 AND replication_stage = 'Initial snapshot' AND ch_inserted_at IS NULL AND replication_latency_ms IS NULL
+        value: 1
+        node: ch
+        timeout: 180
+      - query: SELECT count() FROM test.orders_transformed FINAL WHERE id IN (2, 4, 5, 6) AND replication_stage = 'CDC change' AND ch_inserted_at IS NOT NULL AND replication_latency_ms = dateDiff('microsecond', updated_at, ch_inserted_at) / 1000.0 AND updated_at >= created_at
+        value: 4
+        node: ch
+        timeout: 180
+      - query: SELECT count() FROM test.orders_transformed FINAL WHERE id = 1 AND replication_stage = 'Initial snapshot' AND ch_inserted_at IS NULL AND replication_latency_ms IS NULL
+        value: 1
+        node: ch
+        timeout: 180
+
+
+      - query: SELECT count() FROM test.orders WHERE _peerdb_is_deleted != 0 AND replication_latency_ms IS NOT NULL
+        value: 0
+        node: ch
+        timeout: 180
+      - query: SELECT count() FROM test.orders_existing WHERE _peerdb_is_deleted != 0 AND replication_latency_ms IS NOT NULL
+        value: 0
+        node: ch
+        timeout: 180
+      - query: SELECT count() FROM test.orders_transformed WHERE _peerdb_is_deleted != 0 AND replication_latency_ms IS NOT NULL
         value: 0
         node: ch
         timeout: 180

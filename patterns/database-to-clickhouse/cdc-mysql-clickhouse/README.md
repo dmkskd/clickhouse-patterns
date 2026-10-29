@@ -133,3 +133,15 @@ just test cdc-mysql-clickhouse
 
 The connector uses a dedicated `cdc` ClickHouse user and stores offsets and
 schema history in `altinity_sink_connector`.
+
+## Following a row through the pipeline
+
+`replication_latency_ms` measures source row write → ClickHouse insert in milliseconds, using `updated_at` and `ch_inserted_at`. Snapshot and delete rows show `NULL`.
+
+Lower latency: reduce `poll.interval.ms` and `buffer.flush.time.ms` in `config/connector.yaml`; shorter waits increase CPU use and ClickHouse insert frequency.
+
+Inspect `test.orders` and `test.orders_existing` in **Contents**: the source write times, connector `_version` and `is_deleted`, and destination insert time remain visible together. `_version` orders versions; this demo does not interpret it as a source commit timestamp. The transformation carries the landing timestamps through unchanged, so its latency still describes arrival at the landing table.
+
+## Editing connector settings
+
+Edit the files in `config/`, then run `just reload` and `just validate`. The Explorer’s **Configuration** panel displays the same files. Reload rebuilds the demo and clears its data.

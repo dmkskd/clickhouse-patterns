@@ -3,85 +3,25 @@
 Both connectors run on the same Kafka Connect cluster with the topic between
 them. The source unwraps Debezium's envelope before the record is published, so
 the sink and any other consumer read flat rows rather than before/after pairs.
+Edit config/source.json and config/sink.json, then run just reload to apply changes.
 """
 from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 import urllib.request
 
 import psycopg
 
 from pattern_explorer.orchestration.nodes import connect as ch_connect
+from pattern_explorer.orchestration.sql import run_sql_file
 from pattern_explorer.orchestration.wait import wait_for
 
 CONNECT = os.environ.get("CONNECT_URL", "http://localhost:8083")
-TOPIC = "pg.public.orders"
-
-# Reads the WAL through pgoutput and publishes one record per change.
-# ExtractNewRecordState is the SMT that flattens Debezium's envelope: it keeps
-# the `after` image, rewrites a delete into the key plus __deleted, and carries
-# the LSN through as __lsn for ordering. This transform is the reason the broker
-# is here - it has nowhere to run in the single-process CDC patterns.
-SOURCE = {
-    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-    "tasks.max": "1",
-    "database.hostname": "postgres",
-    "database.port": "5432",
-    "database.user": "postgres",
-    "database.password": "postgres",
-    "database.dbname": "test",
-    "topic.prefix": "pg",
-    "table.include.list": "public.orders",
-    "plugin.name": "pgoutput",
-    "slot.name": "debezium_orders",
-    "publication.autocreate.mode": "filtered",
-    "tombstones.on.delete": "false",
-    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
-    "key.converter.schemas.enable": "false",
-    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
-    "value.converter.schemas.enable": "false",
-    "transforms": "unwrap",
-    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
-    "transforms.unwrap.drop.tombstones": "true",
-    "transforms.unwrap.delete.handling.mode": "rewrite",
-    "transforms.unwrap.add.fields": "lsn",
-}
-
-SINK = {
-    "connector.class": "com.clickhouse.kafka.connect.ClickHouseSinkConnector",
-    "tasks.max": "1",
-    "topics": TOPIC,
-    "hostname": "ch",
-    "port": "8123",
-    "database": "test",
-    "username": "default",
-    "password": "",
-    "ssl": "false",
-    "exactlyOnce": "false",
-    "topic2TableMap": f"{TOPIC}=orders",
-    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
-    "key.converter.schemas.enable": "false",
-    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
-    "value.converter.schemas.enable": "false",
-    "consumer.override.auto.offset.reset": "earliest",
-    # Kafka's own coordinates, added on the sink side. topic/partition/offset
-    # are only available to a sink connector, so this cannot be done upstream.
-    # They make every ClickHouse row traceable to the exact record it came from.
-    # The sink is schemaless, so InsertField writes the timestamp as epoch
-    # milliseconds, which ClickHouse would read into DateTime64 as seconds.
-    # TimestampConverter formats it as a UTC string ClickHouse parses exactly.
-    "transforms": "insertMeta,formatTimestamp",
-    "transforms.insertMeta.type": "org.apache.kafka.connect.transforms.InsertField$Value",
-    "transforms.insertMeta.topic.field": "__topic",
-    "transforms.insertMeta.partition.field": "__partition",
-    "transforms.insertMeta.offset.field": "__offset",
-    "transforms.insertMeta.timestamp.field": "__timestamp",
-    "transforms.formatTimestamp.type": "org.apache.kafka.connect.transforms.TimestampConverter$Value",
-    "transforms.formatTimestamp.field": "__timestamp",
-    "transforms.formatTimestamp.target.type": "string",
-    "transforms.formatTimestamp.format": "yyyy-MM-dd HH:mm:ss.SSS",
-}
+CONFIG_DIR = Path(__file__).with_name("config")
+SOURCE = json.loads((CONFIG_DIR / "source.json").read_text())
+SINK = json.loads((CONFIG_DIR / "sink.json").read_text())
 
 
 def register(name: str, config: dict) -> None:
@@ -101,6 +41,7 @@ register("orders-sink", SINK)
 ch = ch_connect("ch")
 wait_for(ch, "SELECT count() FROM test.orders", 3, timeout=180)
 print("initial snapshot reached ClickHouse through the topic (3 rows)")
+run_sql_file(ch, Path(__file__).with_name("latency.sql"))
 
 with psycopg.connect(
     host="localhost",
@@ -116,4 +57,11 @@ with psycopg.connect(
     )
     source.execute("UPDATE orders SET amount = 250 WHERE id = 2")
     source.execute("DELETE FROM orders WHERE id = 3")
+    source.execute("INSERT INTO orders (id, customer, amount) VALUES (5, 'erin', 500)")
+    source.execute("INSERT INTO orders (id, customer, amount) VALUES (6, 'frank', 600)")
+    source.execute("INSERT INTO orders (id, customer, amount) VALUES (7, 'grace', 700)")
+    source.execute("UPDATE orders SET amount = 550 WHERE id = 5")
+    source.execute("UPDATE orders SET amount = 650 WHERE id = 6")
+    source.execute("DELETE FROM orders WHERE id = 7")
+
 print("applied INSERT/UPDATE/DELETE to public.orders in Postgres")

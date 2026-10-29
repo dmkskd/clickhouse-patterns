@@ -17,6 +17,7 @@ wait_for(
 )
 print("initial snapshots present in CDC-created and existing targets (3 rows each)")
 
+run_sql_file(ch, Path(__file__).with_name("latency.sql"))
 run_sql_file(ch, Path(__file__).with_name("transform.sql"))
 print("created and backfilled the materialized-view transformation")
 
@@ -30,5 +31,12 @@ with conn.cursor() as cur:
         cur.execute(f"INSERT INTO {table} (id, customer, amount) VALUES (4, 'dave', 400)")
         cur.execute(f"UPDATE {table} SET amount = 250 WHERE id = 2")
         cur.execute(f"DELETE FROM {table} WHERE id = 3")
+        cur.execute(f"INSERT INTO {table} (id, customer, amount) VALUES (5, 'erin', 500)")
+        cur.execute(f"INSERT INTO {table} (id, customer, amount) VALUES (6, 'frank', 600)")
+        cur.execute(f"INSERT INTO {table} (id, customer, amount) VALUES (7, 'grace', 700)")
+        cur.execute(f"UPDATE {table} SET amount = 550 WHERE id = 5")
+        cur.execute(f"UPDATE {table} SET amount = 650 WHERE id = 6")
+        cur.execute(f"DELETE FROM {table} WHERE id = 7")
+
 conn.close()
 print("applied matching INSERT/UPDATE/DELETE operations to both MySQL source tables")

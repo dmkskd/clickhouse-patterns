@@ -4,7 +4,7 @@ metadata:
   description: |-
     [walshadow](https://github.com/ClickHouse/walshadow) replicates **Postgres** tables into ClickHouse by streaming physical WAL records from the source **Postgres** server and decoding them into ClickHouse rows.
 
-    CDC tools such as PeerDB and Debezium use **logical decoding**, a **Postgres** feature in which the source **Postgres** server converts its WAL into row changes (INSERT, UPDATE, DELETE) and sends them to the client through a replication slot. **walshadow** receives the WAL records exactly as **Postgres** writes them to its WAL files, and decodes them into row changes with its own decoder. The decoder reads table definitions from a **shadow Postgres** instance in the `walshadow` container. The shadow replays the source's catalog changes and provides the schema in effect when each record was written.
+    CDC tools such as PeerDB and Debezium use **logical decoding**: the source **Postgres** server decodes WAL into row changes (INSERT, UPDATE, DELETE) and streams those changes to the client. By contrast, **walshadow** receives physical WAL records from the source **Postgres** server and decodes them into row changes. The decoder reads table definitions from a **shadow Postgres** instance in the `walshadow` container. The shadow replays the source's catalog changes and provides the schema in effect when each record was written.
 
     Compared with logical decoding:
 
@@ -14,15 +14,15 @@ metadata:
 
     ### Demo setup
 
-    - The `walshadow` service entrypoint runs `walshadow-stream init --table public orders`, which writes `/etc/walshadow/ch-config.toml` with `initial_load = "copy"` for `public.orders` and no `[stream]` section.
-    - **walshadow** creates the table `public_orders` with `ORDER BY (id)` in the ClickHouse database `walshadow` on the `ch` service, as set by `WALSHADOW_CH_URL`.
-    - `load.py` changes rows and runs `ADD COLUMN status text DEFAULT 'new'` on the source table; **walshadow** adds `status` to the ClickHouse table.
-    - Six further source transactions insert Erin, Frank and Grace's orders, mark Erin's order as shipped, change Frank's amount to 650, and delete Grace's order. The final result contains five orders; the raw Contents sample can also show earlier row versions and delete markers before merges reconcile them.
+    **walshadow** copies `public.orders` into `walshadow.public_orders`, ordered by the source primary key `id`. The demo then replicates inserts, updates, deletes and schema changes. Click `walshadow.public_orders` in the diagram to open its table details. The **Contents** section shows a row sample that can include earlier versions and delete markers.
 
-    Each order has two business timestamps maintained in Postgres: `created_at` records its creation and stays unchanged, while `updated_at` records its latest write (set on insert and refreshed by a trigger on every update). The Contents view places `updated_at`, `_commit_ts` and `ch_inserted_at` together: the source write time, the transaction commit time read by walshadow from Postgres WAL, and the time ClickHouse executes the insert. Initial snapshot rows retain both business timestamps, but their original commit time is unavailable: walshadow uses `2000-01-01` for `_commit_ts` and this demo leaves `ch_inserted_at` unmeasured (`NULL`).
-    - `replicate_all` keeps its default `true`, so **walshadow** also replicates `public.orders_existing`, which the shared `compose/cdc/postgres-init.sql` creates in the same source database.
+    ### Following a row through the pipeline
 
-    Click `walshadow.public_orders` in the diagram to inspect its **Contents**. The demo's `replication_stage` labels copied row versions **Initial snapshot** and later row versions **CDC change**. It also adds `ch_inserted_at` and `replication_latency_ms`: the latter measures milliseconds from the Postgres commit to ClickHouse insert execution, including connector buffering. Initial snapshot rows have no measured arrival time and show `NULL` for latency. This is an approximate insert-time measurement, not time to first query visibility, and requires synchronized source and destination clocks. A separate `public_latency_probe` table receives 200 transactions at 50 per second using the same measurement.
+    In **Contents**, `replication_latency_ms` measures the time from a row write in Postgres to its insert in ClickHouse. Snapshot and delete rows show `NULL`.
+
+    Lower latency: reduce `[ch] flush_timeout_ms` in `config/latency.toml` (default: 1,000 ms) to flush small batches sooner, at the cost of more ClickHouse inserts.
+
+    Edit the files in `config/`, then run `just reload` to rebuild the demo with the new settings. The **Configuration** panel displays the files.
 
     ### Delivery guarantees
 
@@ -92,6 +92,8 @@ metadata:
   order: 6
   tags: [cdc, postgres, walshadow, physical-wal]
   references:
+    - label: walshadow default insert flush timeout
+      url: https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/src/emit/ch_emitter.rs#L80
     - label: Introducing walshadow (ClickHouse blog)
       url: https://clickhouse.com/blog/introducing-walshadow
     - label: walshadow repository
@@ -125,6 +127,10 @@ spec:
   profiles: [single, postgres, walshadow]
   driver_node: ch
   services:
+    walshadow:
+      config:
+        - file: config/latency.toml
+          target: /etc/walshadow/ch-config.d/10-pattern.toml
     postgres:
       init: source-init.sql
 
@@ -147,20 +153,12 @@ spec:
         value: 1
         node: ch
         timeout: 120
-      - query: SELECT count() FROM walshadow.public_latency_probe
-        value: 200
-        node: ch
-        timeout: 120
-      - query: SELECT count() FROM walshadow.public_orders FINAL WHERE replication_latency_ms IS NOT NULL
+      - query: SELECT count() FROM walshadow.public_orders FINAL WHERE id IN (2, 4, 5, 6) AND updated_at != _commit_ts AND replication_latency_ms = dateDiff('microsecond', updated_at, ch_inserted_at) / 1000.0
         value: 4
         node: ch
         timeout: 120
       - query: SELECT count() FROM walshadow.public_orders FINAL WHERE id = 1 AND replication_stage = 'Initial snapshot' AND ch_inserted_at IS NULL AND replication_latency_ms IS NULL
         value: 1
-        node: ch
-        timeout: 120
-      - query: SELECT count() FROM walshadow.public_latency_probe WHERE replication_latency_ms IS NOT NULL
-        value: 200
         node: ch
         timeout: 120
       - query: SELECT count() FROM walshadow.public_orders FINAL WHERE replication_stage = 'CDC change'
@@ -175,6 +173,11 @@ spec:
         value: 4
         node: ch
         timeout: 120
+
+      - query: SELECT count() FROM walshadow.public_orders WHERE _is_deleted != 0 AND replication_latency_ms IS NOT NULL
+        value: 0
+        node: ch
+        timeout: 180
 
     verify:
       sql: verify.sql

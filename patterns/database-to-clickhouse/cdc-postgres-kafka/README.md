@@ -109,3 +109,15 @@ Anything that can consume the topic could take its place. Two worth naming:
 ```bash
 just test cdc-postgres-kafka
 ```
+
+## Following a row through the pipeline
+
+`replication_latency_ms` measures source row write → ClickHouse insert in milliseconds, using `updated_at` and `ch_inserted_at`. Snapshot and delete rows show `NULL`.
+
+Lower latency: reduce `poll.interval.ms` in `config/source.json` (default: 500 ms) to shorten idle polling delays, at the cost of increased CPU use.
+
+Inspect `test.orders` in **Contents** to follow `updated_at` → `__source_ts_ms` (Debezium source-event time, epoch milliseconds) → `__timestamp` (Kafka record time) → `ch_inserted_at`. The source SMT preserves Debezium's snapshot marker as `__snapshot` as well as its event timestamp. The Kafka topic, partition and offset identify the intermediate record. These connector timestamps are kept separate from the source business write time.
+
+## Editing connector settings
+
+Edit the files in `config/`, then run `just reload` and `just validate`. The Explorer’s **Configuration** panel displays the same files. Reload rebuilds the demo and clears its data.

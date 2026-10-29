@@ -1,0 +1,5 @@
+# Upstream default for the pinned walshadow version: 1000 milliseconds.
+# Smaller values flush small batches sooner and create more ClickHouse parts.
+# Apply edits with: just reload
+[ch]
+flush_timeout_ms = 1000

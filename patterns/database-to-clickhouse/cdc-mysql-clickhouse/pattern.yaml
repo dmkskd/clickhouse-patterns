@@ -20,6 +20,17 @@ metadata:
     The connector cannot transform records in flight: single-message transforms run inside the Kafka Connect runtime, which this lightweight deployment does not include. Records are inserted as Debezium produces them, so all shaping happens in ClickHouse, either in the target DDL or in a materialized view.
 
     This repository pins Altinity sink `2.9.1-lt` to ClickHouse `25.3` because its startup JDBC metadata reads fail against ClickHouse `26.6`.
+
+    ### Following a row through the pipeline
+
+    `replication_latency_ms` measures source row write → ClickHouse insert in milliseconds, using `updated_at` and `ch_inserted_at`. Snapshot and delete rows show `NULL`.
+
+    Lower latency: reduce `poll.interval.ms` and `buffer.flush.time.ms` in `config/connector.yaml`; shorter waits increase CPU use and ClickHouse insert frequency.
+
+    Edit the files in `config/`, then run `just reload` to rebuild the demo with the new settings. The **Configuration** panel displays the files.
+
+    Inspect `test.orders` and `test.orders_existing` in **Contents**: the source write times, connector `_version` and `is_deleted`, and destination insert time remain visible together. `_version` orders versions; this demo does not interpret it as a source commit timestamp. The transformation carries the landing timestamps through unchanged, so its latency still describes arrival at the landing table.
+
   graph: |-
     snapshot:
       mysql:source_tables(label=2 MySQL sources,tables=test.orders + test.orders_existing)
@@ -49,11 +60,13 @@ metadata:
       mergetree:orders
         -> mv:orders_transform_mv(reads=orders only)
         -> mergetree:orders_transformed@mv-transformed(source=orders MV)
-  status: stable
+  status: under-review
   topology: single
   order: 3
   tags: [cdc, mysql]
   references:
+    - label: Altinity lightweight insert scheduler (2.9.1)
+      url: https://github.com/Altinity/clickhouse-sink-connector/blob/999b63d712212502583b4efe41a84d760c161e6a/sink-connector-lightweight/src/main/java/com/altinity/clickhouse/debezium/embedded/cdc/DebeziumChangeEventCapture.java#L893
     - label: Altinity ClickHouse Sink Connector
       url: https://github.com/Altinity/clickhouse-sink-connector
     - label: Altinity 2.9.1 supported ClickHouse versions (24.8+)
@@ -96,6 +109,14 @@ spec:
     clickhouse_max: '25.3'
     note: Ceiling is the Altinity sink's bundled clickhouse-jdbc, not a ClickHouse limit; its JDBC startup broke on ClickHouse 26.6.
 
+  services:
+    cdc-mysql:
+      config:
+        - file: config/connector.yaml
+          target: /config.yml
+    mysql:
+      init: source-init.sql
+
   steps:
     # ch-cdc initialization provides orders_existing before the connector starts;
     # the connector still creates orders. load.py installs the transformation after
@@ -128,6 +149,44 @@ spec:
         value: 0
         node: ch-cdc
         timeout: 60
+
+      - query: SELECT count() FROM test.orders FINAL WHERE id IN (2, 4, 5, 6) AND replication_stage = 'CDC change' AND ch_inserted_at IS NOT NULL AND replication_latency_ms = dateDiff('microsecond', updated_at, ch_inserted_at) / 1000.0 AND updated_at >= created_at
+        value: 4
+        node: ch-cdc
+        timeout: 180
+      - query: SELECT count() FROM test.orders FINAL WHERE id = 1 AND replication_stage = 'Initial snapshot' AND ch_inserted_at IS NULL AND replication_latency_ms IS NULL
+        value: 1
+        node: ch-cdc
+        timeout: 180
+      - query: SELECT count() FROM test.orders_existing FINAL WHERE id IN (2, 4, 5, 6) AND replication_stage = 'CDC change' AND ch_inserted_at IS NOT NULL AND replication_latency_ms = dateDiff('microsecond', updated_at, ch_inserted_at) / 1000.0 AND updated_at >= created_at
+        value: 4
+        node: ch-cdc
+        timeout: 180
+      - query: SELECT count() FROM test.orders_existing FINAL WHERE id = 1 AND replication_stage = 'Initial snapshot' AND ch_inserted_at IS NULL AND replication_latency_ms IS NULL
+        value: 1
+        node: ch-cdc
+        timeout: 180
+      - query: SELECT count() FROM test.orders_transformed FINAL WHERE id IN (2, 4, 5, 6) AND replication_stage = 'CDC change' AND ch_inserted_at IS NOT NULL AND replication_latency_ms = dateDiff('microsecond', updated_at, ch_inserted_at) / 1000.0 AND updated_at >= created_at
+        value: 4
+        node: ch-cdc
+        timeout: 180
+      - query: SELECT count() FROM test.orders_transformed FINAL WHERE id = 1 AND replication_stage = 'Initial snapshot' AND ch_inserted_at IS NULL AND replication_latency_ms IS NULL
+        value: 1
+        node: ch-cdc
+        timeout: 180
+
+      - query: SELECT count() FROM test.orders WHERE is_deleted != 0 AND replication_latency_ms IS NOT NULL
+        value: 0
+        node: ch-cdc
+        timeout: 180
+      - query: SELECT count() FROM test.orders_existing WHERE is_deleted != 0 AND replication_latency_ms IS NOT NULL
+        value: 0
+        node: ch-cdc
+        timeout: 180
+      - query: SELECT count() FROM test.orders_transformed WHERE is_deleted != 0 AND replication_latency_ms IS NOT NULL
+        value: 0
+        node: ch-cdc
+        timeout: 180
 
     verify:
       sql: verify.sql

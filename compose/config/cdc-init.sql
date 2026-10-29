@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS test.orders_existing
     id Int32,
     customer LowCardinality(Nullable(String)),
     amount Nullable(Int64),
+    -- Source business timestamps used by the MySQL latency demo.
+    created_at Nullable(DateTime64(6, 'UTC')),
+    updated_at Nullable(DateTime64(6, 'UTC')),
     amount_band LowCardinality(String)
         MATERIALIZED if(ifNull(amount, 0) >= 250, 'high', 'standard'),
     _version UInt64,

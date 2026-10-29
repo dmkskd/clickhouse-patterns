@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS test.orders_existing
     id Int32,
     customer LowCardinality(String),
     amount Int64,
+    created_at Nullable(DateTime64(6, 'UTC')),
+    updated_at Nullable(DateTime64(6, 'UTC')),
     amount_band LowCardinality(String)
         MATERIALIZED if(amount >= 250, 'high', 'standard'),
     _peerdb_synced_at DateTime64(9),

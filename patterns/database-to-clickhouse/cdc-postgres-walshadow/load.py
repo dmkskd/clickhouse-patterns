@@ -1,20 +1,21 @@
 """Await walshadow's initial load, then exercise row changes and DDL on Postgres.
 
-Afterwards, write timestamped probe rows so each stage of the path has its own
-time on the same ClickHouse row: written_at (Postgres write), _commit_ts
-(Postgres commit) and ch_inserted_at (ClickHouse insert, a DEFAULT column).
+Order rows retain source write, Postgres commit and ClickHouse insert times.
 """
 from __future__ import annotations
-
-import time
 
 import psycopg
 
 from pattern_explorer.orchestration.nodes import connect
 from pattern_explorer.orchestration.wait import wait_for
 
-PROBE_ROWS = 200
-PROBE_RATE = 50  # single-row transactions per second
+# Same source-write-to-insert interval as the other database CDC patterns.
+LATENCY_EXPRESSION = (
+    "if(ch_inserted_at IS NOT NULL"
+    " AND updated_at > toDateTime64('1970-01-01 00:00:00', 6, 'UTC')"
+    " AND _is_deleted = 0,"
+    " dateDiff('microsecond', updated_at, ch_inserted_at) / 1000.0, NULL)"
+)
 
 ch = connect("ch")
 wait_for(
@@ -37,7 +38,7 @@ def add_latency_columns(table: str) -> None:
 
     Materialize NULL before changing the default, otherwise ClickHouse could
     evaluate the new timestamp default at read time for pre-existing parts.
-    The metric measures commit-to-insert time, not first query visibility;
+    The metric measures source-write-to-insert time, not first query visibility;
     source and destination clocks must be synchronized.
     """
     # This pinned walshadow version uses the Postgres epoch for snapshot rows
@@ -62,9 +63,7 @@ def add_latency_columns(table: str) -> None:
     )
     ch.command(
         f"ALTER TABLE walshadow.{table} ADD COLUMN replication_latency_ms"
-        " Nullable(Float64) DEFAULT if("
-        "ch_inserted_at IS NOT NULL AND _commit_ts > toDateTime64('2000-01-01 00:00:00', 6, 'UTC'),"
-        " dateDiff('microsecond', _commit_ts, ch_inserted_at) / 1000.0, NULL)"
+        f" Nullable(Float64) DEFAULT {LATENCY_EXPRESSION}"
     )
 
 
@@ -99,9 +98,8 @@ with psycopg.connect(
     )
     ch.command(
         "ALTER TABLE walshadow.public_orders"
-        " MODIFY COLUMN replication_latency_ms Nullable(Float64) DEFAULT if("
-        "ch_inserted_at IS NOT NULL AND _commit_ts > toDateTime64('2000-01-01 00:00:00', 6, 'UTC'),"
-        " dateDiff('microsecond', _commit_ts, ch_inserted_at) / 1000.0, NULL) AFTER status,"
+        f" MODIFY COLUMN replication_latency_ms Nullable(Float64)"
+        f" DEFAULT {LATENCY_EXPRESSION} AFTER status,"
         " MODIFY COLUMN replication_stage LowCardinality(String) DEFAULT if("
         "_commit_ts = toDateTime64('2000-01-01 00:00:00', 6, 'UTC'),"
         " 'Initial snapshot', 'CDC change') AFTER replication_latency_ms"
@@ -115,30 +113,3 @@ with psycopg.connect(
     source.execute("UPDATE orders SET amount = 650 WHERE id = 6")
     source.execute("DELETE FROM orders WHERE id = 7")
     print("applied six more CDC changes: three inserts, two updates and one delete")
-
-    # replicate_all = true: walshadow creates walshadow.public_latency_probe.
-    source.execute(
-        """
-        CREATE TABLE latency_probe (
-            id bigserial PRIMARY KEY,
-            written_at timestamptz NOT NULL DEFAULT clock_timestamp()
-        )
-        """
-    )
-    wait_for(
-        ch,
-        "SELECT count() FROM system.tables"
-        " WHERE database = 'walshadow' AND name = 'public_latency_probe'",
-        1,
-        timeout=120,
-    )
-    # walshadow names its columns on INSERT, leaving these defaults to ClickHouse.
-    add_latency_columns("public_latency_probe")
-
-    start = time.monotonic()
-    for i in range(PROBE_ROWS):
-        source.execute("INSERT INTO latency_probe DEFAULT VALUES")
-        delay = start + (i + 1) / PROBE_RATE - time.monotonic()
-        if delay > 0:
-            time.sleep(delay)
-    print(f"wrote {PROBE_ROWS} probe rows at {PROBE_RATE}/s to public.latency_probe")
