@@ -2,3 +2,5 @@
 1	alice	100	new
 2	bob	250	new
 4	dave	400	shipped
+5	erin	500	shipped
+6	frank	650	new

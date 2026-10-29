@@ -2,42 +2,52 @@ manifest_version: 2
 metadata:
   title: CDC · Postgres physical WAL → walshadow → ClickHouse
   description: |-
-    [walshadow](https://github.com/ClickHouse/walshadow) replicates **Postgres** tables into ClickHouse with a latency in the low hundreds of milliseconds, by streaming physical WAL records from the source **Postgres** server and decoding them directly into ClickHouse rows.
+    [walshadow](https://github.com/ClickHouse/walshadow) replicates **Postgres** tables into ClickHouse by streaming physical WAL records from the source **Postgres** server and decoding them into ClickHouse rows.
 
-    CDC tools such as PeerDB and Debezium use **logical decoding**, a **Postgres** feature in which the source **Postgres** server converts its WAL into row changes (INSERT, UPDATE, DELETE) and sends them to the client through a replication slot. **walshadow** receives the WAL records exactly as **Postgres** writes them to its WAL files, and converts them into row changes in its own process.
+    CDC tools such as PeerDB and Debezium use **logical decoding**, a **Postgres** feature in which the source **Postgres** server converts its WAL into row changes (INSERT, UPDATE, DELETE) and sends them to the client through a replication slot. **walshadow** receives the WAL records exactly as **Postgres** writes them to its WAL files, and decodes them into row changes with its own decoder. The decoder reads table definitions from a **shadow Postgres** instance in the `walshadow` container. The shadow replays the source's catalog changes and provides the schema in effect when each record was written.
 
     Compared with logical decoding:
 
-    - A physical slot retains WAL on the source **Postgres** server like a logical slot, and leaves `catalog_xmin` unpinned.
+    - Both slot types make the source **Postgres** server retain WAL until the client confirms it. A logical slot also holds `catalog_xmin`, which prevents VACUUM from removing old system-catalog rows that decoding may still read; a physical slot does not.
     - Logical decoding runs on the source **Postgres** server; **walshadow** decodes WAL outside the source **Postgres** server.
-    - With logical decoding, a client sees a renamed column as a dropped column plus a new column; **walshadow** applies each ADD COLUMN, RENAME COLUMN and DROP COLUMN to the ClickHouse table as executed on Postgres.
+    - Logical decoding does not replicate DDL commands ([restrictions](https://www.postgresql.org/docs/16/logical-replication-restrictions.html)). **walshadow** reads schema changes from the WAL and applies the supported ones to the ClickHouse table in WAL order ([schema changes](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/schema-changes.md)).
 
-    The pattern replicates `public.orders`, then applies an INSERT, an UPDATE, a DELETE and `ADD COLUMN status text DEFAULT 'new'` on the source **Postgres** server. **walshadow** creates `walshadow.public_orders` ordered by the primary key and adds the `status` column to it.
+    ### Demo setup
+
+    - The `walshadow` service entrypoint runs `walshadow-stream init --table public orders`, which writes `/etc/walshadow/ch-config.toml` with `initial_load = "copy"` for `public.orders` and no `[stream]` section.
+    - **walshadow** creates the table `public_orders` with `ORDER BY (id)` in the ClickHouse database `walshadow` on the `ch` service, as set by `WALSHADOW_CH_URL`.
+    - `load.py` changes rows and runs `ADD COLUMN status text DEFAULT 'new'` on the source table; **walshadow** adds `status` to the ClickHouse table.
+    - Six further source transactions insert Erin, Frank and Grace's orders, mark Erin's order as shipped, change Frank's amount to 650, and delete Grace's order. The final result contains five orders; the raw Contents sample can also show earlier row versions and delete markers before merges reconcile them.
+
+    Each order has two business timestamps maintained in Postgres: `created_at` records its creation and stays unchanged, while `updated_at` records its latest write (set on insert and refreshed by a trigger on every update). The Contents view places `updated_at`, `_commit_ts` and `ch_inserted_at` together: the source write time, the transaction commit time read by walshadow from Postgres WAL, and the time ClickHouse executes the insert. Initial snapshot rows retain both business timestamps, but their original commit time is unavailable: walshadow uses `2000-01-01` for `_commit_ts` and this demo leaves `ch_inserted_at` unmeasured (`NULL`).
+    - `replicate_all` keeps its default `true`, so **walshadow** also replicates `public.orders_existing`, which the shared `compose/cdc/postgres-init.sql` creates in the same source database.
+
+    Click `walshadow.public_orders` in the diagram to inspect its **Contents**. The demo's `replication_stage` labels copied row versions **Initial snapshot** and later row versions **CDC change**. It also adds `ch_inserted_at` and `replication_latency_ms`: the latter measures milliseconds from the Postgres commit to ClickHouse insert execution, including connector buffering. Initial snapshot rows have no measured arrival time and show `NULL` for latency. This is an approximate insert-time measurement, not time to first query visibility, and requires synchronized source and destination clocks. A separate `public_latency_probe` table receives 200 transactions at 50 per second using the same measurement.
 
     ### Delivery guarantees
 
-    From **walshadow**'s [ordering and consistency](https://github.com/ClickHouse/walshadow/blob/main/docs/limitations.md) and [destination tables](https://github.com/ClickHouse/walshadow/blob/main/docs/destination-tables.md) documentation:
+    From **walshadow**'s [ordering and consistency](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/limitations.md) and [destination tables](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/destination-tables.md) documentation:
 
     - Delivery is at-least-once; `ReplacingMergeTree(_lsn, _is_deleted)` removes rows resent after a restart at merge or `FINAL`.
     - Rows from one **Postgres** transaction in different tables become visible in ClickHouse at different moments.
     - **walshadow** confirms WAL to the source **Postgres** server only after ClickHouse acknowledges every earlier insert.
     - When required WAL is missing, **walshadow** stops with an error at its last persisted position.
-    - Guaranteed WAL retention needs a physical slot or a WAL archive; this pattern uses neither and relies on `wal_keep_size`.
 
     ### Operational constraints
 
-    - **walshadow** parses the physical WAL format and the heap tuple layout, and both can change in any **Postgres** major version. The daemon runs only on major versions that **walshadow** has audited, and the **walshadow** image must match the source **Postgres** server's major version ([limitations](https://github.com/ClickHouse/walshadow/blob/main/docs/limitations.md)).
+    - **walshadow** parses the physical WAL format and the heap tuple layout, and both can change in any **Postgres** major version. The daemon runs only on major versions that **walshadow** has audited, and the **walshadow** image must match the source **Postgres** server's major version ([limitations](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/limitations.md)).
     - Physical replication connections are available on self-managed **Postgres** and on ClickHouse Managed Postgres. Managed services such as [RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PostgreSQL.Replication.ReadReplicas.Configuration.html) document physical replication for their own read replicas and logical replication for external consumers; the [walshadow launch post](https://clickhouse.com/blog/introducing-walshadow) states that most managed **Postgres** services keep physical WAL internal.
-    - The source **Postgres** server needs a `pg_hba` rule for replication connections and `max_wal_senders` of at least 2: one WAL sender streams WAL while another serves the base backup ([getting started](https://github.com/ClickHouse/walshadow/blob/main/docs/getting-started.md)).
-    - WAL retention is guaranteed only with a physical slot (`slot=` in the source URL) or a WAL archive (`s3://`, `gs://`, `file://`). Without either, **Postgres** recycles WAL older than `wal_keep_size`, and **walshadow** stops if it falls further behind ([configuration](https://github.com/ClickHouse/walshadow/blob/main/docs/configuration.md), [switchover](https://github.com/ClickHouse/walshadow/blob/main/docs/failover.md)).
-    - **walshadow** stores its resume LSN in `manifest.toml` in its spill directory and writes it with an atomic rename. The manifest, the shadow data directory and the filtered WAL must survive a restart together; losing them forces a full initial load ([operations](https://github.com/ClickHouse/walshadow/blob/main/docs/operations.md), [recovery](https://github.com/ClickHouse/walshadow/blob/main/architecture/recovery.md)).
-    - After an unplanned failover of the source **Postgres** server, **walshadow** stops replicating and ClickHouse must be reloaded ([unsupported failover](https://github.com/ClickHouse/walshadow/blob/main/docs/failover.md#unsupported-failover)). A planned switchover needs no reload ([switchover](https://github.com/ClickHouse/walshadow/blob/main/docs/failover.md)).
+    - Each replicated table needs a primary key, `REPLICA IDENTITY USING INDEX` or `REPLICA IDENTITY FULL`. The destination `ORDER BY` uses that row key ([destination tables](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/destination-tables.md)).
+    - The source **Postgres** server needs a `pg_hba` rule for replication connections and `max_wal_senders` of at least 2: one WAL sender streams WAL while another serves the base backup ([getting started](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/getting-started.md)).
+    - WAL retention is guaranteed only with a physical slot (`slot=` in the source URL) or a WAL archive (`s3://`, `gs://`, `file://`). Without either, **Postgres** recycles WAL older than `wal_keep_size`, and **walshadow** stops if it falls further behind. This pattern configures neither, and `wal_keep_size` is 0 ([configuration](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/configuration.md), [switchover](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/failover.md)).
+    - **walshadow** stores its resume LSN in `manifest.toml` in its spill directory and writes it with an atomic rename. The manifest, the shadow data directory and the filtered WAL must survive a restart together; losing them forces a full initial load. The `walshadow` service in this pattern mounts no volume, so recreating its container discards that state ([operations](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/operations.md), [recovery](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/architecture/recovery.md)).
+    - After an unplanned failover of the source **Postgres** server, **walshadow** stops replicating and ClickHouse must be reloaded ([unsupported failover](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/failover.md#unsupported-failover)). A planned switchover needs no reload ([switchover](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/failover.md)).
 
     ### walshadow internals
 
     The source **Postgres** server runs with `wal_level = logical`, the same setting logical decoding requires. At this level, WAL records contain the row data **walshadow** decodes:
 
-    - the complete new tuple of each INSERT and UPDATE
+    - the complete new tuple of each INSERT and UPDATE; an out-of-line (TOAST) value left unchanged by an UPDATE is logged only as a pointer, which **walshadow** resolves from its own copy of the TOAST data ([TOAST and type conversion](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/architecture/values.md))
     - the old replica identity columns of each DELETE, and of each UPDATE that changes them
 
     At the default `wal_level = replica`, an UPDATE record can contain only the changed bytes of the new tuple, and a DELETE record contains only the tuple's location.
@@ -47,27 +57,35 @@ metadata:
     - PeerDB and Debezium send `START_REPLICATION SLOT <slot> LOGICAL`. The server runs logical decoding and sends row changes.
     - **walshadow** sends `START_REPLICATION PHYSICAL`. The server sends the WAL records as written.
 
-    A physical WAL record describes a change to a heap page: relfilenode, block number, item offset and tuple data. Decoding the record requires the table catalog as of the record's LSN. **walshadow** runs a **shadow Postgres** in its container and streams WAL to it with user-table records replaced by no-ops. The shadow replays catalog changes and by default stores only catalog data. **walshadow** reads table descriptors from the shadow at the replay LSN, decodes rows from the original WAL records, and inserts them into ClickHouse over the Native protocol.
+    A heap WAL record identifies a tuple by relfilenode, block number and item offset, and carries the tuple in its on-disk layout. Decoding the record requires the table catalog as of the record's LSN. **walshadow** runs a **shadow Postgres** in its container and streams WAL to it with user-table records replaced by no-ops. The shadow replays catalog changes and by default stores only catalog data. **walshadow** reads table descriptors from the shadow at the replay LSN, decodes rows from the original WAL records, and inserts them into ClickHouse over the Native protocol.
 
-    The initial load reads the heap pages of a base backup of the source **Postgres** server and inserts the tuples visible at the end of the backup. Row changes in the WAL written during the backup are inserted with a higher `_lsn` than the tuples from the backup. The destination engine is `ReplacingMergeTree(_lsn, _is_deleted)`, and `FINAL` returns the row with the highest `_lsn` per sorting key, excluding rows with `_is_deleted = true`.
+    On first start, **walshadow** builds the shadow from a base backup of the source **Postgres** server. `walshadow-stream init --table public orders` sets `initial_load = "copy"` for `public.orders`: **walshadow** reads the table's visible rows with `COPY` at a selected LSN, and changes committed after that LSN are inserted with a higher `_lsn` ([initial loads](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/architecture/bootstrap.md)). The destination engine is `ReplacingMergeTree(_lsn, _is_deleted)`, and `FINAL` returns the row with the highest `_lsn` per sorting key, excluding rows with `_is_deleted = true`.
 
-    The shadow is a physical clone of the source **Postgres** server, which requires the same **Postgres** major version. The pattern builds the **walshadow** image from upstream commit `97f9305` for **Postgres** 16. The **walshadow** repository is licensed AGPL-3.0.
+    The shadow starts from a physical base backup and replays source WAL, so it runs the source **Postgres** major version. The pattern builds the **walshadow** image from upstream commit `97f9305` for **Postgres** 16. The **walshadow** repository is licensed AGPL-3.0.
   graph: |-
     snapshot:
-      postgres:orders(label=public.orders,note=**Source Postgres server** · service `postgres`\n- wal_level = logical\n- pg_hba allows replication connections)
-        -[base backup · replication protocol]-> connector:decoder(label=row decoder · inserters,system=walshadow,note=**walshadow-stream process**\nDecodes rows from backup heap pages and original WAL records with table descriptors read from the shadow.\n- inserts Native protocol blocks)
+      postgres:orders(label=public.orders,note=**Source Postgres server** · service `postgres`\n- wal_level = logical\n- pg_hba allows replication connections\n- public.orders_existing also replicates: replicate_all = true)
+        -[base backup]-> connector:shadow_pg(label=shadow Postgres,system=walshadow,note=**Separate Postgres server** · walshadow container\nRestored from the base backup. Its walreceiver receives the filtered WAL and its startup process replays it.\n- stores only catalog data by default)
+
+    snapshot:
+      postgres:orders
+        -[COPY]-> connector:copy_load(label=initial load,system=walshadow,note=**walshadow-stream process**\nReads the visible rows of public.orders with COPY at a selected LSN.\n- initial_load = "copy")
         -[INITIAL LOAD · Native INSERT]-> mergetree:public_orders(label=walshadow.public_orders,note=**walshadow-created table**\nReplacingMergeTree(_lsn, _is_deleted), ORDER BY the source primary key.\n- _lsn: commit LSN, row version\n- _is_deleted: delete marker\n- _xid and _commit_ts)
 
     changes:
       postgres:orders
-        -[physical WAL · streaming replication]-> connector:receiver(label=WAL receiver,system=walshadow,note=**walshadow-stream process**\nKeeps original WAL records for decoding and rewrites user-table records to no-ops for the shadow.)
-        -[original WAL records]-> connector:decoder
+        -[physical WAL · streaming replication]-> connector:wal_stream(label=WAL stream · filter,system=walshadow,note=**walshadow-stream process**\nPasses original WAL records to the decoder and sends the shadow a copy with user-table records replaced by no-ops.)
+        -[original WAL records]-> connector:decoder(label=row decoder · inserters,system=walshadow,note=**walshadow-stream process**\nDecodes rows from original WAL records with table definitions read from the shadow.\n- inserts Native protocol blocks)
         -[row versions · Native INSERT]-> mergetree:public_orders
 
     catalog:
-      connector:receiver
-        -[filtered WAL]-> connector:shadow_pg(label=shadow Postgres,system=walshadow,note=**Managed shadow** · walshadow container\nReplays catalog changes from the filtered WAL.\n- stores only catalog data by default)
-        -[table descriptors at replay LSN]-> connector:decoder
+      connector:wal_stream
+        -[filtered WAL · streaming replication]-> connector:shadow_pg
+        -[catalog reads at replay LSN]-> connector:decoder
+
+    query:
+      mergetree:public_orders
+        -[FINAL]-> client:readers(label=query clients)
   status: wip
   experimental: true
   topology: single
@@ -79,13 +97,13 @@ metadata:
     - label: walshadow repository
       url: https://github.com/ClickHouse/walshadow
     - label: walshadow quickstart
-      url: https://github.com/ClickHouse/walshadow/blob/main/docs/quickstart.md
+      url: https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/quickstart.md
     - label: walshadow architecture
-      url: https://github.com/ClickHouse/walshadow/blob/main/architecture/README.md
+      url: https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/architecture/README.md
     - label: walshadow destination tables
-      url: https://github.com/ClickHouse/walshadow/blob/main/docs/destination-tables.md
+      url: https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/destination-tables.md
     - label: walshadow current limitations
-      url: https://github.com/ClickHouse/walshadow/blob/main/docs/limitations.md
+      url: https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/limitations.md
     - label: WalShadow in ClickHouse Cloud
       url: https://clickhouse.com/cloud/postgres/walshadow
 
@@ -99,12 +117,16 @@ metadata:
       - "Tied to Postgres internals: one image per Postgres major version, audited versions only."
       - Requires physical replication access to the source Postgres server.
       - Reliability depends on configured WAL retention and on walshadow's local state.
+      - ClickHouse rejects dropping or renaming sorting-key columns; the rejection stops replication.
       - "Eventually consistent: at-least-once delivery, no cross-table transaction atomicity, `FINAL` for current state."
       - Development preview.
 
 spec:
   profiles: [single, postgres, walshadow]
   driver_node: ch
+  services:
+    postgres:
+      init: source-init.sql
 
   steps:
     # walshadow `init` runs at container start and creates the walshadow
@@ -118,11 +140,39 @@ spec:
         node: ch
         timeout: 120
       - query: SELECT count() FROM walshadow.public_orders FINAL
-        value: 3
+        value: 5
         node: ch
         timeout: 120
       - query: SELECT count() FROM walshadow.public_orders FINAL WHERE id = 4 AND status = 'shipped'
         value: 1
+        node: ch
+        timeout: 120
+      - query: SELECT count() FROM walshadow.public_latency_probe
+        value: 200
+        node: ch
+        timeout: 120
+      - query: SELECT count() FROM walshadow.public_orders FINAL WHERE replication_latency_ms IS NOT NULL
+        value: 4
+        node: ch
+        timeout: 120
+      - query: SELECT count() FROM walshadow.public_orders FINAL WHERE id = 1 AND replication_stage = 'Initial snapshot' AND ch_inserted_at IS NULL AND replication_latency_ms IS NULL
+        value: 1
+        node: ch
+        timeout: 120
+      - query: SELECT count() FROM walshadow.public_latency_probe WHERE replication_latency_ms IS NOT NULL
+        value: 200
+        node: ch
+        timeout: 120
+      - query: SELECT count() FROM walshadow.public_orders FINAL WHERE replication_stage = 'CDC change'
+        value: 4
+        node: ch
+        timeout: 120
+      - query: SELECT count() FROM walshadow.public_orders FINAL WHERE created_at > toDateTime64('2000-01-01 00:00:00', 6, 'UTC')
+        value: 5
+        node: ch
+        timeout: 120
+      - query: SELECT count() FROM walshadow.public_orders FINAL WHERE id IN (2, 4, 5, 6) AND updated_at > created_at
+        value: 4
         node: ch
         timeout: 120
 
