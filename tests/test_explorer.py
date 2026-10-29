@@ -214,6 +214,7 @@ def test_resource_inspection_returns_definition_and_bounded_live_sample(monkeypa
     }
     assert result["sample"]["rows"] == [[1, "alice"]]
     assert "LIMIT 20" in client.queries[-1][0]
+    assert "asterisk_include_materialized_columns = 1" in client.queries[-1][0]
 
 
 def test_revision_is_cached_until_a_watched_file_changes(monkeypatch):
@@ -231,6 +232,32 @@ def test_revision_is_cached_until_a_watched_file_changes(monkeypatch):
 
     assert first == second
     assert len(calls) == 1
+
+
+def test_configuration_edits_refresh_the_browser_revision(tmp_path, monkeypatch):
+    from pattern_explorer.server import explorer as server
+
+    root = tmp_path / "patterns"
+    pattern = root / "database" / "demo"
+    config = pattern / "config"
+    config.mkdir(parents=True)
+    (pattern / "pattern.yaml").write_text("manifest_version: 2\n")
+    settings = config / "latency.toml"
+    settings.write_text("flush_timeout_ms = 1000\n")
+    monkeypatch.setattr(server, "PATTERNS_DIR", root)
+    monkeypatch.setattr(server, "workspace_pattern_dirs", lambda: [])
+    monkeypatch.setattr(server, "_revision_cache", None)
+    calls = []
+    monkeypatch.setattr(server, "explorer_catalog_json",
+                        lambda: calls.append(1) or settings.read_text())
+
+    first = server._browser_revision()
+    assert server._browser_revision() == first
+    assert len(calls) == 1
+
+    settings.write_text("flush_timeout_ms = 250\n")
+    assert server._browser_revision() != first
+    assert len(calls) == 2
 
 
 def test_catalog_error_is_reported_once_while_it_repeats(monkeypatch, capsys):

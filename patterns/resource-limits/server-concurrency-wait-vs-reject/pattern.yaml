@@ -1,0 +1,35 @@
+manifest_version: 2
+metadata:
+  title: 'Server concurrency: wait vs reject'
+  description: |-
+    Server `max_concurrent_queries` is the only concurrency limit that can queue
+    a query. With `queue_max_wait_ms = 0` (the default) a query over the limit is
+    rejected at once with `TOO_MANY_SIMULTANEOUS_QUERIES`. With a positive value
+    it waits up to that time for a running query to finish, then is rejected
+    with the same error.
+
+    `max_concurrent_select_queries`, `max_concurrent_insert_queries`,
+    `max_concurrent_queries_for_user`, and `max_concurrent_queries_for_all_users`
+    reject at once and ignore `queue_max_wait_ms`.
+
+    Server `max_waiting_queries` does not apply here: it limits queries waiting
+    for tables to load at startup.
+  graph: |-
+    admission:
+      client:readers(note=**Load**\n- 6 concurrent SELECTs\n- queue_max_wait_ms = 0 and 5000) -[max_concurrent_queries = 2]-> mergetree:events
+  mode: reference
+  status: wip
+  topology: single
+  order: 1
+  tags: [max_concurrent_queries, queue_max_wait_ms, too_many_simultaneous_queries, admission]
+  references:
+    - label: 'ClickHouse: max_concurrent_queries'
+      url: https://clickhouse.com/docs/operations/server-configuration-parameters/settings#max_concurrent_queries
+    - label: 'ClickHouse source: ProcessList::insert'
+      url: https://github.com/ClickHouse/ClickHouse/blob/master/src/Interpreters/ProcessList.cpp
+  tradeoffs:
+    benefits:
+      - A positive `queue_max_wait_ms` absorbs short bursts without client retries.
+    limitations:
+      - The queue is server-wide and has no per-user or per-workload share; use workload query slots for that.
+      - Queued queries hold their connections while they wait.

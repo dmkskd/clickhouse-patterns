@@ -68,7 +68,7 @@ def test_pattern_plan_explains_the_run(capsys):
     assert "Start ClickHouse, MySQL, and the MySQL CDC sink." in normalized
     assert "Prepare the CDC-created and existing ClickHouse targets." in normalized
     assert "Run load.py using ch-cdc as the driver." in normalized
-    assert "Wait for 6 convergence checks, then compare verify.sql with expected.txt." in normalized
+    assert f"Wait for {len(pattern.ready_when)} convergence checks, then compare verify.sql with expected.txt." in normalized
     assert "Tear down the containers and volumes." in normalized
     assert "pins Altinity sink `2.9.1-lt` to ClickHouse `25.3`" in normalized
     assert "Altinity 2.9.1 supported ClickHouse versions (24.8+)" in normalized

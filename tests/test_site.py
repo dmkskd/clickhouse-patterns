@@ -33,6 +33,23 @@ def _catalog_pattern(slug: str) -> dict:
     return next(item for item in catalog["patterns"] if item["slug"] == slug)
 
 
+@pytest.mark.parametrize("slug, name, target, reader", [
+    ("cdc-postgres-walshadow", "config/latency.toml", "/etc/walshadow/ch-config.d/10-pattern.toml", None),
+    ("cdc-mysql-clickhouse", "config/connector.yaml", "/config.yml", None),
+    ("cdc-postgres-kafka", "config/source.json", None, "load.py"),
+    ("cdc-postgres-kafka", "config/sink.json", None, "load.py"),
+    ("cdc-postgres-peerdb", "config/mirror.sql", None, "load.py"),
+])
+def test_cdc_configuration_panel_names_the_actual_files_and_consumers(slug, name, target, reader):
+    config = _catalog_pattern(slug)["definition"]["config"]
+    matches = [item for item in config if item["file"] == name]
+    assert len(matches) == 1
+    assert matches[0]["code"] == (load_pattern(slug).dir / name).read_text()
+    assert matches[0]["mountPath"] == target
+    if reader:
+        assert matches[0]["reader"] == reader
+
+
 def test_every_curated_pattern_has_a_structured_resource_graph():
     patterns = discover_patterns()
     missing = [pattern.slug for pattern in patterns if not pattern.graph]

@@ -91,11 +91,16 @@
             </div>
           </div>
           <div id="catalog-group-intro" class="catalog-group-intro" hidden></div>
+          <!-- Filled by app.js for groups with a guide.yaml: Diagnose / Enforce over the group's mechanisms. -->
+          <section id="catalog-group-guide" class="group-guide" aria-label="Decision guide" hidden></section>
+          <section id="catalog-patterns" aria-label="Patterns">
+          <h3 id="catalog-patterns-heading" class="guide-section-title" hidden>4. Patterns</h3>
           <div class="catalog-filters" aria-label="Catalog filters">
             <div id="catalog-results-summary" class="catalog-results-summary" aria-live="polite"></div>
             <div id="catalog-topology-filters" class="filter-group topology-filters" role="group" aria-label="ClickHouse topology"></div>
           </div>
           <div id="catalog-grid" class="catalog-grid"></div>
+          </section>
         </div>
       </section>
 

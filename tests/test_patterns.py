@@ -8,7 +8,7 @@ import pytest
 from pattern_explorer.catalog.manifest import discover_patterns
 from pattern_explorer.orchestration.runner import run_pattern
 
-PATTERNS = discover_patterns()
+PATTERNS = [pattern for pattern in discover_patterns() if pattern.runnable]
 
 
 @pytest.mark.parametrize("pattern", PATTERNS, ids=[p.slug for p in PATTERNS])

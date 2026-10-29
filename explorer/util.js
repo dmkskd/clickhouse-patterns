@@ -261,6 +261,7 @@ window.PE.util = (() => {
         clone: '<rect x="6" y="6" width="14" height="14" rx="2.5"/><rect x="12" y="12" width="14" height="14" rx="2.5"/>',
         "kafka-in": kafkaGlyph,
         "kafka-out": kafkaGlyph,
+        gauge: '<g class="source"><path d="M6 22a10 10 0 1 1 20 0"/><path d="M16 22l5-7"/><circle cx="16" cy="22" r="1.6"/></g>',
         lake: '<g class="source"><ellipse cx="16" cy="8" rx="7" ry="3"/><path d="M9 8v10c0 1.7 3.1 3 7 3s7-1.3 7-3V8M9 13c0 1.7 3.1 3 7 3s7-1.3 7-3M5 23q2.75-2 5.5 0t5.5 0 5.5 0 5.5 0M5 27.5q2.75-2 5.5 0t5.5 0 5.5 0 5.5 0"/></g>',
       };
       return `<svg class="pattern-group-icon compact" viewBox="0 0 32 32" aria-hidden="true">${glyphs[kind] || kafkaGlyph}</svg>`;
