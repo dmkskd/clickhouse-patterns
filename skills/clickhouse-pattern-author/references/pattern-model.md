@@ -131,8 +131,9 @@ renders it as a header row, and `just test <slug> --update` preserves it.
 ### Per-service customization (`spec.services`)
 
 `spec.services:` customizes the compose services a pattern runs against, keyed
-by service. Two mechanisms exist today: `clickhouse.config` mounts additive XML
-fragments, and `<database>.init` mounts SQL init scripts.
+by service. `clickhouse.config` mounts additive XML fragments,
+`<database>.init` mounts SQL init scripts, and `<service>.config` mounts native
+configuration files for non-ClickHouse services.
 
 #### ClickHouse configuration
 
@@ -184,6 +185,28 @@ the pattern demonstrates (the INSERT/UPDATE/DELETE a demo performs) in
 `steps.load`, not in init. The shared `compose/cdc/postgres-init.sql` and
 `mysql-init.sql` seeds remain the base for patterns that use the common
 `orders` tables; a pattern's own init is additive to them.
+
+#### Native connector configuration
+
+Use `spec.services.<service>.config` for native configuration files consumed by
+other Compose services. Each entry declares a pattern-relative `file` and an
+absolute container `target`. Mounts are read-only; a matching target replaces
+the shared stack's mount for that pattern.
+
+```yaml
+spec:
+  services:
+    walshadow:
+      config:
+        - file: config/latency.toml
+          target: /etc/walshadow/ch-config.d/10-pattern.toml
+```
+
+Use `config/` for editable configuration read by a host-side loader as well,
+such as Kafka Connect JSON payloads or PeerDB mirror SQL. The Explorer displays
+native configuration files in `config/` in its Configuration panel. The loader
+must actually read these files; discovery only displays them. Run `just reload`
+and `just validate` after editing them. Reload rebuilds the demo and clears data.
 
 ### ClickHouse version bounds (`requires`)
 
