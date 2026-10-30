@@ -979,13 +979,76 @@
       if (unfold) {
         const options = document.createElement("div");
         options.className = "pattern-options";
-        items.forEach((pattern) => options.append(patternOption(pattern)));
+        items.forEach((pattern) => {
+          options.append(patternOption(pattern));
+          if (pattern.slug === selected?.slug) options.append(sectionNav());
+        });
         item.append(options);
       }
       rows.push(item);
     });
     nav.replaceChildren(...rows);
+    renderSectionNav();
   }
+
+  // The open pattern lists its sections under its sidebar entry. The list is
+  // read from the live page, because the diagram placement toggle reorders it
+  // and the description's own "### " headings differ per pattern.
+  function sectionNav() {
+    const list = document.createElement("nav");
+    list.id = "pattern-sections";
+    list.className = "pattern-sections";
+    list.setAttribute("aria-label", "Sections");
+    return list;
+  }
+
+  function sectionTargets() {
+    if (!selected || $("pattern-detail").hidden) return [];
+    const targets = [
+      [document.querySelector(".architecture-panel"), "Architecture"],
+      ...[...$("pattern-description").querySelectorAll(".pattern-description-heading")]
+        .map((heading) => [heading, heading.textContent]),
+      [$("tradeoffs"), "Trade-offs"],
+      [$("pattern-links"), "References"],
+    ].filter(([element]) => element && !element.hidden);
+    return targets.sort(([a], [b]) =>
+      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+  }
+
+  function renderSectionNav() {
+    const list = $("pattern-sections");
+    if (!list) return;
+    list.replaceChildren(...sectionTargets().map(([element, label]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "pattern-section-link";
+      button.textContent = label;
+      button.addEventListener("click", () => element.scrollIntoView({ behavior: "smooth", block: "start" }));
+      button.sectionTarget = element;
+      return button;
+    }));
+    markCurrentSection();
+  }
+
+  // The current section is the last one whose top has passed below the
+  // sticky header.
+  function markCurrentSection() {
+    const links = [...($("pattern-sections")?.children || [])];
+    if (!links.length) return;
+    const line = 140;
+    let current = links[0];
+    links.forEach((link) => {
+      if (link.sectionTarget.getBoundingClientRect().top <= line) current = link;
+    });
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) current = links[links.length - 1];
+    links.forEach((link) => link.classList.toggle("active", link === current));
+  }
+
+  let sectionFrame = 0;
+  window.addEventListener("scroll", () => {
+    if (sectionFrame) return;
+    sectionFrame = requestAnimationFrame(() => { sectionFrame = 0; markCurrentSection(); });
+  }, { passive: true });
 
   // ===================== PATTERN DETAIL: trade-offs + diagram zoom =====================
   function renderTradeoffs(pattern) {
@@ -1349,6 +1412,7 @@
     if (place === "bottom") $("pattern-description").after(architecturePanel);
     else lede.after(architecturePanel);
     if (persist) try { localStorage.setItem(DIAGRAM_PLACE_KEY, place); } catch (_error) { /* private mode */ }
+    renderSectionNav();
     DIAGRAM_PLACES.forEach((p) => {
       const button = $(`place-${p}`);
       button.classList.toggle("active", p === place);
