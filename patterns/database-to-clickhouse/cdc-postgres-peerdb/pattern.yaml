@@ -58,8 +58,8 @@ metadata:
   order: 4
   tags: [cdc, postgres, peerdb, clickpipes]
   references:
-    - label: PeerDB default CDC batch interval (v0.37.14)
-      url: https://github.com/PeerDB-io/peerdb/blob/v0.37.14/flow/activities/flowable.go#L63
+    - label: PeerDB default CDC batch interval (v0.37.0)
+      url: https://github.com/PeerDB-io/peerdb/blob/v0.37.0/flow/activities/flowable.go#L63
     - label: PeerDB self-hosted quickstart
       url: https://docs.peerdb.io/quickstart/quickstart
     - label: PeerDB ClickHouse data modeling
