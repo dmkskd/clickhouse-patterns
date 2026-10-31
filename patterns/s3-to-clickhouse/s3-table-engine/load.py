@@ -20,7 +20,7 @@ def s3(path):
     return f"s3('http://minio:9000/clickhouse/{path}', '{KEY}', '{SECRET}', '{FMT}')"
 
 
-# Two objects land in the bucket before any ClickHouse table exists.
+# Two objects are uploaded to the bucket before any ClickHouse table exists.
 for n in range(1, 3):
     lo = (n - 1) * 1000
     ch.command(

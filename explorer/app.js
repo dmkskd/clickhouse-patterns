@@ -166,7 +166,7 @@
 
   // ===================== CATALOG (filters, cards, groups, list) =====================
   // The group axis moved to the sidebar rail, so the catalog's own filter row
-  // carries the topology axis and a reset for whatever is currently narrowing
+  // holds the topology axis and a reset for whatever is currently narrowing
   // the results — group, topology or search.
   function renderCatalogFilters() {
     const needle = catalogFilters.search.trim().toLowerCase();
@@ -206,7 +206,7 @@
 
     const header = document.createElement("span");
     // Without the group mark the header is two columns, not three, or the
-    // badges land in the middle column instead of against the right edge.
+    // badges end up in the middle column instead of against the right edge.
     header.className = `catalog-card-header${showGroup ? "" : " no-mark"}`;
     const mark = document.createElement("span");
     mark.className = `pattern-group-mark ${key}`;
@@ -298,7 +298,7 @@
     + '1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 '
     + '0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>';
 
-  // The landing page is described like a group, so the same title / lede /
+  // The home page is described like a group, so the same title / lede /
   // intro rendering covers both and the two pages cannot drift apart.
   const HOME_GROUP = {
     key: "all",
@@ -844,7 +844,7 @@
     const query = catalogFilters.search.trim();
     const group = catalogFilters.group === "all" ? HOME_GROUP : PATTERN_GROUPS[catalogFilters.group];
     // The page heading is the thing being read: the group's title on a group
-    // page, the landing question on the landing page, the query when searching.
+    // page, the home question on the home page, the query when searching.
     const lede = $("catalog-browser-lede");
     const title = $("catalog-browser-title");
     title.textContent = query ? `Results for “${query}”` : group ? group.title : "";
@@ -876,7 +876,7 @@
       byGroup.get(key).push(pattern);
     });
     if (catalogFilters.group === "all") {
-      // Landing: give the real estate to the groups. One tile per family, its
+      // Home: give the space to the groups. One tile per family, its
       // patterns as one-liners; click a tile to drill into the full cards.
       // A search or a topology filter is a question about patterns, though, so
       // those answer with the matching patterns across every group instead.
@@ -1133,7 +1133,7 @@
       body.innerHTML = codeBlock(d.file, d.code, d.lang);
     }
     body.scrollTop = 0;
-    // The dialog carries its own copy of the tabs, so a reader can move between
+    // The dialog has its own copy of the tabs, so a reader can move between
     // files without closing it.
     const inModal = $("definition-modal-tabs");
     inModal.replaceChildren(...DEFINITION_TABS.filter(([k]) => def[k]).map(([k, label, hint]) => {
@@ -1149,7 +1149,7 @@
     document.querySelectorAll("#definition-tabs button").forEach((b) =>
       b.classList.toggle("active", b.dataset.def === key));
     if (!definitionModal.open) definitionModal.showModal();
-    // showModal() autofocuses the first control, which lands a focus ring on the
+    // showModal() autofocuses the first control, which puts a focus ring on the
     // first tab. The file itself is the thing being read, so it takes focus.
     body.focus({ preventScroll: true });
   }
@@ -1169,7 +1169,7 @@
     if (definitionModal.open) definitionModal.close();
     delete definitionModal.dataset.key;
     $("definition-body").innerHTML = "";
-    // The row carries the legend and the tabs; it hides only with neither.
+    // The row holds the legend and the tabs; it hides only with neither.
     $("control-strip").hidden = !tabs.length && !$("flow-legend").childElementCount;
   }
 
@@ -1293,7 +1293,7 @@
     }
   }
 
-  // The panel and the expanded modal carry the same switch, driven by the one
+  // The panel and the expanded modal have the same switch, driven by the one
   // `architectureView` state, so switching in either place keeps them in step.
   const VIEW_TITLES = {
     logical: "Resource flow", schematic: "Resource diagram", physical: "Container topology"
@@ -1443,7 +1443,7 @@
   }
 
   // ===================== ROUTING & PATTERN SELECTION (detail view) =====================
-  // The whole catalog state is the route, so a link carries the group, the
+  // The whole catalog state is the route, so a link encodes the group, the
   // topology, the query and the open pattern together.
   function updateRoute(slug, replace = false) {
     const url = new URL(window.location.href);
@@ -1554,7 +1554,7 @@
     search.focus();
     try { search.setSelectionRange(caret, caret); } catch (_error) { /* unsupported input type */ }
   });
-  // The brand is "start over": back to the landing page with nothing narrowed.
+  // The brand is "start over": back to the home page with nothing narrowed.
   $("show-catalog-home").addEventListener("click", () => {
     $("pattern-search").value = "";
     applyFilters({ group: "all", topology: "all", search: "" }, { home: true });
@@ -1580,7 +1580,7 @@
     search.value = route.search;
     if (route.pattern) { selectPattern(route.pattern, false); return; }
     showCatalogHome(false);
-    // Coming back from a pattern: land where the reader left the catalog.
+    // Coming back from a pattern: return to where the reader left the catalog.
     const scroll = event.state?.scroll;
     if (typeof scroll === "number") requestAnimationFrame(() => window.scrollTo(0, scroll));
   });

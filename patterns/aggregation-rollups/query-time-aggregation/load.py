@@ -2,8 +2,8 @@
 split across multiple parts.
 
 Each ch.insert() is one insert block, which becomes one part. The three batches
-are arranged so every minute's ticks land in three different parts: batch A
-carries the opening prints, batch B the mid prints, batch C the closing prints.
+are arranged so every minute's ticks are split across three different parts: batch A
+has the opening prints, batch B the mid prints, batch C the closing prints.
 
 Query-time aggregation reads the raw table directly, so the split does not
 matter here. The same loader is reused by the materialized-view patterns, where

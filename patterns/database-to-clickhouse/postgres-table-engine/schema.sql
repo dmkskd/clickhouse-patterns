@@ -23,5 +23,5 @@ DROP DATABASE IF EXISTS pg_schema;
 CREATE DATABASE pg_schema
 ENGINE = PostgreSQL('postgres:5432', 'test', 'postgres', 'postgres');
 
--- 3. Table function. No object at all; the connection lives in the query text.
+-- 3. Table function. No object at all; the connection settings are arguments in the query text.
 --    See verify.sql, which calls postgresql() inline.

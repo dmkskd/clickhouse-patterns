@@ -26,7 +26,7 @@ consumer group and reads the same records at its own pace. Postgres does not
 notice, because the number of slots stays at one.
 
 This is the pattern for an organisation where the change stream has more than
-one customer. Where ClickHouse genuinely is the only destination,
+one customer. Where ClickHouse is the only destination,
 [cdc-mysql-clickhouse](../cdc-mysql-clickhouse/) does the same job with one
 service and no retention to manage.
 
@@ -43,7 +43,7 @@ is published:
 | setting | effect |
 |---|---|
 | `delete.handling.mode=rewrite` | a delete becomes the key plus `__deleted` |
-| `add.fields=lsn` | carries the LSN through as `__lsn`, used for ordering |
+| `add.fields=lsn` | adds the LSN as `__lsn`, used for ordering |
 | `drop.tombstones=true` | suppresses the null-value tombstone record |
 
 Every consumer therefore reads flat rows rather than envelopes. This stage does
@@ -79,13 +79,13 @@ only `KeyToValue` for the record key. They come from Kafka Connect's own
 ## Current state
 
 The target is a `ReplacingMergeTree(__lsn)`, so the highest LSN per `id` wins.
-Deletes arrive as rewritten records carrying `__deleted = 'true'` and are
+Deletes arrive as rewritten records with `__deleted = 'true'` and are
 filtered on read rather than removed, so the table keeps a record that the row
 was deleted.
 
 Non-key columns are nullable because Postgres' default replica identity sends
 only the key for a delete. Setting `REPLICA IDENTITY FULL` on the source table
-would carry the full before-image and allow non-null columns, at the cost of
+would send the full before-image and allow non-null columns, at the cost of
 larger WAL records.
 
 ## Other connectors for the same shape
@@ -121,3 +121,5 @@ Inspect `test.orders` in **Contents** to follow `updated_at` → `__source_ts_ms
 ## Editing connector settings
 
 Edit the files in `config/`, then run `just reload` and `just validate`. The Explorer’s **Configuration** panel displays the same files. Reload rebuilds the demo and clears its data.
+
+The Explorer’s **Experiments** panel runs a timed insert workload with chosen values for the `config/` latency settings and records latency, parts and INSERT cost per run.

@@ -45,7 +45,7 @@ batches are first inserted into PeerDB's mirror-wide `_peerdb_raw_two_table_mirr
 MergeTree, then PeerDB issues target-table inserts that decode the staged CDC
 records, so ClickHouse never polls the bucket on its own.
 
-That hand-off involves two separate network relationships.
+That step uses two separate network connections:
 
 ```text
 control: PeerDB -> ClickHouse     issues INSERT ... SELECT ... FROM s3(...)
@@ -90,7 +90,7 @@ The two source tables receive matching INSERT, UPDATE, and DELETE operations.
 
 ## Comparison with Altinity/Debezium
 
-Surface differences:
+Column and source differences:
 
 | | PeerDB | Altinity lightweight sink |
 |---|---|---|
@@ -99,7 +99,7 @@ Surface differences:
 | Version column | `_peerdb_version` | `_version` |
 | Delete column | `_peerdb_is_deleted` | `is_deleted` |
 
-What the extra services actually buy:
+What the extra services provide:
 
 | | PeerDB | Altinity lightweight sink |
 |---|---|---|
@@ -109,7 +109,7 @@ What the extra services actually buy:
 | Read vs write coupling | Separate steps joined by a staging table | One pipeline; a stalled destination reaches the WAL slot |
 | Scale-out | Workers hold no state, so capacity is added by running more | One process per mirror |
 | Load shape | Bulk `INSERT ... SELECT FROM s3()` over Avro | Row batches over JDBC |
-| Extra stateful systems | Catalog Postgres, Temporal persistence | None; state lives in ClickHouse tables |
+| Extra stateful systems | Catalog Postgres, Temporal persistence | None; state is stored in ClickHouse tables |
 | Postgres instances to operate | 2 (source + catalog) | 1 (source only), or 0 with a MySQL source |
 | ClickHouse version | Native + `s3()`, runs 26.7 | JDBC 0.6.5, pinned to 25.3 |
 
@@ -170,8 +170,10 @@ just validate
 
 Lower latency: reduce `sync_interval` in `config/mirror.sql` (seconds; default: 10); this demo already sets 1 second, at the cost of more frequent MinIO and ClickHouse loads.
 
-Inspect `test.orders` and `test.orders_existing` in **Contents**: source write times sit alongside `_peerdb_synced_at` (PeerDB metadata) and `ch_inserted_at` (destination execution). The raw mirror table and MinIO objects expose the intermediate CDC batch. `_peerdb_synced_at` is kept separate from the source write time and is not treated as a Postgres commit timestamp. The transformation carries the landing timestamps through unchanged, so its latency still describes arrival at the landing table.
+Inspect `test.orders` and `test.orders_existing` in **Contents**: source write times sit alongside `_peerdb_synced_at` (PeerDB metadata) and `ch_inserted_at` (destination execution). The raw mirror table and MinIO objects expose the intermediate CDC batch. `_peerdb_synced_at` is kept separate from the source write time and is not treated as a Postgres commit timestamp. The materialized view copies `ch_inserted_at` and `replication_latency_ms` unchanged, so `test.orders_transformed` reports the arrival time in `test.orders`.
 
 ## Editing connector settings
 
 Edit the files in `config/`, then run `just reload` and `just validate`. The Explorer’s **Configuration** panel displays the same files. Reload rebuilds the demo and clears its data.
+
+The Explorer’s **Experiments** panel runs a timed insert workload with chosen values for the `config/` latency settings and records latency, parts and INSERT cost per run.

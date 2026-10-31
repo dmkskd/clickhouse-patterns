@@ -31,7 +31,7 @@ SETTINGS kafka_broker_list = 'kafka:9094', kafka_topic_list = 'events',
 ```
 
 A shard consumes partition `p` only when `p % kafka_shard_count == shard_num - 1`,
-so shard 1 owns partitions 0 and 2, shard 2 owns 1 and 3. The view carries no
+so shard 1 owns partitions 0 and 2, shard 2 owns 1 and 3. The view has no
 `WHERE`: the engine already narrowed the partitions, so it just copies each row
 into the local `MergeTree`. Both shards share one `kafka_keeper_path`; the engine
 suffixes it with the shard number so only same-shard replicas contend for the same

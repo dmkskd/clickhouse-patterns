@@ -24,6 +24,8 @@ metadata:
 
     Edit the files in `config/`, then run `just reload` to rebuild the demo with the new settings. The **Configuration** panel displays the files.
 
+
+    The **Experiments** panel runs a timed insert workload with chosen values for the `config/` latency settings and records latency, parts and INSERT cost per run.
     ### Delivery guarantees
 
     From **walshadow**'s [ordering and consistency](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/limitations.md) and [destination tables](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/destination-tables.md) documentation:

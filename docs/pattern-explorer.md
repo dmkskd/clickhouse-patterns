@@ -88,7 +88,7 @@ web server.
 
 With no `pattern` query parameter, the application opens on the catalog home:
 a searchable card browser with pattern-group and topology filters, catalog counts,
-and separate workspace context. The landing page uses the full viewport; the
+and separate workspace context. The home page uses the full viewport; the
 compact left navigation appears only after choosing a pattern. Choosing a card opens the full architecture;
 the browser Back button, the ClickHouse brand, and **All patterns** return to
 the catalog. Pattern URLs remain directly linkable as
@@ -134,7 +134,7 @@ interface, with explicit topic or table metadata rather than display labels.
 The page reports its capability mode explicitly:
 
 - **Static catalog**: search, grouping, descriptions, references, diagrams,
-  modal zoom, trade-offs, and SVG download work without a backend. The landing
+  modal zoom, trade-offs, and SVG download work without a backend. The home
   page stays focused on browsing; after a pattern is opened, a compact note
   explains that it can be run locally or cloned into Workspace patterns.
 - **Local control**: when `/api/config` identifies the local Python control
@@ -169,7 +169,7 @@ just test <pattern>
   1. compose up --wait          # healthchecks gate every service
   2. run schema.sql on driver   # DDL (ON CLUSTER for replicated patterns)
   3. run load (.py / .sql)      # INSERT, Kafka produce, source DML, ...
-  4. poll each ready_when       # poll until the data lands / replicates
+  4. poll each ready_when       # poll until the data is inserted / replicated
   5. verify.sql == expected.txt # compare output
   6. compose down -v
 ```

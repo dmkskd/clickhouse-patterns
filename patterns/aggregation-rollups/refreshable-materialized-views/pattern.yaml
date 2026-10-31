@@ -46,7 +46,7 @@ spec:
 
     # Convergence: after the moved prices and the amend/cancel, the scheduled refresh
     # recomputes the book. Wait until both symbols are valued, the BTC position has
-    # deduped to 125 (proving the amend and cancel applied), and BTC carries the
+    # deduped to 125 (proving the amend and cancel applied), and BTC has the
     # moved price of 101 (proving the revaluation, which happened with no trade).
     ready_when:
       - query: SELECT count() FROM demo.position_pnl

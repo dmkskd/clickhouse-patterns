@@ -156,7 +156,7 @@ window.PE.topology = (() => {
   };
 
   // Labels sit in the gutter just left of the target rather than at the edge's
-  // midpoint: a dependency that skips columns would otherwise land its label on
+  // midpoint: a dependency that skips columns would otherwise place its label on
   // top of an unrelated card. One label per target and condition, since several
   // services often wait on the same node for the same reason.
   function dependenciesSvg(edges, boxes) {

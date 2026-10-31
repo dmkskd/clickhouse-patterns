@@ -17,6 +17,7 @@ from pattern_explorer.orchestration.probe import (
     latency_summary,
     next_id,
     result_line,
+    stage_summary,
 )
 from pattern_explorer.orchestration.wait import wait_for
 
@@ -49,4 +50,13 @@ wait_for(
     rows,
     timeout=300,
 )
-print(result_line(latency_summary(ch, "test", "orders", first, last, started_at)))
+result = latency_summary(ch, "test", "orders", first, last, started_at)
+# _peerdb_version is the raw record's _peerdb_timestamp: the time PeerDB read
+# the change from the replication stream (nanoseconds). PeerDB records no time
+# for the raw-table insert, so batching, staging and normalize are one stage.
+read = "fromUnixTimestamp64Nano(toInt64(_peerdb_version), 'UTC')"
+result["stages"] = stage_summary(ch, "test", "orders", first, last, [
+    ("Postgres write to PeerDB read", f"dateDiff('microsecond', updated_at, {read}) / 1000.0"),
+    ("PeerDB read to ClickHouse insert (batch, raw table, normalize)", f"dateDiff('microsecond', {read}, ch_inserted_at) / 1000.0"),
+])
+print(result_line(result))

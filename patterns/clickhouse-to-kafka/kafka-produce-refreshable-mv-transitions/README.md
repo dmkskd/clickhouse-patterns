@@ -80,7 +80,7 @@ checkout  FIRING
 checkout  RESOLVED
 ```
 
-The level topic check asserts `checkout` carried both `firing` and `ok` statuses,
+The level topic check asserts `checkout` emitted both `firing` and `ok` statuses,
 and `health` produced no alerts.
 
 ## Notes

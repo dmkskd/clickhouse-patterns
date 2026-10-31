@@ -12,7 +12,7 @@ ORDER BY id;
 
 -- S3Queue in ordered mode. It keeps only a watermark in Keeper: the highest
 -- filename processed. A file whose name sorts after the watermark is picked up; a
--- file that lands with an earlier name is ignored. Cheap, because only the
+-- file uploaded later with an earlier name is ignored. Cheap, because only the
 -- watermark is stored, but it assumes files arrive in lexical order.
 CREATE TABLE demo.events_queue
 (

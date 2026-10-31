@@ -1,6 +1,6 @@
 -- The Altinity connector has created test.orders by the time this file runs.
 -- Propagate its CDC metadata so the transformed target handles later versions
--- and tombstones in the same way as the landing table.
+-- and tombstones in the same way as test.orders.
 CREATE TABLE IF NOT EXISTS test.orders_transformed
 (
     id Int32,

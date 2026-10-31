@@ -8,7 +8,7 @@ metadata:
 
     - **[Postgres Table Engine](https://clickhouse.com/docs/engines/table-engines/integrations/postgresql):** binds one locally declared ClickHouse table to one Postgres table, with the column types chosen at declaration time.
     - **[Postgres Database Engine](https://clickhouse.com/docs/engines/database-engines/postgresql):** maps an entire schema in a single statement. Tables and types are discovered when queried, so a table created in Postgres becomes queryable on the next query against the schema.
-    - **[postgresql() table function](https://clickhouse.com/docs/sql-reference/table-functions/postgresql):** carries the connection inline and creates no ClickHouse object.
+    - **[postgresql() table function](https://clickhouse.com/docs/sql-reference/table-functions/postgresql):** takes the connection settings as arguments and creates no ClickHouse object.
 
     In all three cases, every read in ClickHouse issues a query to the Postgres server, and as Postgres executes that query, results always reflect the current state of the source table.
   graph: |-
@@ -43,7 +43,7 @@ metadata:
     limitations:
       - Every ClickHouse query against these tables is executed by the Postgres server, adding to its load.
       - As the query is executed by the Postgres server, ClickHouse's columnar optimizations (compression, primary index, skip indexes, projections) do not apply.
-      - Every query is issued to the Postgres server, so it carries round-trip latency and data transfer costs.
+      - Every query is issued to the Postgres server, so it adds round-trip latency and data transfer costs.
       - Query completion depends on the availability of the Postgres server, a system outside ClickHouse's control.
       - Postgres and ClickHouse have different type systems, so a Postgres column type does not always have an exact ClickHouse equivalent.
       - No connection to Postgres is opened when the table is created, so a wrong host, a missing table, or an unusable column type is only reported on the first read.

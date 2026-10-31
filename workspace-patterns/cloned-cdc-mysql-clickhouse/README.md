@@ -40,7 +40,7 @@ demonstrates a controlled but compatible schema:
 - `amount_band` is an additional `MATERIALIZED` column;
 - the connector's `_version` and `is_deleted` columns remain present.
 
-Non-key columns are nullable because a MySQL delete event can carry absent
+Non-key columns are nullable because a MySQL delete event can omit their
 values. Connector DDL execution and schema evolution are disabled so the source
 DDL cannot replace the chosen ClickHouse types. Auto-creation remains enabled
 for the separate `orders` table.

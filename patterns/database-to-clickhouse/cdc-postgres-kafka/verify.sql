@@ -4,7 +4,7 @@
 --
 -- __offset and __timestamp are real but vary per run, so they are checked for
 -- presence and plausibility rather than value: a timestamp written in the wrong
--- unit lands centuries away from now().
+-- unit is centuries away from now().
 SELECT
     id,
     customer,

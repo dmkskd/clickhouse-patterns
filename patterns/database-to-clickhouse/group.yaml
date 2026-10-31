@@ -23,8 +23,8 @@ intro: |-
   actually changed.
 
   **The CDC patterns** read the source's replication log and apply each change
-  as it happens, so the cost is proportional to change volume. The complexity
-  lies in seeding an initial snapshot before streaming takes over, and in
+  as it happens, so the cost is proportional to change volume. The hard parts
+  are seeding an initial snapshot before streaming takes over, and
   deciding how ClickHouse should represent a row that was updated or deleted.
   The trade-off is a pipeline to run and keep correct.
 

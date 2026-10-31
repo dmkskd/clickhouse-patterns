@@ -3,7 +3,7 @@ split across multiple parts.
 
 Each ch.insert() is one insert block: it becomes one part and triggers mv_1m, whose
 insert into candles_1m in turn triggers the cascaded mv_5m. The three batches are
-arranged so every minute's ticks land in three different parts -- batch A the
+arranged so every minute's ticks are split across three different parts -- batch A the
 opening prints, batch B the mid prints, batch C the closing prints.
 
 The 1m candle for each minute is therefore assembled from partial states in

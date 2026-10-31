@@ -52,7 +52,7 @@ print("customer 1 promoted to platinum in public.customers")
 stored = ch.query(
     "SELECT customer_tier FROM test.events_enriched WHERE event_id = 1"
 ).result_rows[0][0]
-print(f"event 1 still carries the tier it was written with: {stored}")
+print(f"event 1 still has the tier it was written with: {stored}")
 
 # LIFETIME(MIN 1 MAX 2) expires within two seconds; nothing reloads a dictionary
 # on demand except SYSTEM RELOAD DICTIONARY, which this deliberately avoids.

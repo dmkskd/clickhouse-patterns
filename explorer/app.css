@@ -136,12 +136,12 @@ button, input { font: inherit; }
 .session-summary #session-title { font-weight: 500; }
 /* Only the pattern link underlines; the "Running pattern:" label stays plain. */
 .session-summary.clickable:hover #session-title .title-link { text-decoration: underline; }
-/* Inside the catalog (a group page or a search), the landing hero folds away
+/* Inside the catalog (a group page or a search), the home hero folds away
    and the page starts on its own title. A running session still shows in the
    sidebar and on the pattern page. */
 
 /* Inside the control row the eyebrow is dropped, and the explanatory sub-line
-   is hidden except when it carries live status (busy progress, or the driver
+   is hidden except when it shows live status (busy progress, or the driver
    info revealed by the Local server pill). */
 #pattern-detail #session-panel #session-eyebrow { display: none; }
 #pattern-detail #session-panel .session-summary { flex: 0 1 auto; }
@@ -337,7 +337,7 @@ button, input { font: inherit; }
 .repo-hint:hover { background: rgb(var(--sh, 168 173 184) / .3); }
 .repo-hint svg { flex: 0 0 auto; }
 /* Product-status chip beside the title, sentence case and low contrast, with the
-   sentence below carrying the explanation. */
+   sentence below with the explanation. */
   align-self: center; padding: 3px 10px; border: 1px solid var(--line);
   border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 600;
   letter-spacing: .01em; white-space: nowrap;
@@ -364,7 +364,7 @@ button, input { font: inherit; }
 .hero-session-actions .hero-stop:hover { background: #2a1a1f; border-color: #6a4650; }
 
 /* "Read more" expands the hero inline instead of opening a modal. */
-/* The opening line is the page's lead, so it carries the larger type. */
+/* The opening line is the page's lead, so it uses the larger type. */
 .clone-modal { width: min(92vw, 640px); max-width: none; padding: 0; border: 1px solid #303954; border-radius: 14px; background: #0b0f1c; color: var(--text); box-shadow: 0 28px 100px #000b; }
 .clone-modal::backdrop { background: #02030acc; backdrop-filter: blur(4px); }
 .clone-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 18px 12px; border-bottom: 1px solid var(--line); }
@@ -1290,7 +1290,7 @@ button, input { font: inherit; }
 [data-theme="flat"][data-scheme="light"] {
   color-scheme: light;
   /* Paper: a near-white page, white panels, and one grey line doing every
-     separation. Depth is deliberately absent — the lines carry the structure. */
+     separation. Depth is deliberately absent — the lines show the structure. */
   --bg: #f6f7f9;
   --panel: #ffffff;
   --panel-2: #ffffff;
@@ -1544,7 +1544,7 @@ button, input { font: inherit; }
 /* Tag chips are engravings, not fills: they must stay the same material as the
    card they sit in, so only light describes them. Filling them with --well makes
    them read as dark patches instead. Same recipe as light, retuned for the fact
-   that a dark surface carries far less highlight. */
+   that a dark surface shows far less highlight. */
 [data-theme="soft"][data-scheme="dark"] .pattern-tag {
   background: transparent;
   box-shadow:

@@ -15,7 +15,7 @@ ch.command(
 )
 print("inserted one expired monthly partition on the hot volume")
 
-# The current-month rows land as two inserts, then OPTIMIZE consolidates them
+# The current-month rows are written by two inserts, then OPTIMIZE consolidates them
 # into one part. The merge is forced rather than left to the background merger
 # for the same reason the TTL move is materialized: the demonstration must be
 # deterministic. The hot partition thus shows ordinary merge activity, in

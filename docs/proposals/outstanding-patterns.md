@@ -44,9 +44,9 @@ Kafka, dbt, PeerDB, materialized views, and object storage remain possible
 implementation mechanisms.
 
 - **CDC:** how inserts, updates, and deletes leave a mutable source and reach a
-  source-faithful ClickHouse landing table.
+  source-faithful ClickHouse table.
 - **Modeling and enrichment:** what query-facing shape should be built from the
-  landed data, including joins, denormalization, derived columns, and
+  replicated data, including joins, denormalization, derived columns, and
   aggregates.
 - **Change propagation:** how a derived model is repaired when any input row is
   updated or deleted. This may be a cross-cutting concern rather than a final
@@ -199,7 +199,7 @@ locality-sensitive key, and `ReplacingMergeTree` targets whose dedup scope
 depends on the sharding key, need a redesign rather than this optimization.
 
 Demonstrates. A two-hop chain on a sharded, replicated cluster with
-`distributed_foreground_insert = 1`: a Kafka-engine consumer MV lands rows in a
+`distributed_foreground_insert = 1`: a Kafka-engine consumer MV inserts rows into a
 `Distributed` table (first fan-out), and an enrichment MV reads the local table
 and writes onward. Run the second hop twice — once targeting the `Distributed`
 wrapper, once targeting `_local` — and show the network wait disappearing from
@@ -716,11 +716,11 @@ Related:
 [refreshable-materialized-views](../../patterns/aggregation-rollups/refreshable-materialized-views/)
 demonstrates Angle C's mechanics (scheduled recompute with `FINAL` and a join
 inside the refresh query) on a mark-to-market fixture, though not from CDC
-landing tables.
+target tables.
 
 Background. A relational source may have `customers`, `orders`, and
 `order_items`, while the ClickHouse consumer wants one query-facing
-`order_facts` table. CDC can keep three source-faithful landing tables current,
+`order_facts` table. CDC can keep three source-faithful tables current,
 but it does not answer when to join them, what historical meaning copied
 dimension values have, or how a derived result changes after an update or
 delete.
@@ -751,17 +751,17 @@ general three-table join.
 
 Angle B, incremental materialized view. This can cast, filter, derive, or enrich
 rows as inserts arrive. A joined incremental MV triggers only from its source
-table; updates arriving in another landing table do not automatically re-emit
+table; updates arriving in another CDC target table do not automatically re-emit
 affected facts. It can implement stable dimensions or deliberate as-was
 semantics, but it does not maintain arbitrary mutable joins.
 
 Angle C, refreshable materialized view. Periodically recompute the join from
-the resolved current state of all three CDC landing tables and atomically
+the resolved current state of all three CDC target tables and atomically
 replace the result. ClickHouse schedules the refresh, and the refresh interval
 defines how stale the result may be. Full recomputation cost and refresh
 frequency may become limiting factors. Dependencies can order refreshes.
 
-Angle D, dbt. Express landing, current-state, conformed, and serving models as a
+Angle D, dbt. Express raw, current-state, conformed, and serving models as a
 version-controlled DAG with tests. A full refresh recomputes the entire model.
 Incremental dbt models reduce work but still need an invalidation strategy when
 a customer update affects many existing facts. dbt organizes and executes the
@@ -850,7 +850,7 @@ consumer cannot advance past the poison message. The Kafka engine supports
 Demonstrates. A topic containing both valid and poison messages. One MV parses
 valid messages into the serving table; the error stream is captured into a
 dead-letter table holding `_raw_message`, `_error`, topic, partition, and
-offset. The test asserts that all valid rows landed, the poison messages were
+offset. The test asserts that all valid rows were inserted, the poison messages were
 captured with their error text, and consumption advanced past them.
 
 Infra. `single` + `kafka`.
@@ -883,16 +883,16 @@ References.
 [Asynchronous inserts](https://clickhouse.com/docs/optimize/asynchronous-inserts),
 [Buffer engine](https://clickhouse.com/docs/engines/table-engines/special/buffer).
 
-### json-landing-parse
+### json-raw-parse
 
 Status. **Outstanding.**
 
-Background. A common first processing level lands raw JSON payloads untouched
+Background. A common first processing level stores raw JSON payloads untouched
 and extracts typed columns with a materialized view, keeping the raw copy for
 replay and schema drift. ClickHouse also offers the `JSON` type with dynamic
 paths and materialized subcolumns as an alternative.
 
-Demonstrates. A raw landing table (`String` or `JSON` column), an MV extracting
+Demonstrates. A raw table (`String` or `JSON` column), an MV extracting
 typed columns into a serving MergeTree, and a payload that gains a new field
 mid-stream. Contrast explicit `JSONExtract*` extraction with `JSON` dynamic
 paths. Pairs naturally with [kafka-poison-pill-dead-letter](#kafka-poison-pill-dead-letter)

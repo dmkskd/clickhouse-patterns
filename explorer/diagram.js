@@ -385,7 +385,7 @@ window.PE.diagram = (() => {
     ).join("");
     // The isometric floor grid was removed: its width scaled with the diagram
     // while its height stayed fixed, so wide diagrams distorted the rhombus and
-    // its grid lines. Cube shadows + boundary boxes carry the depth instead.
+    // its grid lines. Cube shadows + boundary boxes show the depth instead.
     const grid = "";
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 55 ${diagramWidth} ${diagramHeight}" role="img" aria-label="${esc(pattern.title)} architecture">
       <defs>${markers}<filter id="glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="blur"><feGaussianBlur stdDeviation="8"/></filter></defs>
@@ -401,7 +401,7 @@ window.PE.diagram = (() => {
   // ===================== TYPED VIEW =====================
   // A second renderer over the same graph: instead of one isometric cube per
   // resource, each node is drawn in the silhouette of its kind (table, topic,
-  // processor, reader, client, store), so the diagram carries its types in its
+  // processor, reader, client, store), so the diagram shows its types in its
   // shapes rather than in color alone. Same node attributes as the isometric
   // renderer, so inspection, notes and the modal work unchanged.
   const T = { W: 186, HGAP: 188, VGAP: 34, LEFT: 44, TOP: 122 };
@@ -480,7 +480,7 @@ window.PE.diagram = (() => {
   }
 
   // Silhouettes. Every shape fills the same box, so text placement and edge
-  // anchors stay identical across kinds. `attrs` carries the paint, so one
+  // anchors stay identical across kinds. `attrs` holds the paint, so one
   // outline can be drawn twice: an opaque base that hides edges passing behind
   // the node, then the tinted face on top.
   function schematicSilhouette(shape, x, y, h, attrs) {
@@ -509,8 +509,8 @@ window.PE.diagram = (() => {
   }
 
   // What is inside the outline says what the object holds. A table stores rows,
-  // so it carries a grid. A view stores nothing — it holds a query — so it
-  // carries `SELECT` instead. A reader pulls from a stream, so it carries the
+  // so it shows a grid. A view stores nothing — it holds a query — so it
+  // shows `SELECT` instead. A reader pulls from a stream, so it shows the
   // doubled edge. Marks tint with the node's own colour: they belong to it.
   function schematicMotif(shape, x, y, h, color, kind) {
     const w = T.W;

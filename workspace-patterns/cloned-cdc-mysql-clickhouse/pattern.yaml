@@ -2,7 +2,7 @@ manifest_version: 2
 metadata:
   title: CDC - MySQL → ClickHouse (Altinity lightweight sink)
   description: >-
-    Compares three ways to land the same MySQL CDC stream in ClickHouse: let the
+    Compares three ways to write the same MySQL CDC stream to ClickHouse: let the
     Altinity sink create the target, transform that target through a materialized
     view, or write into an existing ClickHouse table with deliberate types and a
     generated column. All three paths receive matching INSERT, UPDATE, and DELETE

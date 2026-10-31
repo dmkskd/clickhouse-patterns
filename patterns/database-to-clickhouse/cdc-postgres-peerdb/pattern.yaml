@@ -22,8 +22,9 @@ metadata:
 
     Edit the files in `config/`, then run `just reload` to rebuild the demo with the new settings. The **Configuration** panel displays the files.
 
-    Inspect `test.orders` and `test.orders_existing` in **Contents**: source write times sit alongside `_peerdb_synced_at` (PeerDB metadata) and `ch_inserted_at` (destination execution). The raw mirror table and MinIO objects expose the intermediate CDC batch. `_peerdb_synced_at` is kept separate from the source write time and is not treated as a Postgres commit timestamp. The transformation carries the landing timestamps through unchanged, so its latency still describes arrival at the landing table.
+    Inspect `test.orders` and `test.orders_existing` in **Contents**: source write times sit alongside `_peerdb_synced_at` (PeerDB metadata) and `ch_inserted_at` (destination execution). The raw mirror table and MinIO objects expose the intermediate CDC batch. `_peerdb_synced_at` is kept separate from the source write time and is not treated as a Postgres commit timestamp. The materialized view copies `ch_inserted_at` and `replication_latency_ms` unchanged, so `test.orders_transformed` reports the arrival time in `test.orders`.
 
+    The **Experiments** panel runs a timed insert workload with chosen values for the `config/` latency settings and records latency, parts and INSERT cost per run.
   graph: |-
     snapshot:
       postgres:source_tables(label=public.orders + public.orders_existing,note=**Source Postgres** · service `postgres`\nThe replicated user data.\n- not the peerdb-catalog\n- read through a logical replication slot)

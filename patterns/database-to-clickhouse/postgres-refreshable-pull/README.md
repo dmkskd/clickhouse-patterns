@@ -85,7 +85,7 @@ is a periodic scan on the OLTP side as well. Three signals indicate the limit:
 3. the intermediate values are needed, not just the current state, which a full
    replace never observes.
 
-Signal 1 has a cheaper answer than CDC. If the source carries a monotonic
+Signal 1 has a cheaper answer than CDC. If the source has a monotonic
 `updated_at` or id, `REFRESH EVERY ... APPEND` with a watermark predicate pulls
 only new rows and removes the full-scan cost while keeping the connector-free
 property. Deletes must then be handled explicitly, because appended rows

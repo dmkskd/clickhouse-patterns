@@ -1,4 +1,4 @@
--- This pattern owns its target table, so both the CDC metadata and the Kafka
+-- This pattern creates its target table, so both the CDC metadata and the Kafka
 -- metadata are declared here rather than inferred by the connector.
 --
 -- Debezium's envelope is unwrapped in flight by an SMT (see load.py), so rows
@@ -12,7 +12,7 @@
 -- row is traceable back to the exact Kafka record that produced it.
 --
 -- Non-key columns are nullable because Postgres' default replica identity sends
--- only the key for a delete, so the rewritten delete event carries no customer
+-- only the key for a delete, so the rewritten delete event has no customer
 -- or amount.
 CREATE DATABASE IF NOT EXISTS test;
 

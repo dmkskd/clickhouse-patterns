@@ -2,7 +2,7 @@ manifest_version: 2
 metadata:
   title: Shared consumer group into a replicated table
   description: |-
-    Two ClickHouse replicas each run the same `Kafka`-engine consumer in one consumer group. The topic has a single partition, so Kafka keeps one consumer active and the other on standby.
+    A ClickHouse cluster with two replicas consumes one Kafka topic. `ON CLUSTER` DDL creates a local `Kafka` engine table on each node, and both consumers join group `ch_events`. The group coordinator assigns the topic's single partition to one consumer. The other consumer stays idle until a rebalance moves the partition to it.
 
     The active consumer's materialized view inserts into the local `ReplicatedMergeTree`, and Keeper replicates the data parts to the other node. If the active node fails, Kafka hands the partition to the standby, which resumes from the last committed offset.
 

@@ -12,10 +12,10 @@ from pattern_explorer.orchestration.wait import wait_for
 
 ch = connect("ch")
 wait_for(ch, "SELECT count() FROM test.orders", 3, timeout=90)
-print("initial refresh landed 3 rows in the local MergeTree")
+print("initial refresh inserted 3 rows into the local MergeTree")
 
 # The append-only history must observe the pre-change state before anything is
-# mutated, otherwise its first snapshot lands after the delete and the row this
+# mutated, otherwise its first snapshot runs after the delete and the row this
 # pattern is about never enters the history at all.
 wait_for(ch, "SELECT count() FROM test.orders_history WHERE id = 3", 1, timeout=90)
 print("history captured its first snapshot, with id 3 still present")

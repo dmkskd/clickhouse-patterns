@@ -24,7 +24,7 @@ metadata:
 
     ingestion:
       client:producer(label=event producer)
-        -[INSERT]-> mergetree:events_raw(label=test.events_raw,engine=MergeTree,note=**Facts as received**\nCarries customer_id and nothing about the customer.)
+        -[INSERT]-> mergetree:events_raw(label=test.events_raw,engine=MergeTree,note=**Facts as received**\nStores customer_id and nothing about the customer.)
         -[MV insert]-> mv:enrich(label=test.events_enrich_mv,note=**dictGet per inserted block**\nResolves name and tier once, at insert.)
         -> mergetree:events_enriched(label=test.events_enriched,engine=MergeTree,note=**Denormalized fact**\nStores the attribute values as of insert time.\n- reads need no join\n- ORDER BY can start with tier\n- a later dimension change does not reach it)
         -[SELECT]-> client:stored_readers(label=readers · stored tier)

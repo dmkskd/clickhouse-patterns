@@ -18,7 +18,7 @@ none fits).
 
 ## Groups
 
-Each curated group folder carries a `group.yaml`. The group `key` is the folder
+Each curated group folder has a `group.yaml`. The group `key` is the folder
 name; a pattern belongs to the group folder it lives in.
 
 ```yaml
@@ -28,7 +28,7 @@ description: Aggregate raw data into summary views   # one line, card-fit
 icon: rollup                         # database | s3 | kafka-in | kafka-out | clock | rollup | clone | lake
 order: 1                             # display order across groups
 intro: |-
-  First paragraph, shown on the group landing.
+  First paragraph, shown on the group page.
 
   Later paragraphs are revealed behind a "More" toggle.
 related:                             # optional cross-links to sibling groups
@@ -40,7 +40,7 @@ links:                               # optional curated external reading
     note: One line saying why this is worth reading (hover tooltip)
 ```
 
-Grouping is the folder; patterns carry no separate category field.
+Grouping is the folder; patterns have no separate category field.
 
 Pattern readiness is declared in `pattern.yaml`, independently of whether it is
 runnable or reference-only:
@@ -273,7 +273,7 @@ Use for a neighbouring family, not for an individual pattern.
 
 **Group external reading — `links`** in `group.yaml`. Use for curated external
 articles that apply across the whole family; the `note` says why the link is
-worth reading. They render as a "Further reading" list on the group landing.
+worth reading. They render as a "Further reading" list on the group page.
 An article about one pattern's specific mechanism belongs in that pattern's
 `references` instead.
 

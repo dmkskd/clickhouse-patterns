@@ -49,7 +49,7 @@ metadata:
       - A full replace leaves no earlier version of a row to reconcile, so the target is a plain MergeTree read without FINAL, without a version column, and without a tombstone predicate.
       - The rows are stored locally, so compression, the primary index, skip indexes, and projections all apply, and joins against local tables no longer touch Postgres.
       - Exactly one reader hits Postgres per interval regardless of how many analysts query the copy, which is the read-load problem the pass-through pattern has.
-      - The entire mechanism is one DDL statement; the schedule and its run history live in ClickHouse (`system.view_refreshes`), so there is no connector process or pipeline state to operate.
+      - The entire mechanism is one DDL statement; the schedule and its run history are stored in ClickHouse (`system.view_refreshes`), so there is no connector process or pipeline state to operate.
       - A failed refresh leaves the previous result in place and the next scheduled run retries, so a transient Postgres outage degrades to staleness rather than to a broken table.
     limitations:
       - The copy is stale by up to the refresh interval, so this cannot serve a use case that needs to see a write seconds after it commits.

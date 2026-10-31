@@ -19,7 +19,7 @@ ENGINE = PostgreSQL('postgres:5432', 'test', 'orders', 'postgres', 'postgres');
 -- Without APPEND, each refresh REPLACES the entire table, which is why this is
 -- lighter than CDC. A row deleted in Postgres is simply not in the next result,
 -- so nothing needs a tombstone, a _version comparison, or FINAL on read. The
--- table is always a clean, complete, slightly stale copy.
+-- table is always a complete copy, at most one refresh interval old.
 --
 -- It is also the constraint: every refresh re-reads every row, so this only
 -- stays cheap while the source table stays small.

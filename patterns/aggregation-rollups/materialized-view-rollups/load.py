@@ -3,7 +3,7 @@ split across multiple parts.
 
 Each ch.insert() is one insert block: it becomes one part AND triggers each
 materialized view once. The three batches are arranged so every minute's ticks
-land in three different parts -- batch A carries the opening prints, batch B the
+are split across three different parts -- batch A has the opening prints, batch B the
 mid prints, batch C the closing prints.
 
 That split is the point of this pattern. candles_1m therefore holds several

@@ -49,7 +49,7 @@ window.PE.util = (() => {
     "consumer-group": "Kafka engine tables", s3queue: "S3Queue()"
   };
   // Schematic view: each resource kind maps to a shape family, so the diagram
-  // carries its type in its silhouette rather than in color alone.
+  // shows its type in its silhouette rather than in color alone.
   const KIND_SHAPES = {
     mergetree: "table", "replicated-mergetree": "table", distributed: "table",
     part: "table", keepermap: "table", "remote-table": "table",
@@ -109,7 +109,7 @@ window.PE.util = (() => {
   };
 
   // Schematic (shape-per-kind) view palette. Same rationale as DIAGRAM_PALETTES:
-  // the SVG is downloadable and embeddable, so it carries its own <style>.
+  // the SVG is downloadable and embeddable, so it includes its own <style>.
   // Node fills are drawn from KIND_COLORS at low opacity, which reads correctly
   // on both a dark and a light ground, so only the chrome differs per scheme.
   const SCHEMATIC_STYLE_SHARED = "text{font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}.t-name,.t-query{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.t-edge{fill:none;stroke-width:1.8;stroke-dasharray:4 8;opacity:.8}.packet{filter:url(#glow)}[data-resource-key]{cursor:pointer}.t-node{transform-box:fill-box;transform-origin:center;transition:transform .12s ease}.inspectable-resource{cursor:pointer;outline:none}.inspectable-resource:hover .t-shape,.inspectable-resource:focus-visible .t-shape{stroke-width:2.6}.note-badge{cursor:help}.t-ghost{opacity:.34}";
@@ -147,7 +147,7 @@ window.PE.util = (() => {
   };
 
   // Topology (physical view) palette. Same rationale as DIAGRAM_PALETTES:
-  // the SVG is downloadable and embeddable, so it carries its own <style>.
+  // the SVG is downloadable and embeddable, so it includes its own <style>.
   const TOPOLOGY_PALETTES = {
     dark: {
       style: `

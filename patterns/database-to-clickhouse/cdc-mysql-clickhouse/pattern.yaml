@@ -29,8 +29,9 @@ metadata:
 
     Edit the files in `config/`, then run `just reload` to rebuild the demo with the new settings. The **Configuration** panel displays the files.
 
-    Inspect `test.orders` and `test.orders_existing` in **Contents**: the source write times, connector `_version` and `is_deleted`, and destination insert time remain visible together. `_version` orders versions; this demo does not interpret it as a source commit timestamp. The transformation carries the landing timestamps through unchanged, so its latency still describes arrival at the landing table.
+    Inspect `test.orders` and `test.orders_existing` in **Contents**: the source write times, connector `_version` and `is_deleted`, and destination insert time remain visible together. `_version` orders versions; the connector builds it from the MySQL commit time (`source.ts_ms`, milliseconds) and the GTID transaction number. The materialized view copies `ch_inserted_at` and `replication_latency_ms` unchanged, so `test.orders_transformed` reports the arrival time in `test.orders`.
 
+    The **Experiments** panel runs a timed insert workload with chosen values for the `config/` latency settings and records latency, parts and INSERT cost per run.
   graph: |-
     snapshot:
       mysql:source_tables(label=2 MySQL sources,tables=test.orders + test.orders_existing)
@@ -87,7 +88,7 @@ metadata:
   tradeoffs:
     benefits:
       - The lightweight connector embeds Debezium, so MySQL CDC reaches ClickHouse without operating Kafka, an orchestrator, a catalog database, or object storage.
-      - The pipeline is one service beyond ClickHouse and the source, and all of its state lives in ClickHouse tables, so there is no second stateful system to back up or reconcile.
+      - The pipeline is one service beyond ClickHouse and the source, and all of its state is stored in ClickHouse tables, so there is no second stateful system to back up or reconcile.
       - Cost tracks change volume rather than table size, so a large table with few edits stays cheap where a scheduled full re-read would not.
       - Auto-create supports a connector-owned target while the same stream can be inserted into a deliberately pre-created ClickHouse schema.
       - ReplacingMergeTree versions and delete markers preserve current-state semantics for inserts, updates, and deletes.
@@ -116,6 +117,58 @@ spec:
           target: /config.yml
     mysql:
       init: source-init.sql
+
+  experiments:
+    - name: replication-latency
+      title: Replication latency
+      description: Inserts orders into MySQL at a fixed rate and measures the time from the MySQL write to the ClickHouse insert.
+      script: experiments/replication_latency.py
+      parameters:
+        - name: poll_interval_ms
+          label: Debezium poll interval (ms)
+          default: 500
+          config: {file: config/connector.yaml, key: poll.interval.ms}
+        - name: buffer_flush_time_ms
+          label: Sink buffer flush time (ms)
+          default: 30
+          config: {file: config/connector.yaml, key: buffer.flush.time.ms}
+        - name: rate
+          label: Rows per second
+          default: 50
+        - name: rows_per_txn
+          label: Rows per transaction
+          default: 1
+        - name: duration
+          label: Duration (s)
+          default: 10
+      results:
+        - name: rows
+          label: Rows
+          description: Rows inserted into MySQL during the run.
+        - name: p50_ms
+          label: p50 (ms)
+          description: Median time from the MySQL write to the ClickHouse insert, per row.
+        - name: p95_ms
+          label: p95 (ms)
+          description: 95th percentile of the same per-row time.
+        - name: p99_ms
+          label: p99 (ms)
+          description: 99th percentile of the same per-row time.
+        - name: max_ms
+          label: Max (ms)
+          description: Slowest row.
+        - name: parts
+          label: Parts
+          description: New data parts in test.orders during the run (system.part_log).
+        - name: inserts
+          label: INSERTs
+          description: INSERT statements ClickHouse executed into test.orders during the run (system.query_log).
+        - name: insert_avg_ms
+          label: INSERT avg (ms)
+          description: Average ClickHouse execution time of those INSERT statements.
+        - name: insert_max_ms
+          label: INSERT max (ms)
+          description: Slowest of those INSERT statements.
 
   steps:
     # ch-cdc initialization provides orders_existing before the connector starts;

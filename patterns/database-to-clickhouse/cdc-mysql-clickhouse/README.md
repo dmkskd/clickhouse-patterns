@@ -18,7 +18,7 @@ is too wide, or when the change history is itself the product.
 The connector is source-agnostic, so the same lightweight deployment runs
 Debezium against MySQL binlogs or PostgreSQL `pgoutput`, and the three ClickHouse
 target choices are identical either way. MySQL is used so that the group has exactly one
-Postgres deployment story, in [cdc-postgres-peerdb](../cdc-postgres-peerdb/),
+Postgres deployment, in [cdc-postgres-peerdb](../cdc-postgres-peerdb/),
 where two Postgres instances have to be told apart. Running this against
 PostgreSQL means pointing the connector at the `postgres` service and switching
 its Debezium connector class; nothing in `transform.sql` or the target DDL
@@ -64,8 +64,8 @@ source record schema. It uses `ReplacingMergeTree`, `_version`, and
 ## Transformation
 
 Once the initial snapshot creates `test.orders`, `transform.sql` creates an
-incremental materialized view and backfills the three snapshot rows. New CDC
-versions then flow through the view in real time.
+incremental materialized view and backfills the three snapshot rows. Each later CDC
+insert into `test.orders` triggers the view.
 
 The transformation uppercases `customer`, converts `amount` to
 `Decimal(12, 2)`, and derives `amount_band`. Its target retains `_version` and
@@ -80,7 +80,7 @@ ClickHouse creates `test.orders_existing` before the connector starts. It is a c
 - `amount_band` is an additional `MATERIALIZED` column;
 - the connector's `_version` and `is_deleted` columns remain present.
 
-Non-key columns are nullable because a MySQL delete event can carry absent
+Non-key columns are nullable because a MySQL delete event can omit their
 values. Connector DDL execution and schema evolution are disabled so the source
 DDL cannot replace the chosen ClickHouse types. Auto-creation remains enabled
 for the separate `orders` table.
@@ -94,11 +94,11 @@ targets.
 The lightweight connector does not run a transform chain. Its documented
 configuration exposes routing and filtering (`database.include.list`,
 `table.include.list`, `clickhouse.database.override.map`) and type-handling
-knobs (`binary.handling.mode`, `persist.raw.bytes`), not per-message rewriting.
+settings (`binary.handling.mode`, `persist.raw.bytes`), not per-message rewriting.
 The Kafka Connect single-message transforms that people associate with Debezium
 belong to the connector's
 [Kafka deployment mode](https://github.com/Altinity/clickhouse-sink-connector/blob/develop/doc/architecture.md),
-where a broker sits between extract and apply. Collapsing that into one process
+where a broker runs between extract and apply. Collapsing that into one process
 removes the place an SMT would run.
 
 All semantic work in this pattern therefore happens in ClickHouse, in two
@@ -112,17 +112,17 @@ connector's own insert, without an extra object or an extra pass.
 **After insert, in a materialized view.** `transform.sql` uppercases
 `customer`, casts `amount` to `Decimal(12, 2)`, and derives `amount_band` into
 `test.orders_transformed`. This needs an explicit backfill for snapshot rows and
-must carry `_version` and `is_deleted` through so updates and tombstones still
+must copy `_version` and `is_deleted` so updates and tombstones still
 converge.
 
 Prefer the DDL position when the change is a type or a derived column, and the
-MV position when it is a rewrite or a reshape. The
+MV position when it rewrites rows or changes their structure. The
 [PeerDB pattern](../cdc-postgres-peerdb/) reaches the same result, for the same
 reason.
 
 [postgres-refreshable-pull](../postgres-refreshable-pull/) places the same three
 transformations in the refreshable view's own `SELECT`, with no backfill and no
-CDC metadata to carry, because a full replace never has two versions of a row to
+CDC metadata to copy, because a full replace never has two versions of a row to
 reconcile. Tracking changes costs more on the read side than re-reading state.
 
 ## Run
@@ -140,8 +140,10 @@ schema history in `altinity_sink_connector`.
 
 Lower latency: reduce `poll.interval.ms` and `buffer.flush.time.ms` in `config/connector.yaml`; shorter waits increase CPU use and ClickHouse insert frequency.
 
-Inspect `test.orders` and `test.orders_existing` in **Contents**: the source write times, connector `_version` and `is_deleted`, and destination insert time remain visible together. `_version` orders versions; this demo does not interpret it as a source commit timestamp. The transformation carries the landing timestamps through unchanged, so its latency still describes arrival at the landing table.
+Inspect `test.orders` and `test.orders_existing` in **Contents**: the source write times, connector `_version` and `is_deleted`, and destination insert time remain visible together. `_version` orders versions; the connector builds it from the MySQL commit time (`source.ts_ms`, milliseconds) and the GTID transaction number. The materialized view copies `ch_inserted_at` and `replication_latency_ms` unchanged, so `test.orders_transformed` reports the arrival time in `test.orders`.
 
 ## Editing connector settings
 
 Edit the files in `config/`, then run `just reload` and `just validate`. The Explorer’s **Configuration** panel displays the same files. Reload rebuilds the demo and clears its data.
+
+The Explorer’s **Experiments** panel runs a timed insert workload with chosen values for the `config/` latency settings and records latency, parts and INSERT cost per run.

@@ -71,7 +71,7 @@ window.PE.session = (() => {
     if (consoleSplit && consoleSplit.dataset.key === key) return consoleSplit;
 
     // Every theme styles `.session-links a` as a standalone pill, so the parts
-    // inside this pill are buttons: nothing but .console-split then carries a
+    // inside this pill are buttons: nothing but .console-split then has a
     // border, background or shadow, whichever theme is active.
     const open = (href) => window.open(href, "_blank", "noreferrer");
     const part = (className) => {
@@ -174,7 +174,7 @@ window.PE.session = (() => {
     }
 
     // The session moved to its own bar under the top bar; the diagram panel's
-    // bottom row now carries the flow legend and the definition tabs, and hides
+    // bottom row now holds the flow legend and the definition tabs, and hides
     // only when it has neither.
     function syncControlStrip() {
       $("control-strip").hidden =
@@ -349,7 +349,7 @@ window.PE.session = (() => {
         if (!selected) panel.classList.add("catalog-only");
         const runnable = Boolean(selected?.runnable);
         $("session-eyebrow").textContent = runnable ? "No active session" : "Reference pattern";
-        // For a runnable pattern the green "Launch pattern" button carries the label,
+        // For a runnable pattern the green "Launch pattern" button shows the label,
         // so the redundant status text is hidden (idle-ready), leaving just the dot.
         // The slug (the `just test` argument) stays available as the button's tooltip.
         if (runnable) panel.classList.add("idle-ready");

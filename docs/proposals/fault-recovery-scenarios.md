@@ -126,7 +126,7 @@ Paths worth covering, each tied to the pattern where it applies:
   `kafka-ingest-sharded-partition-affinity`, and is exactly the claim its
   `tradeoffs` block makes about resetting one shard's offsets.
 
-Each of these should carry the destructive-when-misapplied warning in the
+Each of these should include the destructive-when-misapplied warning in the
 scenario's `description`, since that is what gets rendered.
 
 ## Pilot
@@ -147,7 +147,7 @@ does as well. That comparison is the deliverable; the fault injection is the
 easy part.
 
 Note that the partition-affinity pattern runs on `clickhouse-server:head`
-(profile `shards-v2`) because StorageKafka2 landed after 26.7. Scenario results
+(profile `shards-v2`) because StorageKafka2 was released after 26.7. Scenario results
 for it are inherently less stable than for the pinned patterns, which is another
 reason to keep scenarios out of the default test sweep.
 

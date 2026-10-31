@@ -26,7 +26,7 @@ earlier_month, later_month = ch.query(
     parameters={"earlier": EARLIER_MONTH_DAYS, "later": LATER_MONTH_DAYS},
 ).first_row
 
-# Each month lands in its own part, which is what makes a partial rollout
+# Each month is written to its own part, which is what makes a partial rollout
 # possible: a partition is the unit MATERIALIZE TTL can be pointed at.
 ch.command(
     "INSERT INTO demo.events (event_time, id, payload) "
@@ -58,4 +58,4 @@ ch.command(
     settings={"mutations_sync": 2},
 )
 print(f"materialized the new TTL in partition {earlier_month} only")
-print(f"partition {later_month} still carries the deadline of the one-year policy")
+print(f"partition {later_month} still stores the deadline of the one-year policy")
