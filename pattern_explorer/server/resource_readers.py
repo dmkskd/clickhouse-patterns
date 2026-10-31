@@ -27,6 +27,16 @@ _MV_TARGET = re.compile(
 )
 
 
+def _pretty_ddl(client, statement: str) -> str:
+    """Return ClickHouse's multi-line rendering of a one-line DDL statement."""
+    if not statement:
+        return statement
+    try:
+        return client.query("SELECT formatQuery({q:String})", parameters={"q": statement}).result_rows[0][0]
+    except Exception:  # noqa: BLE001 - the one-line statement is still correct
+        return statement
+
+
 def _materialized_view_target(engine: str, create_statement: str) -> str | None:
     """The table a `TO`-form materialized view writes into.
 
@@ -128,6 +138,7 @@ class ClickHouseReader:
             raise ValueError(f"{requested_table} exists in multiple databases ({databases}); qualify its name in the resource graph")
 
         database, table, engine, create_statement = metadata[0]
+        create_statement = _pretty_ddl(client, create_statement)
         column_result = client.query(
             """
             SELECT name, type, default_kind, default_expression, comment
@@ -228,7 +239,7 @@ class DictionaryReader:
 
         qualified = f"{quote_identifier(database)}.{quote_identifier(name)}"
         try:
-            create_statement = client.query(f"SHOW CREATE DICTIONARY {qualified}").result_rows[0][0]
+            create_statement = _pretty_ddl(client, client.query(f"SHOW CREATE DICTIONARY {qualified}").result_rows[0][0])
         except Exception as exc:  # noqa: BLE001 - load state remains useful
             create_statement = f"-- SHOW CREATE DICTIONARY failed: {type(exc).__name__}: {str(exc).splitlines()[0]}"
 

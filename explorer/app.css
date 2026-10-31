@@ -755,28 +755,29 @@ button, input { font: inherit; }
 .resource-inspector-section + .resource-inspector-section { margin-top: 23px; }
 .resource-inspector-section h3 { margin: 0 0 10px; color: #8d98b8; font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .13em; text-transform: uppercase; }
 .resource-inspector-note { margin: 0 0 12px; padding: 10px 12px; border: 1px solid #554a2d; border-radius: 8px; background: #211d12; color: #e2c679; font-size: 12px; line-height: 1.45; }
-.resource-inspector pre { max-height: 280px; overflow: auto; margin: 0; padding: 14px; border: 1px solid #252c45; border-radius: 9px; background: #070910; color: #d9deed; font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.resource-inspector pre { max-height: 280px; overflow: auto; margin: 0; padding: 14px; border: 1px solid #252c45; border-radius: 9px; background: #070910; color: #d9deed; font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; }
 /* Object documents (Iceberg metadata JSON) fill the dialog below the header and preview meta. */
+.resource-inspector pre code.hljs { overflow: visible; padding: 0; background: none; }
 .resource-inspector pre.object-text { max-height: calc(81vh - 210px); }
-.resource-inspector pre.object-text::-webkit-scrollbar { width: 11px; height: 11px; }
-.resource-inspector pre.object-text::-webkit-scrollbar-track { background: transparent; }
-.resource-inspector pre.object-text::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px; background: color-mix(in srgb, var(--muted) 55%, transparent); background-clip: content-box; }
-.resource-inspector pre.object-text::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--muted) 80%, transparent); background-clip: content-box; }
 .resource-table-wrap { max-height: min(45vh, 420px); overflow: auto; border: 1px solid #252c45; border-radius: 9px; background: #070910; }
 /* Keep the horizontal bar within reach and visible even with macOS overlay
    scrollbars. Long tables scroll inside this frame rather than hiding the bar
    below the inspector viewport. */
-.resource-table-wrap::-webkit-scrollbar { width: 12px; height: 12px; }
-.resource-table-wrap::-webkit-scrollbar-track { background: #111526; }
-.resource-table-wrap::-webkit-scrollbar-thumb { border: 2px solid #111526; border-radius: 6px; background: #8792b1; }
-.resource-table-wrap::-webkit-scrollbar-thumb:hover { background: #b8c0d6; }
-.resource-table-wrap::-webkit-scrollbar-corner { background: #111526; }
+.resource-inspector pre::-webkit-scrollbar, .resource-table-wrap::-webkit-scrollbar { width: 12px; height: 12px; }
+.resource-inspector pre::-webkit-scrollbar-track, .resource-table-wrap::-webkit-scrollbar-track { background: #111526; }
+.resource-inspector pre::-webkit-scrollbar-thumb, .resource-table-wrap::-webkit-scrollbar-thumb { border: 2px solid #111526; border-radius: 6px; background: #8792b1; }
+.resource-inspector pre::-webkit-scrollbar-thumb:hover, .resource-table-wrap::-webkit-scrollbar-thumb:hover { background: #b8c0d6; }
+.resource-inspector pre::-webkit-scrollbar-corner, .resource-table-wrap::-webkit-scrollbar-corner { background: #111526; }
 @supports not selector(::-webkit-scrollbar) {
-  .resource-table-wrap { scrollbar-color: #8792b1 #111526; scrollbar-width: auto; }
+  .resource-inspector pre, .resource-table-wrap { scrollbar-color: #8792b1 #111526; scrollbar-width: auto; }
 }
 .resource-table { width: 100%; border-collapse: collapse; color: #cbd2e5; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .resource-table th, .resource-table td { max-width: 360px; padding: 8px 10px; border-bottom: 1px solid #1e2438; text-align: left; vertical-align: top; white-space: nowrap; }
-.resource-table th { position: sticky; top: 0; z-index: 1; background: #111526; color: #8792b1; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.resource-table th { position: sticky; top: 0; z-index: 1; background: #111526; color: #8792b1; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; user-select: none; }
+.resource-table th:hover { color: #d9deed; }
+.resource-table th[aria-sort]::after { margin-left: 5px; color: #d9deed; }
+.resource-table th[aria-sort="ascending"]::after { content: "▲"; }
+.resource-table th[aria-sort="descending"]::after { content: "▼"; }
 .resource-table tbody tr:last-child td { border-bottom: 0; }
 .resource-table td { overflow: hidden; text-overflow: ellipsis; }
 .resource-object-link { max-width: 320px; overflow: hidden; padding: 0; border: 0; background: none; color: #7fb0e6; font: inherit; text-align: left; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; white-space: nowrap; text-overflow: ellipsis; }

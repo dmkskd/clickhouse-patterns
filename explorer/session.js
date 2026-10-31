@@ -142,6 +142,33 @@ window.PE.session = (() => {
     let clearedLogSequence = 0;
     let connInfoOpen = false;   // reveal the ClickHouse connection by clicking the Local server pill
 
+    // Clicking a column header sorts that table's rows; clicking again reverses.
+    // Numeric columns sort by value, NULL sorts last either way.
+    resourceInspectorBody.addEventListener("click", (event) => {
+      const th = event.target.closest(".resource-table th");
+      if (!th) return;
+      const table = th.closest("table");
+      const tbody = table.tBodies[0];
+      const index = th.cellIndex;
+      const rows = [...tbody.rows].filter((row) => row.cells.length > index);
+      if (rows.length < 2) return;
+      const direction = th.getAttribute("aria-sort") === "ascending" ? -1 : 1;
+      table.querySelectorAll("th").forEach((cell) => cell.removeAttribute("aria-sort"));
+      th.setAttribute("aria-sort", direction === 1 ? "ascending" : "descending");
+      const key = (row) => {
+        const cell = row.cells[index];
+        return cell.classList.contains("empty-value") ? null : cell.textContent;
+      };
+      const numeric = rows.every((row) => key(row) === null || (key(row).trim() !== "" && !isNaN(Number(key(row)))));
+      const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+      rows.sort((a, b) => {
+        const x = key(a), y = key(b);
+        if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
+        return direction * (numeric ? Number(x) - Number(y) : collator.compare(x, y));
+      });
+      tbody.append(...rows);
+    });
+
     function setVisible(id, visible) {
       $(id).hidden = !visible;
     }
@@ -499,7 +526,7 @@ window.PE.session = (() => {
       resourceInspectorBody.innerHTML = `
         <section class="resource-inspector-section">
           <h3>Table definition</h3>
-          <pre>${esc(payload.create_statement)}</pre>
+          ${sqlBlock(payload.create_statement)}
         </section>
         <section class="resource-inspector-section">
           <h3>${columnsHeading}</h3>
@@ -568,11 +595,14 @@ window.PE.session = (() => {
     }
 
     // Highlight.js escapes its input; the fallback is escaped too.
-    function highlightJson(text) {
-      return window.hljs?.getLanguage("json")
-        ? window.hljs.highlight(text, { language: "json", ignoreIllegals: true }).value
+    function highlight(text, language) {
+      return window.hljs?.getLanguage(language)
+        ? window.hljs.highlight(text, { language, ignoreIllegals: true }).value
         : esc(text);
     }
+    const highlightJson = (text) => highlight(text, "json");
+    const sqlBlock = (text) =>
+      `<pre class="code lang-sql"><code class="hljs language-sql">${highlight(text || "", "sql")}</code></pre>`;
 
     function renderObjectPreviewInspector(payload, resourceKey) {
       const resource = ctx.getSelected()?.graph?.resources?.find((item) => item.key === resourceKey);
@@ -616,7 +646,7 @@ window.PE.session = (() => {
       resourceInspectorBody.innerHTML = `
         <section class="resource-inspector-section">
           <h3>Dictionary definition</h3>
-          <pre>${esc(payload.create_statement)}</pre>
+          ${sqlBlock(payload.create_statement)}
         </section>
         <section class="resource-inspector-section">
           <h3>Load state</h3>
@@ -644,7 +674,7 @@ window.PE.session = (() => {
         return `
         <section class="resource-inspector-section">
           <h3>Table definition${name}</h3>
-          <pre>${esc(table.create_statement)}</pre>
+          ${sqlBlock(table.create_statement)}
         </section>
         <section class="resource-inspector-section">
           <h3>Columns${name}</h3>
