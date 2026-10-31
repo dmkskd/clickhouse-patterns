@@ -50,6 +50,7 @@ wait_for(
     timeout=300,
 )
 result = latency_summary(ch, "walshadow", "public_orders", first, last, started_at)
+result["achieved_rate"] = round(rows / elapsed)
 result["stages"] = stage_summary(ch, "walshadow", "public_orders", first, last, [
     ("Postgres write to commit", "dateDiff('microsecond', updated_at, _commit_ts) / 1000.0"),
     ("Commit to ClickHouse insert (walshadow)", "dateDiff('microsecond', _commit_ts, ch_inserted_at) / 1000.0"),

@@ -23,10 +23,17 @@ def paced(first: int, rows: int, rate: int, rows_per_txn: int, write_transaction
     elapsed seconds.
     """
     start = time.monotonic()
+    reported = start
     for index in range(rows // rows_per_txn):
         offset = first + index * rows_per_txn
         write_transaction(range(offset, offset + rows_per_txn))
-        delay = start + (index + 1) * rows_per_txn / rate - time.monotonic()
+        now = time.monotonic()
+        written = (index + 1) * rows_per_txn
+        if now - reported >= 2:
+            # Progress, so a target rate the source cannot sustain shows early.
+            print(f"wrote {written}/{rows} rows, {written / (now - start):.0f} rows/s (target {rate})")
+            reported = now
+        delay = start + written / rate - now
         if delay > 0:
             time.sleep(delay)
     return time.monotonic() - start

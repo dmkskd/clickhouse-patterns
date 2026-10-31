@@ -22,6 +22,7 @@ window.PE.experiments = (() => {
     let experimentsPattern = null;  // pattern whose experiment forms are rendered
     let experimentsSeen = null;     // finished_at of the last experiment whose runs were fetched
     let experimentRuns = [];
+    const sortState = {};           // experiment name -> { column, direction }
 
     function setVisible(id, visible) {
       $(id).hidden = !visible;
@@ -82,7 +83,17 @@ window.PE.experiments = (() => {
         reset.textContent = "Reset";
         reset.title = "Delete the saved runs and restore the default values";
         reset.addEventListener("click", () => resetExperiments(pattern));
-        form.append(run, reset);
+        const stop = document.createElement("button");
+        stop.type = "button";
+        stop.className = "stop";
+        stop.textContent = "Stop";
+        stop.title = "End the running workload; the config file is restored and the session reloaded";
+        stop.hidden = true;
+        stop.addEventListener("click", async () => {
+          try { await deps.command(apiUrl("api/session/experiment/stop")); }
+          catch (error) { deps.showToast(error.message, "error"); }
+        });
+        form.append(run, stop, reset);
         form.addEventListener("submit", async (event) => {
           event.preventDefault();
           deps.openLogs();
@@ -217,6 +228,19 @@ window.PE.experiments = (() => {
         const declared = new Map((experiment.results || []).map((result) => [result.name, result]));
         const resultNames = [...new Set([...declared.keys(), ...runs.flatMap((run) => Object.keys(run.results))])]
           .filter((name) => name !== "stages");
+        // Sort by the chosen column; the default is newest first.
+        const sort = sortState[experiment.name] || { column: "time", direction: -1 };
+        const sortValue = (run) => {
+          if (sort.column === "time") return new Date(run.started_at).getTime();
+          if (sort.column === "timeline") return runTimeline(run).reduce((sum, segment) => sum + segment.ms, 0);
+          const value = parameterNames.includes(sort.column) ? run.parameters[sort.column] : run.results[sort.column];
+          return value == null || value === "" ? null : Number(value);
+        };
+        runs.sort((a, b) => {
+          const x = sortValue(a), y = sortValue(b);
+          if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;  // empty cells last
+          return sort.direction * (x - y);
+        });
         const timelines = runs.map(runTimeline);
         const longest = Math.max(1, ...timelines.map((segments) => segments.reduce((sum, segment) => sum + segment.ms, 0)));
         const table = document.createElement("table");
@@ -225,6 +249,13 @@ window.PE.experiments = (() => {
         ["time", ...parameterNames, ...resultNames, "timeline"].forEach((name) => {
           const cell = document.createElement("th");
           cell.textContent = declared.get(name)?.label || name;
+          cell.className = "sortable";
+          if (sort.column === name) cell.setAttribute("aria-sort", sort.direction === 1 ? "ascending" : "descending");
+          cell.addEventListener("click", () => {
+            // A new column starts descending (largest first); clicking again reverses.
+            sortState[experiment.name] = { column: name, direction: sort.column === name ? -sort.direction : -1 };
+            renderExperimentResults();
+          });
           if (declared.get(name)?.description) cell.title = declared.get(name).description;
           head.append(cell);
         });
@@ -237,7 +268,9 @@ window.PE.experiments = (() => {
           row.insertCell().append(timelineBar(timelines[runs.indexOf(run)], longest));
         });
         const caption = table.createCaption();
-        caption.textContent = `${runs.length} saved run${runs.length === 1 ? "" : "s"}, newest first`;
+        const sortLabel = sort.column === "time" && sort.direction === -1 ? "newest first"
+          : `sorted by ${declared.get(sort.column)?.label || sort.column}, ${sort.direction === 1 ? "ascending" : "descending"}`;
+        caption.textContent = `${runs.length} saved run${runs.length === 1 ? "" : "s"}, ${sortLabel}`;
         const stageLegend = timelineLegend(timelines.find((segments) => segments.length) || []);
         const legend = document.createElement("dl");
         legend.className = "experiment-legend";
@@ -268,8 +301,12 @@ window.PE.experiments = (() => {
         renderExperimentForms(selected);
         loadExperimentRuns(selected.slug);
       }
-      document.querySelectorAll("#experiments-body .experiment-form button").forEach((button) => {
-        button.disabled = busy;
+      // While this experiment runs, Run gives way to Stop; Reset waits.
+      document.querySelectorAll("#experiments-body .experiment-form").forEach((form) => {
+        form.querySelector("button[type=submit]").hidden = experimenting;
+        form.querySelector("button.stop").hidden = !experimenting;
+        form.querySelector("button.secondary").disabled = busy;
+        form.querySelector("button[type=submit]").disabled = busy;
       });
       const finished = operation?.name === "experiment" && operation.status !== "running" ? operation.finished_at : null;
       if (finished && finished !== experimentsSeen) {

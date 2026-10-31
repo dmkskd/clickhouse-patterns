@@ -50,6 +50,7 @@ wait_for(
     timeout=300,
 )
 result = latency_summary(ch, "test", "orders", first, last, started_at)
+result["achieved_rate"] = round(rows / elapsed)
 # _version is the connector's snowflake ID (2.9.1 ClickHouseStruct.calculateVersion):
 # source.ts_ms, the MySQL commit time in milliseconds, in the top bits since the
 # Twitter epoch (1288834974657).

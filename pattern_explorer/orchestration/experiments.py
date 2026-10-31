@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -26,6 +27,22 @@ from .runner import Reporter
 _ROOT = Path(__file__).resolve().parents[2]
 RESULTS_DIR = _ROOT / ".runtime" / "experiments"
 RESULT_PREFIX = "RESULT "
+
+# The script process of the experiment in progress, so stop_experiment() can end it.
+_process_lock = threading.Lock()
+_process: subprocess.Popen | None = None
+_stop_requested = False
+
+
+def stop_experiment() -> bool:
+    """Terminate the running experiment script; False when none is running."""
+    global _stop_requested
+    with _process_lock:
+        if _process is None or _process.poll() is not None:
+            return False
+        _stop_requested = True
+        _process.terminate()
+        return True
 
 
 def find_experiment(pattern: Pattern, name: str) -> Experiment:
@@ -95,13 +112,24 @@ def _record(run: dict) -> None:
 
 
 def _run_script(pattern: Pattern, experiment: Experiment, args: list[str], report: Reporter) -> dict:
+    global _process, _stop_requested
     path = pattern.dir / experiment.script
     env = {**os.environ, "PYTHONPATH": str(_ROOT), "PYTHONUNBUFFERED": "1"}
     command = [sys.executable, str(path), *args]
-    process = subprocess.Popen(
-        command, cwd=pattern.dir, env=env, text=True, bufsize=1,
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-    )
+    with _process_lock:
+        _stop_requested = False
+        process = _process = subprocess.Popen(
+            command, cwd=pattern.dir, env=env, text=True, bufsize=1,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+    try:
+        return _read_script(process, command, experiment, report)
+    finally:
+        with _process_lock:
+            _process = None
+
+
+def _read_script(process, command, experiment: Experiment, report: Reporter) -> dict:
     assert process.stdout is not None
     result: dict = {}
     for line in process.stdout:
@@ -111,6 +139,8 @@ def _run_script(pattern: Pattern, experiment: Experiment, args: list[str], repor
         elif message:
             report(f"EXPERIMENT {message}")
     if process.wait():
+        if _stop_requested:
+            raise RuntimeError("stopped from the Explorer")
         raise subprocess.CalledProcessError(process.returncode, command)
     if not result:
         raise RuntimeError(f"{experiment.script} printed no `{RESULT_PREFIX.strip()}` line")

@@ -121,6 +121,9 @@ spec:
         - name: rows
           label: Rows
           description: Rows inserted into Postgres during the run.
+        - name: achieved_rate
+          label: Achieved rate (rows/s)
+          description: Rows per second actually written to the source; below the target rate when one connection cannot insert that fast.
         - name: p50_ms
           label: p50 (ms)
           description: Median time from the Postgres write to the ClickHouse insert, per row.

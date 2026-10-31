@@ -51,6 +51,7 @@ wait_for(
     timeout=300,
 )
 result = latency_summary(ch, "test", "orders", first, last, started_at)
+result["achieved_rate"] = round(rows / elapsed)
 # _peerdb_version is the raw record's _peerdb_timestamp: the time PeerDB read
 # the change from the replication stream (nanoseconds). PeerDB records no time
 # for the raw-table insert, so batching, staging and normalize are one stage.

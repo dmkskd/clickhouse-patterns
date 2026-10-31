@@ -52,6 +52,7 @@ wait_for(
     timeout=300,
 )
 result = latency_summary(ch, "test", "orders", first, last, started_at)
+result["achieved_rate"] = round(rows / elapsed)
 # __source_ts_ms: Debezium source.ts_ms (Postgres commit time, millisecond
 # precision). __timestamp: Kafka record timestamp; assumed to be the producer's
 # CreateTime (when Connect sent it), which a negative stage would disprove.

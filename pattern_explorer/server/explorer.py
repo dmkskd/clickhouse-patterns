@@ -17,7 +17,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from ..orchestration import session as sessions
-from ..orchestration.experiments import clear_runs, read_runs, run_experiment
+from ..orchestration.experiments import clear_runs, read_runs, run_experiment, stop_experiment
 from ..rendering.site import (
     EXPLORER_DIR,
     _browser_pattern,
@@ -601,6 +601,11 @@ class ExplorerRequestHandler(SimpleHTTPRequestHandler):
                 if not isinstance(parameters, dict):
                     raise ValueError("`parameters` must be an object")
                 operation = self.controller.experiment(name, parameters)
+            elif route == "/api/session/experiment/stop":
+                if not stop_experiment():
+                    raise ValueError("no experiment is running")
+                self._json(HTTPStatus.OK, {"stopping": True})
+                return
             elif route == "/api/experiments/clear":
                 slug = payload.get("pattern")
                 if not isinstance(slug, str) or not slug:

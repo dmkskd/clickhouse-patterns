@@ -290,6 +290,8 @@ button, input { font: inherit; }
 .experiment-form button { padding: 7px 14px; border: 1px solid #2d765b; border-radius: 7px; background: #153729; color: #8ef0c1; font-size: 11px; cursor: pointer; }
 .experiment-form button.secondary { margin-left: -6px; border-color: var(--line); background: transparent; color: var(--muted); }
 .experiment-form button.secondary:hover { color: var(--text); }
+.experiment-form button.stop { border-color: #653b44; background: transparent; color: #f2a1a8; }
+.experiment-form button[hidden] { display: none; }
 .experiment-form button:disabled { opacity: .45; cursor: wait; }
 /* Timeline: bars share one scale (the longest run), so rows compare directly. */
 .timeline-bar { display: flex; width: 160px; height: 10px; border-radius: 2px; background: color-mix(in srgb, var(--line) 50%, transparent); overflow: hidden; }
@@ -317,6 +319,10 @@ button, input { font: inherit; }
 .experiment-table { border-collapse: collapse; color: var(--text); font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .experiment-table th { padding: 4px 12px 4px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-weight: 600; text-align: left; white-space: nowrap; }
 .experiment-table td { padding: 3px 12px 3px 0; white-space: nowrap; }
+.experiment-table th.sortable { cursor: pointer; user-select: none; }
+.experiment-table th.sortable:hover { color: var(--text); }
+.experiment-table th[aria-sort="ascending"]::after { content: " ▲"; font-size: 9px; }
+.experiment-table th[aria-sort="descending"]::after { content: " ▼"; font-size: 9px; }
 .experiment-table th:not(:first-child), .experiment-table td:not(:first-child) { text-align: right; }
 .pattern-detail > .session-bar:has(> .experiments-panel:not([hidden])) { width: auto; max-width: 1500px; margin-right: max(0px, calc((100% - 1500px) / 2)); }
 
