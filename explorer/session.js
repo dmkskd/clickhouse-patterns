@@ -141,6 +141,17 @@ window.PE.session = (() => {
     let sessionLogsClosed = false;
     let clearedLogSequence = 0;
     let connInfoOpen = false;   // reveal the ClickHouse connection by clicking the Local server pill
+    // An experiment that changes a config file also changes the catalog, and
+    // the live-revision check reloads the page; keep the panel open across it.
+    let experimentsOpen = false;
+    try { experimentsOpen = sessionStorage.getItem("experiments-open") === "1"; } catch (_error) { /* storage blocked */ }
+    function setExperimentsOpen(open) {
+      experimentsOpen = open;
+      try { sessionStorage.setItem("experiments-open", open ? "1" : "0"); } catch (_error) { /* storage blocked */ }
+    }
+    let experimentsPattern = null;  // pattern whose experiment forms are rendered
+    let experimentsSeen = null;     // finished_at of the last experiment whose runs were fetched
+    let experimentRuns = [];
 
     // Clicking a column header sorts that table's rows; clicking again reverses.
     // Numeric columns sort by value, NULL sorts last either way.
@@ -190,6 +201,209 @@ window.PE.session = (() => {
       badge.title = isLocal
         ? "A local Pattern Explorer server is connected, so you can run, validate, and stop patterns and inspect their live tables."
         : "Browsing a generated catalog; running patterns needs the local server.";
+    }
+
+    // Experiments: one form per declared experiment and a table of its past
+    // runs. Forms are built once per pattern so a refresh keeps typed values.
+    async function loadExperimentRuns(slug) {
+      try {
+        const response = await fetch(apiUrl(`api/experiments?pattern=${encodeURIComponent(slug)}`), { cache: "no-store" });
+        if (!response.ok) return;
+        experimentRuns = (await response.json()).runs || [];
+      } catch (_error) {
+        return;
+      }
+      renderExperimentResults();
+    }
+
+    function renderExperimentForms(pattern) {
+      $("experiments-body").replaceChildren(...pattern.experiments.map((experiment) => {
+        const section = document.createElement("section");
+        section.className = "experiment";
+        section.dataset.experiment = experiment.name;
+        const title = document.createElement("h4");
+        title.textContent = experiment.title;
+        const description = document.createElement("p");
+        description.textContent = experiment.description;
+        const form = document.createElement("form");
+        form.className = "experiment-form";
+        // Typed values survive the page reload a config change triggers.
+        const storageKey = `experiment-values:${pattern.slug}:${experiment.name}`;
+        let saved = {};
+        try { saved = JSON.parse(sessionStorage.getItem(storageKey) || "{}"); } catch (_error) { saved = {}; }
+        form.addEventListener("input", () => {
+          try { sessionStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(new FormData(form).entries()))); }
+          catch (_error) { /* storage blocked */ }
+        });
+        experiment.parameters.forEach((parameter) => {
+          const label = document.createElement("label");
+          const name = document.createElement("span");
+          name.textContent = parameter.label || parameter.name;
+          const input = document.createElement("input");
+          Object.assign(input, { type: "number", min: "1", step: Number.isInteger(parameter.default) ? "1" : "any", name: parameter.name, value: saved[parameter.name] ?? parameter.default, required: true });
+          label.append(name, input);
+          if (parameter.config) {
+            const hint = document.createElement("small");
+            hint.textContent = `${parameter.config.file} · a change reloads the session`;
+            label.append(hint);
+          }
+          form.append(label);
+        });
+        const run = document.createElement("button");
+        run.type = "submit";
+        run.className = "primary";
+        run.textContent = "Run";
+        const reset = document.createElement("button");
+        reset.type = "button";
+        reset.className = "secondary";
+        reset.textContent = "Reset";
+        reset.title = "Delete the saved runs and restore the default values";
+        reset.addEventListener("click", () => resetExperiments(pattern));
+        form.append(run, reset);
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          sessionLogsExpanded = true;
+          sessionLogsClosed = false;
+          const parameters = Object.fromEntries(new FormData(form).entries());
+          try { await command(apiUrl("api/session/experiment"), { experiment: experiment.name, parameters }); }
+          catch (error) { showToast(error.message, "error"); }
+        });
+        const results = document.createElement("div");
+        results.className = "experiment-results";
+        section.append(title, description, form, results);
+        return section;
+      }));
+      renderExperimentResults();
+    }
+
+    async function resetExperiments(pattern) {
+      if (!await confirmAction(`Delete the ${experimentRuns.length} saved runs for ${pattern.slug} and restore the default values?`, "Reset")) return;
+      try {
+        await command(apiUrl("api/experiments/clear"), { pattern: pattern.slug });
+      } catch (error) {
+        showToast(error.message, "error");
+        return;
+      }
+      try {
+        pattern.experiments.forEach((experiment) =>
+          sessionStorage.removeItem(`experiment-values:${pattern.slug}:${experiment.name}`));
+      } catch (_error) { /* storage blocked */ }
+      experimentRuns = [];
+      renderExperimentForms(pattern);
+    }
+
+    // Timeline: the run's per-row stages (averages, so they add up to the
+    // average latency), then the average ClickHouse INSERT execution, which is
+    // per statement and drawn hatched.
+    function runTimeline(run) {
+      const segments = (run.results.stages || []).map((stage, index) => ({ label: stage.label, ms: Math.max(0, Number(stage.ms) || 0), index }));
+      if (segments.length && run.results.insert_avg_ms != null) {
+        segments.push({ label: "ClickHouse INSERT execution (avg per statement)", ms: Number(run.results.insert_avg_ms) || 0, index: "insert" });
+      }
+      return segments;
+    }
+
+    function timelineBar(segments, longest) {
+      const bar = document.createElement("div");
+      bar.className = "timeline-bar";
+      if (!segments.length) return bar;
+      bar.title = segments.map((segment) => `${segment.label}: ${segment.ms} ms`).join("\n");
+      segments.forEach((segment) => {
+        const piece = document.createElement("span");
+        piece.className = `timeline-stage stage-${segment.index}`;
+        piece.style.width = `${(segment.ms / longest) * 100}%`;
+        bar.append(piece);
+      });
+      return bar;
+    }
+
+    function timelineLegend(segments) {
+      if (!segments.length) return null;
+      const legend = document.createElement("div");
+      legend.className = "timeline-legend";
+      segments.forEach((segment) => {
+        const item = document.createElement("span");
+        const swatch = document.createElement("i");
+        swatch.className = `timeline-stage stage-${segment.index}`;
+        item.append(swatch, segment.label);
+        legend.append(item);
+      });
+      return legend;
+    }
+
+    function renderExperimentResults() {
+      document.querySelectorAll("#experiments-body .experiment").forEach((section) => {
+        const experiment = experimentsPattern?.experiments.find((item) => item.name === section.dataset.experiment);
+        const target = section.querySelector(".experiment-results");
+        const runs = experimentRuns.filter((run) => run.experiment === section.dataset.experiment).reverse();
+        if (!experiment || !runs.length) {
+          target.textContent = "No saved runs.";
+          return;
+        }
+        const parameterNames = experiment.parameters.map((parameter) => parameter.name);
+        // Declared results first, in manifest order, then any extra keys a script reports.
+        const declared = new Map((experiment.results || []).map((result) => [result.name, result]));
+        const resultNames = [...new Set([...declared.keys(), ...runs.flatMap((run) => Object.keys(run.results))])]
+          .filter((name) => name !== "stages");
+        const timelines = runs.map(runTimeline);
+        const longest = Math.max(1, ...timelines.map((segments) => segments.reduce((sum, segment) => sum + segment.ms, 0)));
+        const table = document.createElement("table");
+        table.className = "experiment-table";
+        const head = table.createTHead().insertRow();
+        ["time", ...parameterNames, ...resultNames, "timeline"].forEach((name) => {
+          const cell = document.createElement("th");
+          cell.textContent = declared.get(name)?.label || name;
+          if (declared.get(name)?.description) cell.title = declared.get(name).description;
+          head.append(cell);
+        });
+        const body = table.createTBody();
+        runs.forEach((run) => {
+          const row = body.insertRow();
+          row.insertCell().textContent = new Date(run.started_at).toLocaleTimeString();
+          parameterNames.forEach((name) => { row.insertCell().textContent = run.parameters[name] ?? ""; });
+          resultNames.forEach((name) => { row.insertCell().textContent = run.results[name] ?? ""; });
+          row.insertCell().append(timelineBar(timelines[runs.indexOf(run)], longest));
+        });
+        const caption = table.createCaption();
+        caption.textContent = `${runs.length} saved run${runs.length === 1 ? "" : "s"}, newest first`;
+        const stageLegend = timelineLegend(timelines.find((segments) => segments.length) || []);
+        const legend = document.createElement("dl");
+        legend.className = "experiment-legend";
+        resultNames.filter((name) => declared.get(name)?.description).forEach((name) => {
+          const term = document.createElement("dt");
+          term.textContent = declared.get(name).label;
+          const definition = document.createElement("dd");
+          definition.textContent = declared.get(name).description;
+          legend.append(term, definition);
+        });
+        target.replaceChildren(table, ...(stageLegend ? [stageLegend] : []), ...(legend.childElementCount ? [legend] : []));
+      });
+    }
+
+    function renderExperiments(selected, active, compact, busy, operation) {
+      // Offered once the session is in steady state; an experiment's own
+      // config reloads pass through "starting" without hiding the panel.
+      const steady = Boolean(active && ["ready", "validated"].includes(active.phase) && !busy);
+      const experimenting = busy && operation?.name === "experiment" && operation.pattern === selected?.slug;
+      const available = Boolean(selected?.experiments?.length && !compact && (steady || experimenting));
+      setVisible("toggle-experiments", available);
+      $("toggle-experiments").setAttribute("aria-expanded", String(experimentsOpen));
+      setVisible("experiments-panel", available && experimentsOpen);
+      if (!available || !experimentsOpen) return;
+      if (experimentsPattern?.slug !== selected.slug) {
+        experimentsPattern = selected;
+        experimentRuns = [];
+        renderExperimentForms(selected);
+        loadExperimentRuns(selected.slug);
+      }
+      document.querySelectorAll("#experiments-body .experiment-form button").forEach((button) => {
+        button.disabled = busy;
+      });
+      const finished = operation?.name === "experiment" && operation.status !== "running" ? operation.finished_at : null;
+      if (finished && finished !== experimentsSeen) {
+        experimentsSeen = finished;
+        loadExperimentRuns(selected.slug);
+      }
     }
 
     function progressMessages(snapshot) {
@@ -265,7 +479,7 @@ window.PE.session = (() => {
         $("session-detail").innerHTML = selected
           ? `Running locally starts this pattern's services, loads its data, validates the result, and allows live table inspection from this page. ${hint}`
           : `Diagrams, trade-offs, references, and SVG export work without a local service. Running the patterns end to end needs the local explorer. ${hint}`;
-        ["start-session", "validate-session", "stop-session", "view-running", "toggle-session-logs"].forEach((id) => setVisible(id, false));
+        ["start-session", "validate-session", "stop-session", "view-running", "toggle-session-logs", "toggle-experiments", "experiments-panel"].forEach((id) => setVisible(id, false));
         setVisible("explorer-mode", true);   // "Static catalog" indicator (no local server)
         $("session-links").replaceChildren();
         setVisible("session-progress", false);
@@ -453,6 +667,7 @@ window.PE.session = (() => {
         progress.append(hint);
       }
       progress.scrollTop = progress.scrollHeight;
+      renderExperiments(selected, active, compact, busy, operation);
       $("clear-session-logs").hidden = messages.length === 0;
       $("copy-session-logs").hidden = messages.length === 0;
       // Status text truncates with an ellipsis to keep the control row on one
@@ -894,6 +1109,14 @@ window.PE.session = (() => {
     $("toggle-session-logs").addEventListener("click", () => {
       sessionLogsExpanded = !sessionLogsExpanded;
       sessionLogsClosed = !sessionLogsExpanded;
+      renderSession();
+    });
+    $("toggle-experiments").addEventListener("click", () => {
+      setExperimentsOpen(!experimentsOpen);
+      renderSession();
+    });
+    $("close-experiments").addEventListener("click", () => {
+      setExperimentsOpen(false);
       renderSession();
     });
     $("close-session-logs").addEventListener("click", () => {

@@ -142,6 +142,54 @@ spec:
     postgres:
       init: source-init.sql
 
+  experiments:
+    - name: replication-latency
+      title: Replication latency
+      description: Inserts orders into Postgres at a fixed rate and measures the time from the Postgres write to the ClickHouse insert.
+      script: experiments/replication_latency.py
+      parameters:
+        - name: flush_timeout_ms
+          label: walshadow flush timeout (ms)
+          default: 1000
+          config: {file: config/latency.toml, key: flush_timeout_ms}
+        - name: rate
+          label: Rows per second
+          default: 50
+        - name: rows_per_txn
+          label: Rows per transaction
+          default: 1
+        - name: duration
+          label: Duration (s)
+          default: 10
+      results:
+        - name: rows
+          label: Rows
+          description: Rows inserted into Postgres during the run.
+        - name: p50_ms
+          label: p50 (ms)
+          description: Median time from the Postgres write to the ClickHouse insert, per row.
+        - name: p95_ms
+          label: p95 (ms)
+          description: 95th percentile of the same per-row time.
+        - name: p99_ms
+          label: p99 (ms)
+          description: 99th percentile of the same per-row time.
+        - name: max_ms
+          label: Max (ms)
+          description: Slowest row.
+        - name: parts
+          label: Parts
+          description: New data parts in walshadow.public_orders during the run (system.part_log).
+        - name: inserts
+          label: INSERTs
+          description: INSERT statements ClickHouse executed into walshadow.public_orders during the run (system.query_log).
+        - name: insert_avg_ms
+          label: INSERT avg (ms)
+          description: Average ClickHouse execution time of those INSERT statements.
+        - name: insert_max_ms
+          label: INSERT max (ms)
+          description: Slowest of those INSERT statements.
+
   steps:
     # walshadow `init` runs at container start and creates the walshadow
     # database and public_orders; load.py applies changes on the source Postgres server.

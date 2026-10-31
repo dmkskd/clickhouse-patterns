@@ -66,6 +66,7 @@
               <div class="session-actions">
                 <button id="toggle-session-logs" type="button" aria-controls="session-progress" aria-expanded="false" hidden>Show logs</button>
                 <button id="view-running" type="button" hidden>View running</button>
+                <button id="toggle-experiments" type="button" aria-controls="experiments-panel" aria-expanded="false" hidden>Experiments</button>
                 <button id="validate-session" type="button" hidden>Validate</button>
                 <button id="stop-session" class="danger" type="button" hidden>Stop session</button>
                 <button id="start-session" class="primary" type="button" hidden><span class="play" aria-hidden="true">▶</span>Launch pattern</button>
@@ -77,6 +78,10 @@
           <div id="session-progress" class="session-progress" hidden>
             <div class="progress-heading"><span>Startup &amp; validation log</span><span id="operation-state"></span><div class="progress-actions"><button id="copy-session-logs" class="progress-icon" type="button" aria-label="Copy log" title="Copy log" hidden>⧉</button><button id="clear-session-logs" class="progress-icon" type="button" aria-label="Clear log" title="Clear log" hidden>⌫</button><button id="close-session-logs" class="progress-close" type="button" aria-label="Close log">×</button></div></div>
             <ol id="progress-events"></ol>
+          </div>
+          <div id="experiments-panel" class="session-progress experiments-panel" hidden>
+            <div class="progress-heading"><span>Experiments</span><div class="progress-actions"><button id="close-experiments" class="progress-close" type="button" aria-label="Close experiments">×</button></div></div>
+            <div id="experiments-body"></div>
           </div>
       </div>
 

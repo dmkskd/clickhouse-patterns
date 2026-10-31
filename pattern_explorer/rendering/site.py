@@ -115,6 +115,7 @@ def _browser_pattern(pattern) -> dict:
         "tags": pattern.tags,
         "profiles": pattern.profiles,
         "runnable": pattern.runnable,
+        "experiments": [experiment.model_dump() for experiment in pattern.experiments],
         "graphSource": pattern.graph,
         "graph": (
             {

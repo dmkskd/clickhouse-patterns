@@ -146,6 +146,57 @@ class Verify(BaseModel):
     expected: str | None = "expected.txt"
 
 
+class ExperimentConfig(BaseModel):
+    """A `key = value` (or `key: value`) line in a pattern config file."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    file: str
+    key: str
+
+
+class ExperimentParameter(BaseModel):
+    """One input of an experiment.
+
+    With `config`, the value is written to that config file line and the session
+    is reloaded before the script runs. Without it, the value is passed to the
+    script as `--<name> <value>`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    label: str = ""
+    default: int | float
+    config: ExperimentConfig | None = None
+
+
+class ExperimentResult(BaseModel):
+    """How the Explorer labels and explains one key of the script's RESULT line."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    label: str
+    description: str = ""
+
+
+class Experiment(BaseModel):
+    """An on-demand workload run against the active session.
+
+    The script prints progress lines and one final `RESULT {json}` line.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
+    title: str
+    description: str = ""
+    script: str
+    parameters: list[ExperimentParameter] = Field(default_factory=list)
+    results: list[ExperimentResult] = Field(default_factory=list)
+
+
 def _version_key(text: str) -> tuple[int, ...]:
     """The numeric components of a ClickHouse version string, e.g. 26.8.1.918."""
     return tuple(int(part) for part in re.findall(r"\d+", text))
@@ -346,6 +397,9 @@ class Pattern(BaseModel):
 
     ready_when: list[Expectation] = Field(default_factory=list)
 
+    # On-demand workloads, run from `just experiment` or the Explorer.
+    experiments: list[Experiment] = Field(default_factory=list)
+
     # Filled in by the loader, not read from YAML.
     slug: str = ""
     dir: Path = Path()
@@ -456,6 +510,12 @@ class Pattern(BaseModel):
             for item in self.service_config:
                 if not (self.dir / item.file).is_file():
                     missing.append(item.file)
+            for experiment in self.experiments:
+                if not (self.dir / experiment.script).is_file():
+                    missing.append(experiment.script)
+                for parameter in experiment.parameters:
+                    if parameter.config and not (self.dir / parameter.config.file).is_file():
+                        missing.append(parameter.config.file)
             if missing:
                 raise ValueError(
                     f"referenced file(s) not found in {self.dir}: "
@@ -641,7 +701,7 @@ _METADATA_KEYS = frozenset({
     "superseded_by", "superseded_since", "tradeoffs",
 })
 _SPEC_KEYS = frozenset({
-    "mode", "profiles", "driver_node", "requires", "services", "steps",
+    "mode", "profiles", "driver_node", "requires", "services", "steps", "experiments",
 })
 _STEP_KEYS = frozenset({"schema", "load", "ready_when", "verify"})
 
@@ -687,7 +747,7 @@ def _normalize_manifest(manifest: Path, data: dict) -> dict:
             f"{_manifest_path(manifest)}: unknown spec key(s) {sorted(unknown_spec)}; "
             f"known: {sorted(_SPEC_KEYS)}"
         )
-    for key in ("mode", "profiles", "driver_node", "requires"):
+    for key in ("mode", "profiles", "driver_node", "requires", "experiments"):
         if key in spec:
             flat[key] = spec[key]
 

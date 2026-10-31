@@ -276,6 +276,41 @@ button, input { font: inherit; }
 .pattern-detail > .session-bar:has(> .session-progress:not([hidden])) { width: auto; max-width: 1500px; margin-right: max(0px, calc((100% - 1500px) / 2)); }
 .pattern-detail > .session-bar .session-panel { padding: 8px 14px; }
 .pattern-detail > .session-bar .session-progress { padding: 11px 14px 14px; }
+/* Experiments sit in the sticky session bar, so the panel scrolls on its own. */
+.experiments-panel #experiments-body { max-height: 46vh; overflow-y: auto; }
+.experiment { margin-top: 10px; }
+.experiment h4 { margin: 0; color: var(--text); font-size: 13px; }
+.experiment p { margin: 3px 0 0; color: var(--muted); font-size: 11.5px; white-space: pre-line; }
+.experiment-form { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 14px; margin-top: 10px; }
+/* Line up with the inputs: label line (11px * 1.5) plus the 3px gap. */
+.experiment-form button { margin-top: 19.5px; }
+.experiment-form label { display: grid; gap: 3px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.experiment-form input { width: 120px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.experiment-form small { color: var(--dim); font-size: 10px; }
+.experiment-form button { padding: 7px 14px; border: 1px solid #2d765b; border-radius: 7px; background: #153729; color: #8ef0c1; font-size: 11px; cursor: pointer; }
+.experiment-form button.secondary { margin-left: -6px; border-color: var(--line); background: transparent; color: var(--muted); }
+.experiment-form button.secondary:hover { color: var(--text); }
+.experiment-form button:disabled { opacity: .45; cursor: wait; }
+/* Timeline: bars share one scale (the longest run), so rows compare directly. */
+.timeline-bar { display: flex; width: 160px; height: 10px; border-radius: 2px; background: color-mix(in srgb, var(--line) 50%, transparent); overflow: hidden; }
+.timeline-stage { display: block; height: 100%; }
+.timeline-stage.stage-0 { background: var(--blue); }
+.timeline-stage.stage-1 { background: var(--violet); }
+.timeline-stage.stage-2 { background: var(--amber); }
+.timeline-stage.stage-insert { background: repeating-linear-gradient(135deg, var(--green) 0 3px, color-mix(in srgb, var(--green) 45%, transparent) 3px 6px); }
+.timeline-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; color: var(--muted); font-size: 11px; }
+.timeline-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.timeline-legend i { width: 10px; height: 10px; border-radius: 2px; }
+.experiment-legend { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 10px 0 0; color: var(--muted); font-size: 11px; }
+.experiment-legend dt { color: var(--text); font-weight: 600; }
+.experiment-legend dd { margin: 0; }
+.experiment-table caption { padding-bottom: 6px; color: var(--dim); font: 11px system-ui, sans-serif; text-align: left; }
+.experiment-results { margin-top: 12px; color: var(--dim); font-size: 11px; overflow-x: auto; }
+.experiment-table { border-collapse: collapse; color: var(--text); font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.experiment-table th { padding: 4px 12px 4px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-weight: 600; text-align: left; white-space: nowrap; }
+.experiment-table td { padding: 3px 12px 3px 0; white-space: nowrap; }
+.experiment-table th:not(:first-child), .experiment-table td:not(:first-child) { text-align: right; }
+.pattern-detail > .session-bar:has(> .experiments-panel:not([hidden])) { width: auto; max-width: 1500px; margin-right: max(0px, calc((100% - 1500px) / 2)); }
 
   radial-gradient(circle at 80% 22%, #293a6a55 0, transparent 34%),
   linear-gradient(135deg, #101526 0, #0b0e19 58%, #0a0c15 100%); }

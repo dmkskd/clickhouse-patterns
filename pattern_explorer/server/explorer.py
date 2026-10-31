@@ -17,6 +17,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from ..orchestration import session as sessions
+from ..orchestration.experiments import clear_runs, read_runs, run_experiment
 from ..rendering.site import (
     EXPLORER_DIR,
     _browser_pattern,
@@ -360,6 +361,17 @@ class ExplorerController:
             lambda: validate_and_record_session(report=self._reporter(active.slug)),
         )
 
+    def experiment(self, name: str, parameters: dict) -> dict:
+        active = sessions.read_session(required=True)
+        pattern = sessions.load_session_pattern(active)
+        return self._start_operation(
+            "experiment",
+            active.slug,
+            lambda: run_experiment(
+                pattern, name, parameters, report=self._reporter(active.slug)
+            ),
+        )
+
     def stop(self) -> dict:
         active = sessions.read_session(required=True)
         if active.owner == "terminal":
@@ -464,6 +476,10 @@ class ExplorerRequestHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/session":
             self._json(HTTPStatus.OK, self.controller.snapshot())
+            return
+        if route == "/api/experiments":
+            slug = parse_qs(parsed_request.query).get("pattern", [""])[0]
+            self._json(HTTPStatus.OK, {"runs": read_runs(slug) if slug else []})
             return
         if route == "/api/resource":
             if not self._authorized():
@@ -577,6 +593,22 @@ class ExplorerRequestHandler(SimpleHTTPRequestHandler):
                 if not isinstance(slug, str) or not slug:
                     raise ValueError("`pattern` is required")
                 operation = self.controller.switch(slug)
+            elif route == "/api/session/experiment":
+                name = payload.get("experiment")
+                parameters = payload.get("parameters") or {}
+                if not isinstance(name, str) or not name:
+                    raise ValueError("`experiment` is required")
+                if not isinstance(parameters, dict):
+                    raise ValueError("`parameters` must be an object")
+                operation = self.controller.experiment(name, parameters)
+            elif route == "/api/experiments/clear":
+                slug = payload.get("pattern")
+                if not isinstance(slug, str) or not slug:
+                    raise ValueError("`pattern` is required")
+                load_pattern(slug)  # rejects unknown slugs before touching files
+                clear_runs(slug)
+                self._json(HTTPStatus.OK, {"cleared": slug})
+                return
             elif route == "/api/session/validate":
                 operation = self.controller.validate()
             elif route == "/api/session/stop":
