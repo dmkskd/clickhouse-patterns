@@ -38,6 +38,7 @@ const css = source("app.css");
 const util = source("util.js");
 const diagram = source("diagram.js");
 const topology = source("topology.js");
+const experiments = source("experiments.js");
 const session = source("session.js");
 const js = source("app.js");
 const shell = source("index.html");
@@ -54,6 +55,7 @@ if (args.single) {
   html = replaceOnce(html, '<script src="util.js"></script>', inlineScript(util));
   html = replaceOnce(html, '<script src="diagram.js"></script>', inlineScript(diagram));
   html = replaceOnce(html, '<script src="topology.js"></script>', inlineScript(topology));
+  html = replaceOnce(html, '<script src="experiments.js"></script>', inlineScript(experiments));
   html = replaceOnce(html, '<script src="session.js"></script>', inlineScript(session));
   html = replaceOnce(html, '<script src="app.js"></script>', inlineScript(js));
   fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -66,6 +68,7 @@ if (args.single) {
   fs.copyFileSync(path.join(explorerDir, "util.js"), path.join(outputDir, "util.js"));
   fs.copyFileSync(path.join(explorerDir, "diagram.js"), path.join(outputDir, "diagram.js"));
   fs.copyFileSync(path.join(explorerDir, "topology.js"), path.join(outputDir, "topology.js"));
+  fs.copyFileSync(path.join(explorerDir, "experiments.js"), path.join(outputDir, "experiments.js"));
   fs.copyFileSync(path.join(explorerDir, "session.js"), path.join(outputDir, "session.js"));
   fs.copyFileSync(path.join(explorerDir, "app.js"), path.join(outputDir, "app.js"));
   const catalogOutput = path.join(outputDir, "catalog.js");
