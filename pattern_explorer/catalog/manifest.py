@@ -33,7 +33,7 @@ class PatternManifestError(ValueError):
 
     Pydantic reports the failing field but not the file it came from, and a
     caller loading every manifest at once cannot tell which of them broke. This
-    carries the path in the first line of the message, where terse error
+    puts the path in the first line of the message, where terse error
     reporting can still see it.
     """
 
@@ -534,7 +534,7 @@ class GroupLink(BaseModel):
 
 
 class GroupExternalLink(BaseModel):
-    """A curated external reading link on a group landing page, with a
+    """A curated external reading link on a group page, with a
     one-line note saying why it is worth reading."""
 
     model_config = ConfigDict(extra="forbid")

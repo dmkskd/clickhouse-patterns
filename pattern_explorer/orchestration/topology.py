@@ -1,7 +1,7 @@
 """Physical view of a pattern: the Compose services behind its profiles.
 
 `pattern.yaml` describes the logical architecture (tables, views, flows). The
-container wiring that carries it lives in `compose/stack.yml`, selected by the
+container wiring that runs it is defined in `compose/stack.yml`, selected by the
 pattern's profiles. Rather than restate that wiring in the manifest, this module
 reads it back from Compose itself:
 

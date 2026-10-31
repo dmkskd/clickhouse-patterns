@@ -281,7 +281,7 @@ def _cmd_describe(_args) -> int:
             description = textwrap.fill(
                 _plain_description(pattern.description),
                 width=max(20, reading_width - 4),
-                # Descriptions carry relative pattern links; hyphen breaking would
+                # Descriptions contain relative pattern links; hyphen breaking would
                 # split `../cdc-postgres-peerdb/` across lines.
                 break_on_hyphens=False,
                 break_long_words=False,

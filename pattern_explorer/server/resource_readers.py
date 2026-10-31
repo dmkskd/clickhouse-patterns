@@ -101,7 +101,7 @@ class ClickHouseReader:
         if object_key:
             raise ValueError("ClickHouse table inspection does not accept an object key")
         resource = context.resource
-        # `table=` carries the real name when the graph id is something else, as
+        # `table=` holds the real name when the graph id is something else, as
         # it is when one table is drawn once per replica.
         declared = resource.properties.get("table") or resource.name
         requested_database = None

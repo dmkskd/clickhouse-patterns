@@ -16,26 +16,33 @@ def next_id(source, table: str, floor: int = 1_000_000) -> int:
     return max(current, floor)
 
 
-def insert_at_rate(source, table: str, first: int, rows: int, rate: int, rows_per_txn: int) -> float:
-    """Insert ids first..first+rows-1, `rows_per_txn` per transaction, at `rate` rows/s.
+def paced(first: int, rows: int, rate: int, rows_per_txn: int, write_transaction) -> float:
+    """Call `write_transaction(ids)` once per transaction, at `rate` rows/s overall.
 
-    Returns the elapsed seconds.
+    `ids` is the slice of first..first+rows-1 for that transaction. Returns the
+    elapsed seconds.
     """
     start = time.monotonic()
-    transactions = rows // rows_per_txn
-    current = first
-    for index in range(transactions):
-        with source.transaction():
-            for _ in range(rows_per_txn):
-                source.execute(
-                    f"INSERT INTO {table} (id, customer, amount) VALUES (%s, 'probe', 0)",
-                    (current,),
-                )
-                current += 1
+    for index in range(rows // rows_per_txn):
+        offset = first + index * rows_per_txn
+        write_transaction(range(offset, offset + rows_per_txn))
         delay = start + (index + 1) * rows_per_txn / rate - time.monotonic()
         if delay > 0:
             time.sleep(delay)
     return time.monotonic() - start
+
+
+def insert_at_rate(source, table: str, first: int, rows: int, rate: int, rows_per_txn: int) -> float:
+    """Postgres (psycopg, autocommit): insert probe orders at a fixed rate."""
+    def write(ids):
+        with source.transaction():
+            for row_id in ids:
+                source.execute(
+                    f"INSERT INTO {table} (id, customer, amount) VALUES (%s, 'probe', 0)",
+                    (row_id,),
+                )
+
+    return paced(first, rows, rate, rows_per_txn, write)
 
 
 def latency_summary(ch, database: str, table: str, first: int, last: int, started_at) -> dict:

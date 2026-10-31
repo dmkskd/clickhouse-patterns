@@ -46,7 +46,7 @@ from .resource_readers import RESOURCE_READERS, ReaderContext
 
 _BROWSER_SOURCES = (
     "index.html", "app.css", "util.js", "diagram.js", "topology.js",
-    "session.js", "app.js",
+    "experiments.js", "session.js", "app.js",
 )
 
 _revision_cache: tuple[tuple[tuple[str, int, int], ...], str] | None = None

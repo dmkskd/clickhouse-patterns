@@ -33,7 +33,7 @@ _DROPPED_KEYS = ("category", "flow")
 
 
 def _move(src: CommentedMap, key: str, dst: CommentedMap, dst_key: str | None = None) -> None:
-    """Move one key between maps, carrying the comments attached to it."""
+    """Move one key between maps, with the comments attached to it."""
     if key not in src:
         return
     target = dst_key or key
@@ -45,7 +45,7 @@ def _move(src: CommentedMap, key: str, dst: CommentedMap, dst_key: str | None = 
 
 
 def _indent_orphan_comments(text: str) -> str:
-    """Re-indent top-level comment lines that landed inside metadata:/spec:.
+    """Re-indent top-level comment lines that ended up inside metadata:/spec:.
 
     ruamel emits moved comments at their original column (0), which scatters
     them across the nested sections they moved into. A comment documents the key
