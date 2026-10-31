@@ -139,7 +139,7 @@ def test_static_site_contains_catalog_and_declares_capability_mode(tmp_path: Pat
     assert html_path == (tmp_path / "index.html").resolve()
     assert {path.name for path in tmp_path.iterdir()} == {
         "index.html", "app.css", "app.js", "catalog.js",
-        "util.js", "diagram.js", "topology.js", "session.js",
+        "util.js", "diagram.js", "topology.js", "experiments.js", "session.js",
     }
     html = html_path.read_text()
     app = (tmp_path / "app.js").read_text()
@@ -240,7 +240,7 @@ def test_connector_delivery_claims_link_precise_upstream_documentation():
 
 
 def test_peerdb_graph_compiles_operation_labels_and_hover_note():
-    """The browser catalog carries the edge labels and hover note the JS renders."""
+    """The browser catalog contains the edge labels and hover note the JS renders."""
     pattern = _catalog_pattern("cdc-postgres-peerdb")
     labels = {edge["label"] for edge in pattern["graph"]["connections"] if edge["label"]}
 
