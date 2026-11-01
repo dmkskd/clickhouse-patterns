@@ -18,9 +18,9 @@ metadata:
 
     ### Following a row through the pipeline
 
-    In **Contents**, `replication_latency_ms` measures the time from a row write in Postgres to its insert in ClickHouse. Snapshot and delete rows show `NULL`.
+    In **Contents**, `replication_latency_ms` measures the time from a row write in Postgres to its insert in ClickHouse. Initial-load and delete rows show `NULL`.
 
-    Lower latency: reduce `[ch] flush_timeout_ms` in `config/latency.toml` (default: 1,000 ms) to flush small batches sooner, at the cost of more ClickHouse inserts.
+    Reducing `[ch] flush_timeout_ms` in `config/latency.toml` (default: 1,000 ms) flushes smaller batches sooner: latency drops, and ClickHouse receives more INSERTs and creates more parts.
 
     Edit the files in `config/`, then run `just reload` to rebuild the demo with the new settings. The **Configuration** panel displays the files.
 
@@ -38,12 +38,12 @@ metadata:
     ### Operational constraints
 
     - **walshadow** parses the physical WAL format and the heap tuple layout, and both can change in any **Postgres** major version. The daemon runs only on major versions that **walshadow** has audited, and the **walshadow** image must match the source **Postgres** server's major version ([limitations](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/limitations.md)).
+    - Failover, major-version upgrades and some schema changes on the source **Postgres** server interrupt **walshadow**'s replication; it resumes after the steps described in the [failover](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/failover.md) and [limitations](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/limitations.md) pages.
     - Physical replication connections are available on self-managed **Postgres** and on ClickHouse Managed Postgres. Managed services such as [RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PostgreSQL.Replication.ReadReplicas.Configuration.html) document physical replication for their own read replicas and logical replication for external consumers; the [walshadow launch post](https://clickhouse.com/blog/introducing-walshadow) states that most managed **Postgres** services keep physical WAL internal.
     - Each replicated table needs a primary key, `REPLICA IDENTITY USING INDEX` or `REPLICA IDENTITY FULL`. The destination `ORDER BY` uses that row key ([destination tables](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/destination-tables.md)).
     - The source **Postgres** server needs a `pg_hba` rule for replication connections and `max_wal_senders` of at least 2: one WAL sender streams WAL while another serves the base backup ([getting started](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/getting-started.md)).
-    - WAL retention is guaranteed only with a physical slot (`slot=` in the source URL) or a WAL archive (`s3://`, `gs://`, `file://`). Without either, **Postgres** recycles WAL older than `wal_keep_size`, and **walshadow** stops if it falls further behind. This pattern configures neither, and `wal_keep_size` is 0 ([configuration](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/configuration.md), [switchover](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/failover.md)).
-    - **walshadow** stores its resume LSN (log sequence number: the position in the WAL) in `manifest.toml` in its spill directory and writes it with an atomic rename. The manifest, the shadow data directory and the filtered WAL must survive a restart together; losing them forces a full initial load. The `walshadow` service in this pattern mounts no volume, so recreating its container discards that state ([operations](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/operations.md), [recovery](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/architecture/recovery.md)).
-    - After an unplanned failover of the source **Postgres** server, **walshadow** stops replicating and ClickHouse must be reloaded ([unsupported failover](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/failover.md#unsupported-failover)). A planned switchover needs no reload ([switchover](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/failover.md)).
+    - **Postgres** removes or recycles WAL files once a checkpoint has written their changes to the data files and every replication slot and the WAL archiver have moved past them; replication stops if **walshadow** still needed them ([configuration](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/configuration.md)).
+    - **walshadow** stores its WAL position (LSN) and its shadow **Postgres** in a local directory, which must survive restarts; losing it forces a full initial load ([operations](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/operations.md)).
 
     ### walshadow internals
 
@@ -98,7 +98,7 @@ metadata:
     88      07 00 08                 main data: offset number 7, flags 08 (contains new tuple)
     ```
 
-    The table appears only as relfilenode 16403 (bytes 36-39). A variable-length value (`varchar`, `text`) starts with a length byte ([variable-length storage](https://www.postgresql.org/docs/16/storage-toast.html)). Bytes 52-87 are the column values without names or types: splitting them into `id`, `customer`, `amount` and the rest requires the table definition.
+    The table appears only as relfilenode 16403 (bytes 36-39). The short `varchar` and `text` values in this record start with a one-byte length header; longer, compressed or out-of-line values use other headers ([variable-length storage](https://www.postgresql.org/docs/16/storage-toast.html)). Bytes 52-87 are the column values without names or types: splitting them into `id`, `customer`, `amount` and the rest requires the table definition.
 
     :::
 
@@ -109,7 +109,7 @@ metadata:
     **walshadow** creates a **shadow Postgres** instance and loads existing table rows in separate steps:
 
     - On first start, **walshadow** streams a base backup of the source **Postgres** server and writes only its catalog and recovery files to the **shadow Postgres** data directory.
-    - Existing rows are loaded per table, as set by `initial_load`. `copy` reads the visible rows with `COPY` in a SQL snapshot at a selected LSN. `base_backup` reads heap pages from a new base backup of the whole cluster; `object_store` reads them from the latest wal-g backup plus archived WAL ([table selection](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/table-selection.md)).
+    - Existing rows are loaded per table, as set by `initial_load`. `copy` reads the visible rows with `COPY` after the table is selected; COPY rows get the selection LSN as `_lsn`, and WAL changes committed later carry a higher `_lsn` and replace them. `base_backup` reads heap pages from a new base backup of the whole cluster; `object_store` reads them from the latest wal-g backup plus archived WAL ([table selection](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/table-selection.md)).
     - Changes committed after the load LSN are inserted from WAL with a higher `_lsn` ([initial loads](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/architecture/bootstrap.md)).
 
     In this pattern, `walshadow-stream init --table public orders` sets `initial_load = "copy"` for `public.orders`.
@@ -295,7 +295,7 @@ spec:
         value: 4
         node: ch
         timeout: 120
-      - query: SELECT count() FROM walshadow.public_orders FINAL WHERE id = 1 AND replication_stage = 'Initial snapshot' AND ch_inserted_at IS NULL AND replication_latency_ms IS NULL
+      - query: SELECT count() FROM walshadow.public_orders FINAL WHERE id = 1 AND replication_stage = 'Initial load' AND ch_inserted_at IS NULL AND replication_latency_ms IS NULL
         value: 1
         node: ch
         timeout: 120

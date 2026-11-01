@@ -47,7 +47,7 @@ def add_latency_columns(table: str) -> None:
         f"ALTER TABLE walshadow.{table} ADD COLUMN replication_stage"
         " LowCardinality(String) DEFAULT if("
         "_commit_ts = toDateTime64('2000-01-01 00:00:00', 6, 'UTC'),"
-        " 'Initial snapshot', 'CDC change') AFTER _commit_ts"
+        " 'Initial load', 'CDC change') AFTER _commit_ts"
     )
     ch.command(
         f"ALTER TABLE walshadow.{table} ADD COLUMN ch_inserted_at"
@@ -102,7 +102,7 @@ with psycopg.connect(
         f" DEFAULT {LATENCY_EXPRESSION} AFTER status,"
         " MODIFY COLUMN replication_stage LowCardinality(String) DEFAULT if("
         "_commit_ts = toDateTime64('2000-01-01 00:00:00', 6, 'UTC'),"
-        " 'Initial snapshot', 'CDC change') AFTER replication_latency_ms"
+        " 'Initial load', 'CDC change') AFTER replication_latency_ms"
     )
 
     # Each statement commits separately, producing another CDC row version.

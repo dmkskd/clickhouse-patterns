@@ -28,6 +28,23 @@ wait_for(
 )
 result = latency_summary(ch, "test", "orders", first, last, started_at)
 result["achieved_rate"] = round(args.rows / elapsed)
+# PeerDB's two ClickHouse statements per batch, averaged over the run: the raw
+# table load from S3, and normalize into test.orders (which also runs the
+# test.orders_transformed materialized view).
+raw_load, normalize = ch.query(
+    "SELECT"
+    " round(avgIf(dateDiff('microsecond', query_start_time_microseconds, event_time_microseconds),"
+    "  has(tables, '_table_function.s3')) / 1000.0, 1),"
+    " round(avgIf(dateDiff('microsecond', query_start_time_microseconds, event_time_microseconds),"
+    "  has(tables, 'test.orders')) / 1000.0, 1)"
+    " FROM system.query_log"
+    " WHERE type = 'QueryFinish' AND query_kind = 'Insert'"
+    " AND has(tables, 'test._peerdb_raw_two_table_mirror')"
+    " AND event_time_microseconds >= {started_at:DateTime64(6)}",
+    parameters={"started_at": started_at},
+).result_rows[0]
+result["raw_load_ms"] = raw_load
+result["normalize_ms"] = normalize
 # _peerdb_version is the raw record's _peerdb_timestamp: the time PeerDB read
 # the change from the replication stream (nanoseconds; flow/connectors/utils/
 # stream.go at v0.37.0). PeerDB records no time for the raw-table insert, so

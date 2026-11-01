@@ -158,14 +158,14 @@ spec:
           label: parts
           group: ClickHouse
           description: New data parts in test.orders during the run (system.part_log).
-        - name: async_buffer_avg_ms
-          label: buffer avg
+        - name: raw_load_ms
+          label: raw load
           group: ClickHouse
-          description: Average time in ms an INSERT's data waited in ClickHouse's async insert buffer until the flush (system.asynchronous_insert_log). Empty when the INSERTs are synchronous.
-        - name: async_buffer_max_ms
-          label: buffer max
+          description: Average time in ms of PeerDB's per-batch INSERT into the raw table from S3 (system.query_log).
+        - name: normalize_ms
+          label: normalize
           group: ClickHouse
-          description: Longest async insert buffer wait, in ms.
+          description: Average time in ms of PeerDB's per-batch INSERT … SELECT from the raw table into test.orders, including the test.orders_transformed materialized view (system.query_log).
         - name: part_write_avg_ms
           label: write avg
           group: ClickHouse
