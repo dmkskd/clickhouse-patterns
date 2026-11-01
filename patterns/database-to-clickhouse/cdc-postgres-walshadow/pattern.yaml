@@ -61,10 +61,10 @@ metadata:
 
     A heap WAL record identifies a tuple by relfilenode, block number and item offset. Insert and update records contain the new tuple in heap page format. Decoding the record requires the table catalog as of the record's LSN. **walshadow** runs a **shadow Postgres** in its container and streams WAL to it with user-table records replaced by no-ops. The shadow replays catalog changes and by default stores only catalog data. **walshadow** reads table descriptors from the shadow at the replay LSN, decodes rows from the original WAL records, and inserts them into ClickHouse over the Native protocol.
 
-    **walshadow** restores the shadow and loads existing table rows separately:
+    **walshadow** creates the **shadow Postgres** instance and loads existing table rows in separate steps:
 
-    - The shadow is restored from a base backup of the source **Postgres** server when its data directory is empty.
-    - Existing rows are loaded per table, as set by `initial_load`. `copy` reads them with `COPY` over a SQL connection at a selected LSN. `base_backup` and `object_store` read them from backup heap pages ([table selection](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/table-selection.md)).
+    - On first start, **walshadow** streams a base backup of the source **Postgres** server and writes only its catalog and recovery files to the **shadow Postgres** data directory.
+    - Existing rows are loaded per table, as set by `initial_load`. `copy` reads the visible rows with `COPY` in a SQL snapshot at a selected LSN. `base_backup` reads heap pages from a new base backup of the whole cluster; `object_store` reads them from the latest wal-g backup plus archived WAL ([table selection](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/table-selection.md)).
     - Changes committed after the load LSN are inserted from WAL with a higher `_lsn` ([initial loads](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/architecture/bootstrap.md)).
 
     In this pattern, `walshadow-stream init --table public orders` sets `initial_load = "copy"` for `public.orders`.

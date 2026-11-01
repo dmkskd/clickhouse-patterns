@@ -51,9 +51,12 @@ from .resource_readers import RESOURCE_READERS, ReaderContext
 
 
 
+# index.html, app.css and the page's local scripts in load order (catalog.js is
+# generated). tests/test_site.py checks this against index.html.
 _BROWSER_SOURCES = (
     "index.html", "app.css", "util.js", "diagram.js", "topology.js",
-    "experiments.js", "session.js", "app.js",
+    "experiments.js", "session.js", "catalog-data.js", "guide.js",
+    "catalog-view.js", "pattern-page.js", "architecture.js", "app.js",
 )
 
 _revision_cache: tuple[tuple[tuple[str, int, int], ...], str] | None = None

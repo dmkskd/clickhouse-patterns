@@ -6,6 +6,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 
 from . import config_overlay
 from . import session as sessions
@@ -91,6 +92,46 @@ def _emit(report: Reporter | None, message: str) -> None:
         report(message)
 
 
+def _report_config(pattern: Pattern, report: Reporter | None) -> None:
+    """Name each config file the session uses and whether it is an experiment copy."""
+    if not report:
+        return
+    mounts = (
+        [(item.file, item.node) for item in pattern.clickhouse_config]
+        + [(item.file, item.service) for item in pattern.service_init]
+        + [(item.file, f"{item.service}:{item.target}") for item in pattern.service_config]
+    )
+    # Loaders can also read config/ files from the host (PeerDB mirror.sql,
+    # Kafka Connect JSON); those go through config_overlay.config_file().
+    mounted = {file for file, _ in mounts}
+    config_dir = pattern.dir / "config"
+    read = [
+        (name, f"read by {pattern.load}")
+        for name in (str(path.relative_to(pattern.dir)) for path in sorted(config_dir.rglob("*")) if path.is_file())
+        if name not in mounted
+    ] if config_dir.is_dir() else []
+    for file, where in mounts + read:
+        copy = config_overlay.effective(pattern.dir, pattern.slug, file) != pattern.dir / file
+        report(f"CONFIG  {file} → {where}" + (" · experiment copy" if copy else ""))
+    # The settings the manifest declares as experiment parameters, read from the
+    # file the session actually uses.
+    keys = dict.fromkeys(
+        (parameter.config.file, parameter.config.key)
+        for experiment in pattern.experiments for parameter in experiment.parameters
+        if parameter.config is not None
+    )
+    def value_in(path: Path, key: str) -> str:
+        value = config_overlay.read_config(path.read_text(), key) if path.is_file() else None
+        return value if value is not None else "(not set)"
+
+    for file, key in keys:
+        path = config_overlay.effective(pattern.dir, pattern.slug, file)
+        line = f"CONFIG  {file} · {key} = {value_in(path, key)}"
+        if path != pattern.dir / file:
+            line += f" (experiment value; the pattern file sets {value_in(pattern.dir / file, key)})"
+        report(line)
+
+
 def _start_session(
     pattern: Pattern,
     report: Reporter | None = None,
@@ -107,6 +148,7 @@ def _start_session(
     current = sessions.new_session(pattern, owner=owner)
     sessions.write_session(current)
     try:
+        _report_config(pattern, report)
         dc = docker(pattern.profiles, pattern)
         compose_up(dc, pattern.profiles, report=report)
         prepare_pattern(pattern, report=report)

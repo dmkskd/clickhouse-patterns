@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -94,3 +95,28 @@ def clear(slug: str | None = None) -> bool:
     existed = directory.is_dir()
     shutil.rmtree(directory, ignore_errors=True)
     return existed
+
+
+def _config_line(key: str) -> re.Pattern:
+    # `key = value` (TOML, SQL options), `key: value` (YAML) or `"key": "value"`
+    # (JSON), keeping quotes, trailing commas and comments.
+    return re.compile(
+        rf'^(\s*"?{re.escape(key)}"?\s*[:=]\s*"?)([^\s#,"]+)(.*)$', re.MULTILINE
+    )
+
+
+def read_config(text: str, key: str) -> str | None:
+    """The value on the first `key` line of `text`, or None when there is none."""
+    match = _config_line(key).search(text)
+    return match.group(2) if match else None
+
+
+def edit_config(text: str, key: str, value) -> str | None:
+    """`text` with the first `key` line set to `value`, or None when it already is."""
+    line = _config_line(key)
+    match = line.search(text)
+    if match is None:
+        raise ValueError(f"no `{key}` line")
+    if match.group(2) == str(value):
+        return None
+    return line.sub(lambda m: f"{m.group(1)}{value}{m.group(3)}", text, count=1)

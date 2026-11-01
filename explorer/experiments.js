@@ -20,9 +20,9 @@ window.PE.experiments = (() => {
       try { sessionStorage.setItem("experiments-open", open ? "1" : "0"); } catch (_error) { /* storage blocked */ }
     }
     let experimentsPattern = null;  // pattern whose experiment forms are rendered
-    let experimentsSeen = null;     // finished_at of the last experiment whose runs were fetched
+    let experimentsSeen = null;     // finished_at of the last operation whose runs were fetched
     let experimentRuns = [];
-    let appliedValues = {};         // experiment config values the running session uses
+    let appliedValues = null;       // experiment config values the running session uses; null until fetched
     const sortState = {};           // experiment name -> { column, direction }
 
     function setVisible(id, visible) {
@@ -38,11 +38,32 @@ window.PE.experiments = (() => {
         // A slow response for a pattern the reader has left must not replace the current runs.
         if (experimentsPattern?.slug !== slug) return;
         experimentRuns = data.runs || [];
-        appliedValues = data.applied || {};
+        const applied = data.applied || {};
+        if (JSON.stringify(applied) !== JSON.stringify(appliedValues)) {
+          appliedValues = applied;
+          showSessionConfig();
+        }
       } catch (_error) {
         return;
       }
       renderExperimentResults();
+    }
+
+    // A config field shows the value the session runs with: the experiment
+    // value when one is applied, otherwise the pattern's committed default. A
+    // new session starts from the committed files, so its fields go back to
+    // the defaults. Script arguments keep what was typed.
+    function showSessionConfig() {
+      document.querySelectorAll("#experiments-body .experiment").forEach((section) => {
+        const experiment = experimentsPattern?.experiments.find((item) => item.name === section.dataset.experiment);
+        const form = section.querySelector(".experiment-form");
+        if (!experiment || !form) return;
+        experiment.parameters.filter((parameter) => parameter.config).forEach((parameter) => {
+          const input = form.elements.namedItem(parameter.name);
+          if (input) input.value = String(appliedValues[parameter.name] ?? parameter.default);
+        });
+        form.dispatchEvent(new Event("input"));  // saves the shown values
+      });
     }
 
     function renderExperimentForms(pattern) {
@@ -100,7 +121,7 @@ window.PE.experiments = (() => {
         stop.type = "button";
         stop.className = "stop";
         stop.textContent = "Stop";
-        stop.title = "End the running workload; the config file is restored and the session reloaded";
+        stop.title = "End the running workload; the session keeps its experiment config";
         stop.hidden = true;
         stop.addEventListener("click", async () => {
           try { await deps.command(apiUrl("api/session/experiment/stop")); }
@@ -232,7 +253,7 @@ window.PE.experiments = (() => {
     // the session keeps them after a run. Say so, and offer the way back.
     function renderAppliedValues() {
       const note = $("experiments-applied");
-      const entries = Object.entries(appliedValues);
+      const entries = Object.entries(appliedValues || {});
       note.hidden = !entries.length;
       if (!entries.length) return;
       const parameters = (experimentsPattern?.experiments || []).flatMap((experiment) => experiment.parameters);
@@ -370,6 +391,7 @@ window.PE.experiments = (() => {
       if (experimentsPattern?.slug !== selected.slug) {
         experimentsPattern = selected;
         experimentRuns = [];
+        appliedValues = null;
         renderExperimentForms(selected);
         loadExperimentRuns(selected.slug);
       }
@@ -381,8 +403,9 @@ window.PE.experiments = (() => {
         form.querySelector("button.secondary").disabled = busy;
         form.querySelector("button[type=submit]").disabled = busy;
       });
-      const finished = ["experiment", "restore config"].includes(operation?.name) && operation.status !== "running"
-        ? operation.finished_at : null;
+      // Any finished operation can change the session's config: an experiment
+      // or a reload applies values, a stop and a new start drop them.
+      const finished = operation && operation.status !== "running" ? operation.finished_at : null;
       if (finished && finished !== experimentsSeen) {
         experimentsSeen = finished;
         loadExperimentRuns(selected.slug);

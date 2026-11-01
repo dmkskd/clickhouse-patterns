@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config_overlay
+from .config_overlay import edit_config
 from . import session as sessions
 from ..catalog.manifest import Experiment, Pattern
 from .lifecycle import reload_session
@@ -79,25 +80,6 @@ def resolve_values(experiment: Experiment, overrides: dict) -> dict[str, int | f
             raise ValueError(f"{name} must be at least {parameter.min}")
         values[name] = value
     return values
-
-
-def _config_line(key: str) -> re.Pattern:
-    # `key = value` (TOML, SQL options), `key: value` (YAML) or `"key": "value"`
-    # (JSON), keeping quotes, trailing commas and comments.
-    return re.compile(
-        rf'^(\s*"?{re.escape(key)}"?\s*[:=]\s*"?)([^\s#,"]+)(.*)$', re.MULTILINE
-    )
-
-
-def edit_config(text: str, key: str, value) -> str | None:
-    """`text` with the first `key` line set to `value`, or None when it already is."""
-    line = _config_line(key)
-    match = line.search(text)
-    if match is None:
-        raise ValueError(f"no `{key}` line")
-    if match.group(2) == str(value):
-        return None
-    return line.sub(lambda m: f"{m.group(1)}{value}{m.group(3)}", text, count=1)
 
 
 def _results_path(slug: str) -> Path:

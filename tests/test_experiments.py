@@ -17,7 +17,8 @@ from pattern_explorer.catalog.manifest import (
 )
 import yaml
 
-from pattern_explorer.orchestration import config_overlay, experiments, stack
+from pattern_explorer.orchestration import config_overlay, experiments, lifecycle, stack
+from pattern_explorer.orchestration import session as sessions
 from pattern_explorer.orchestration.experiments import edit_config, resolve_values
 from pattern_explorer.orchestration.probe import paced, result_line
 from pattern_explorer.rendering.site import _browser_pattern
@@ -121,6 +122,44 @@ def test_compose_mounts_the_copy_instead_of_the_pattern_file(tmp_path, monkeypat
     assert any(str(pattern.dir / "config/latency.toml") in volume for volume in mounted())
     config_overlay.replace(pattern.slug, {"config/latency.toml": "[ch]\nflush_timeout_ms = 200\n"}, {"flush_timeout_ms": 200})
     assert any(str(tmp_path / "copies" / pattern.slug / "config/latency.toml") in volume for volume in mounted())
+
+
+def test_a_new_session_starts_from_the_committed_config(tmp_path, monkeypatch):
+    monkeypatch.setattr(config_overlay, "OVERLAY_ROOT", tmp_path / "copies")
+    monkeypatch.setattr(sessions, "STATE_FILE", tmp_path / "session.json")
+    seen: list[dict] = []
+
+    class Started(Exception):
+        pass
+
+    # The containers come up inside _start_session; what it sees is what they mount.
+    def start_containers(pattern, **_kwargs):
+        seen.append(config_overlay.applied_values(pattern.slug))
+        raise Started
+
+    monkeypatch.setattr(lifecycle, "_start_session", start_containers)
+    pattern = load_pattern("cdc-postgres-walshadow")
+    for start in (lifecycle.start_session, lifecycle.run_session):
+        config_overlay.replace(pattern.slug, {"config/latency.toml": "[ch]\nflush_timeout_ms = 200\n"}, {"flush_timeout_ms": 200})
+        with pytest.raises(Started):
+            start(pattern)
+    assert seen == [{}, {}]
+
+
+def test_session_start_logs_each_config_file_and_its_source(tmp_path, monkeypatch):
+    monkeypatch.setattr(config_overlay, "OVERLAY_ROOT", tmp_path / "copies")
+    pattern = load_pattern("cdc-postgres-peerdb")
+    lines: list[str] = []
+    lifecycle._report_config(pattern, lines.append)
+    assert "CONFIG  config/mirror.sql → read by load.py" in lines
+    committed = config_overlay.read_config((pattern.dir / "config/mirror.sql").read_text(), "sync_interval")
+    assert f"CONFIG  config/mirror.sql · sync_interval = {committed}" in lines
+    config_overlay.replace(pattern.slug, {"config/mirror.sql": "sync_interval = 5"}, {"sync_interval": 5})
+    lines.clear()
+    lifecycle._report_config(pattern, lines.append)
+    assert "CONFIG  config/mirror.sql → read by load.py · experiment copy" in lines
+    assert (f"CONFIG  config/mirror.sql · sync_interval = 5 "
+            f"(experiment value; the pattern file sets {committed})") in lines
 
 
 def test_result_line_turns_nan_into_null():

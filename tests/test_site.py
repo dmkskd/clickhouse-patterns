@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -12,6 +13,16 @@ from pattern_explorer.rendering.site import (
     write_explorer_catalog,
 )
 from pattern_explorer.catalog.manifest import discover_patterns, load_pattern
+from pattern_explorer.server.explorer import _BROWSER_SOURCES
+
+EXPLORER = Path(__file__).parents[1] / "explorer"
+
+
+def _local_scripts() -> list[str]:
+    """The page's checked-in scripts in load order: no CDN URLs, no generated catalog.js."""
+    html = (EXPLORER / "index.html").read_text()
+    names = re.findall(r'<script src="([^":]+\.js)"></script>', html)
+    return [name for name in names if name != "catalog.js"]
 
 
 GRAPH = """\
@@ -120,12 +131,12 @@ def test_pattern_graph_builds_browser_site(tmp_path: Path):
     assert 'id="diagram-modal"' in html
     assert (tmp_path / "app.js").exists()
     assert (tmp_path / "app.css").exists()
-    app = (tmp_path / "app.js").read_text()
+    architecture = (tmp_path / "architecture.js").read_text()
     session = (tmp_path / "session.js").read_text()
     util = (tmp_path / "util.js").read_text()
     assert 'apiUrl("api/session")' in session
-    assert "setDiagramZoom" in app
-    assert "openDiagramModal" in app
+    assert "setDiagramZoom" in architecture
+    assert "openDiagramModal" in architecture
     assert "data-clickhouse-resource-key" in util
     catalog = (tmp_path / "catalog.js").read_text()
     assert "topic:events(partitions=4)" in catalog
@@ -138,15 +149,14 @@ def test_static_site_contains_catalog_and_declares_capability_mode(tmp_path: Pat
 
     assert html_path == (tmp_path / "index.html").resolve()
     assert {path.name for path in tmp_path.iterdir()} == {
-        "index.html", "app.css", "app.js", "catalog.js",
-        "util.js", "diagram.js", "topology.js", "experiments.js", "session.js",
+        "index.html", "app.css", "catalog.js", *_local_scripts(),
     }
     html = html_path.read_text()
     app = (tmp_path / "app.js").read_text()
     session = (tmp_path / "session.js").read_text()
     assert ">Static catalog</span>" in html
     assert 'control.mode === "local"' in session
-    assert "renderCatalogHome" in app
+    assert "renderCatalogHome" in (tmp_path / "catalog-view.js").read_text()
     assert "showCatalogHome" in app
     assert 'window.addEventListener("popstate"' in app
     assert "Diagrams, trade-offs, references, and SVG export work without a local service" in session
@@ -228,7 +238,14 @@ def test_javascript_packer_builds_one_self_contained_file(tmp_path: Path):
     assert "Static catalog" in html
     assert '<link rel="stylesheet" href="app.css"' not in html
     assert '<script src="catalog.js"' not in html
-    assert '<script src="app.js"' not in html
+    for name in _local_scripts():
+        assert f'<script src="{name}"' not in html
+    assert '<script src="https://cdn.jsdelivr.net/' in html
+
+
+def test_server_watches_every_browser_source():
+    assert list(_BROWSER_SOURCES) == ["index.html", "app.css", *_local_scripts()]
+    assert all((EXPLORER / name).is_file() for name in _BROWSER_SOURCES)
 
 
 def test_connector_delivery_claims_link_precise_upstream_documentation():
