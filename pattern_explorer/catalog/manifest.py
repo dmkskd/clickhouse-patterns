@@ -160,15 +160,33 @@ class ExperimentParameter(BaseModel):
 
     With `config`, the value is written to that config file line and the session
     is reloaded before the script runs. Without it, the value is passed to the
-    script as `--<name> <value>`.
+    script as `--<name-with-dashes> <value>`.
+
+    A number takes any value at or above `min` (no bound when unset). `choices`
+    restricts the value to a list and is required for a text default, so a
+    free-form string never reaches a config file or a command line.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     label: str = ""
-    default: int | float
+    short: str = ""      # results-table column header; falls back to name
+    group: str = ""      # results-table header group (pipeline stage), e.g. "Postgres"
+    default: int | float | str
+    choices: list[int | float | str] = Field(default_factory=list)
+    min: int | float | None = None
     config: ExperimentConfig | None = None
+
+    @model_validator(mode="after")
+    def _check_value_rules(self) -> "ExperimentParameter":
+        if isinstance(self.default, str) and not self.choices:
+            raise ValueError(f"parameter {self.name!r}: a text default needs `choices`")
+        if self.choices and self.default not in self.choices:
+            raise ValueError(f"parameter {self.name!r}: default {self.default!r} is not in choices")
+        if self.min is not None and (isinstance(self.default, str) or self.default < self.min):
+            raise ValueError(f"parameter {self.name!r}: `min` needs a numeric default at or above it")
+        return self
 
 
 class ExperimentResult(BaseModel):
@@ -178,13 +196,17 @@ class ExperimentResult(BaseModel):
 
     name: str
     label: str
+    group: str = ""      # results-table header group, e.g. "Latency (ms)"
     description: str = ""
 
 
 class Experiment(BaseModel):
     """An on-demand workload run against the active session.
 
-    The script prints progress lines and one final `RESULT {json}` line.
+    The script prints progress lines and one final `RESULT {json}` line. The
+    JSON maps result names to numbers or text; an optional `stages` list of
+    {label, ms, extra} draws the per-run timeline (`extra` marks a segment that
+    is shown but not summed into `timeline_total`).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -195,6 +217,10 @@ class Experiment(BaseModel):
     script: str
     parameters: list[ExperimentParameter] = Field(default_factory=list)
     results: list[ExperimentResult] = Field(default_factory=list)
+    # Left-to-right order of the results-table groups (pipeline order).
+    groups: list[str] = Field(default_factory=list)
+    # Timeline tooltip label for the sum of the stages a script reports.
+    timeline_total: str = "Total"
 
 
 def _version_key(text: str) -> tuple[int, ...]:

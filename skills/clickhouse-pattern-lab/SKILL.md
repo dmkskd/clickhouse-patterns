@@ -162,6 +162,43 @@ Make changes in repository files, never through MCP:
 4. Run `just validate`.
 5. Inspect the rebuilt runtime through MCP when evidence is needed.
 
+## Run Experiments
+
+Some runnable patterns declare on-demand experiments under `spec.experiments`
+(see the pattern-author skill's `pattern-model.md`, "Experiments"). An
+experiment writes to the session, so run one only when the user asks.
+
+```bash
+just experiment                                        # list the active pattern's experiments and parameters
+just experiment replication-latency rate=500 duration=5
+```
+
+Before running:
+
+- Check `just status` and the Explorer: only one operation runs at a time, and
+  a user may have an experiment running from the browser. Running another
+  workload alongside it corrupts both measurements.
+- A parameter with a `config` file (marked `[config/...]` in the listing) is
+  applied through a copy of that file under `.runtime/experiment-config/<slug>/`
+  and a session reload, which destroys the session's data. Confirm with the user
+  before changing one during an inspection they care about. The pattern file
+  stays as committed.
+- After such a run the session keeps the experiment values; `just experiment`
+  lists them. Report runtime evidence with that in mind: `config/` in the
+  pattern folder no longer describes the running session. `just reload` goes
+  back to the committed config.
+- Script parameters (`rate`, `rows_per_txn`, `duration` in the CDC experiments)
+  only write new rows to the source; they do not reload.
+
+During and after a run:
+
+- Progress lines appear in the terminal or the Explorer log. **Stop** in the
+  Explorer ends the workload script; a running config reload cannot be
+  interrupted.
+- The result prints as JSON and is saved to `.runtime/experiments/<slug>.jsonl`,
+  so it appears in the Explorer's results table. Report the numbers with the
+  parameters used.
+
 ## Recover A Broken Environment
 
 `just reset` is the recovery path when the session record and the running

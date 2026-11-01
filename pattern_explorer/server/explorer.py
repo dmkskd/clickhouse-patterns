@@ -17,7 +17,13 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from ..orchestration import session as sessions
-from ..orchestration.experiments import clear_runs, read_runs, run_experiment, stop_experiment
+from ..orchestration import config_overlay
+from ..orchestration.experiments import (
+    clear_runs,
+    read_runs,
+    run_experiment,
+    stop_experiment,
+)
 from ..rendering.site import (
     EXPLORER_DIR,
     _browser_pattern,
@@ -26,6 +32,7 @@ from ..rendering.site import (
 )
 from ..orchestration.lifecycle import (
     get_session_status,
+    reload_session,
     run_session,
     stop_session,
     validate_and_record_session,
@@ -228,7 +235,7 @@ class ExplorerController:
         infrastructure_changing = bool(
             operation
             and operation.get("status") == "running"
-            and operation.get("name") in {"run", "stop", "switch"}
+            and operation.get("name") in {"run", "stop", "switch", "experiment", "restore config"}
         )
         status = get_session_status(probe_reachability=not infrastructure_changing)
         slug = (
@@ -372,6 +379,15 @@ class ExplorerController:
             ),
         )
 
+    def restore_config(self) -> dict:
+        """Reload with the pattern's committed config, dropping experiment values."""
+        active = sessions.read_session(required=True)
+        return self._start_operation(
+            "restore config",
+            active.slug,
+            lambda: reload_session(report=self._reporter(active.slug)),
+        )
+
     def stop(self) -> dict:
         active = sessions.read_session(required=True)
         if active.owner == "terminal":
@@ -479,7 +495,14 @@ class ExplorerRequestHandler(SimpleHTTPRequestHandler):
             return
         if route == "/api/experiments":
             slug = parse_qs(parsed_request.query).get("pattern", [""])[0]
-            self._json(HTTPStatus.OK, {"runs": read_runs(slug) if slug else []})
+            try:
+                self._json(HTTPStatus.OK, {
+                    "runs": read_runs(slug) if slug else [],
+                    # Experiment config values the running session uses, if any.
+                    "applied": config_overlay.applied_values(slug) if slug else {},
+                })
+            except ValueError as exc:
+                self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             return
         if route == "/api/resource":
             if not self._authorized():
@@ -603,9 +626,14 @@ class ExplorerRequestHandler(SimpleHTTPRequestHandler):
                 operation = self.controller.experiment(name, parameters)
             elif route == "/api/session/experiment/stop":
                 if not stop_experiment():
-                    raise ValueError("no experiment is running")
+                    raise ValueError(
+                        "no experiment workload is running; a config reload cannot be"
+                        " interrupted, so wait for the workload to start"
+                    )
                 self._json(HTTPStatus.OK, {"stopping": True})
                 return
+            elif route == "/api/session/experiment/restore":
+                operation = self.controller.restore_config()
             elif route == "/api/experiments/clear":
                 slug = payload.get("pattern")
                 if not isinstance(slug, str) or not slug:

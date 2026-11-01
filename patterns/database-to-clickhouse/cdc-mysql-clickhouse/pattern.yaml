@@ -126,52 +126,79 @@ spec:
       parameters:
         - name: poll_interval_ms
           label: Debezium poll interval (ms)
+          short: poll ms
+          group: Altinity connector
           default: 500
+          min: 1
           config: {file: config/connector.yaml, key: poll.interval.ms}
         - name: buffer_flush_time_ms
           label: Sink buffer flush time (ms)
+          short: flush ms
+          group: Altinity connector
           default: 30
+          min: 1
           config: {file: config/connector.yaml, key: buffer.flush.time.ms}
         - name: rate
           label: Rows per second
+          short: requested/s
+          group: MySQL
           default: 50
+          min: 1
         - name: rows_per_txn
           label: Rows per transaction
+          short: rows/txn
+          group: MySQL
           default: 1
+          min: 1
         - name: duration
           label: Duration (s)
+          short: secs
+          group: MySQL
           default: 10
+          min: 1
       results:
         - name: rows
-          label: Rows
+          label: rows
+          group: MySQL
           description: Rows inserted into MySQL during the run.
         - name: achieved_rate
-          label: Achieved rate (rows/s)
-          description: Rows per second actually written to the source; below the target rate when one connection cannot insert that fast.
+          label: actual/s
+          group: MySQL
+          description: Rows per second actually written to MySQL; below the requested rate when one connection cannot insert that fast.
         - name: p50_ms
-          label: p50 (ms)
+          label: p50
+          group: End to end (ms)
           description: Median time from the MySQL write to the ClickHouse insert, per row.
         - name: p95_ms
-          label: p95 (ms)
+          label: p95
+          group: End to end (ms)
           description: 95th percentile of the same per-row time.
         - name: p99_ms
-          label: p99 (ms)
+          label: p99
+          group: End to end (ms)
           description: 99th percentile of the same per-row time.
         - name: max_ms
-          label: Max (ms)
+          label: max
+          group: End to end (ms)
           description: Slowest row.
         - name: parts
-          label: Parts
+          label: parts
+          group: ClickHouse
           description: New data parts in test.orders during the run (system.part_log).
         - name: inserts
           label: INSERTs
+          group: ClickHouse
           description: INSERT statements ClickHouse executed into test.orders during the run (system.query_log).
         - name: insert_avg_ms
-          label: INSERT avg (ms)
+          label: avg ms
+          group: ClickHouse
           description: Average ClickHouse execution time of those INSERT statements.
         - name: insert_max_ms
-          label: INSERT max (ms)
+          label: max ms
+          group: ClickHouse
           description: Slowest of those INSERT statements.
+      groups: [MySQL, Altinity connector, ClickHouse, End to end (ms)]
+      timeline_total: Average row latency (write to insert)
 
   steps:
     # ch-cdc initialization provides orders_existing before the connector starts;

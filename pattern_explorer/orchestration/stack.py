@@ -10,6 +10,8 @@ from typing import Callable, TYPE_CHECKING
 from python_on_whales import DockerClient
 import yaml
 
+from . import config_overlay
+
 if TYPE_CHECKING:
     from ..catalog.manifest import Pattern
 
@@ -29,7 +31,7 @@ def pattern_compose_file(pattern: "Pattern") -> Path | None:
         return None
     services: dict[str, dict] = {}
     for item in pattern.clickhouse_config:
-        source = (pattern.dir / item.file).resolve()
+        source = config_overlay.effective(pattern.dir, pattern.slug, item.file).resolve()
         target = f"/etc/clickhouse-server/{item.directory}/99-pattern-{item.destination_name}"
         service = services.setdefault(item.node, {"volumes": [], "depends_on": {}})
         service["volumes"].append(f"{source}:{target}:ro")
@@ -41,7 +43,8 @@ def pattern_compose_file(pattern: "Pattern") -> Path | None:
         service = services.setdefault(item.service, {"volumes": [], "depends_on": {}})
         service["volumes"].append(f"{source}:{target}:ro")
     for item in pattern.service_config:
-        source = (pattern.dir / item.file).resolve()
+        # An experiment's edited copy, when one exists, replaces the pattern file.
+        source = config_overlay.effective(pattern.dir, pattern.slug, item.file).resolve()
         service = services.setdefault(item.service, {"volumes": [], "depends_on": {}})
         service["volumes"].append(f"{source}:{item.target}:ro")
     path = RUNTIME_OVERRIDES / f"{pattern.slug}.yaml"

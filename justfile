@@ -124,6 +124,11 @@ status *flags:
 validate *flags:
     uv run python -m pattern_explorer validate {{flags}}
 
+# List the active pattern's experiments, or run one: just experiment <name> [parameter=value ...]
+[group('Patterns')]
+experiment *args:
+    uv run python -m pattern_explorer experiment {{args}}
+
 # Rebuild the active pattern from its current source.
 [group('Patterns')]
 reload:

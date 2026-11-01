@@ -11,6 +11,7 @@ from typing import Callable
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from ..catalog.manifest import Pattern, check_clickhouse_version
+from . import config_overlay
 from .nodes import connect
 from .sql import query_as_text, run_sql_file
 from .stack import stack
@@ -41,6 +42,8 @@ def _run_load(pattern: Pattern, report: Reporter | None = None) -> None:
             **os.environ,
             "PYTHONPATH": str(_REPO_ROOT),
             "PYTHONUNBUFFERED": "1",
+            # Loaders that read config/ find an experiment's edited copy through this.
+            **config_overlay.loader_env(pattern.slug),
         }
         if report is None:
             subprocess.run(

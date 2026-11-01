@@ -701,6 +701,40 @@ def _cmd_reload(_args) -> int:
     return 0
 
 
+def _cmd_experiment(args) -> int:
+    from .orchestration import config_overlay
+    from .orchestration.experiments import run_experiment
+
+    active = sessions.read_session(required=True)
+    pattern = sessions.load_session_pattern(active)
+    if not pattern.experiments:
+        print(f"{pattern.slug} declares no experiments")
+        return 1
+    if not args.name:
+        for experiment in pattern.experiments:
+            print(f"{experiment.name}  {experiment.title}")
+            for parameter in experiment.parameters:
+                rule = (f"one of {parameter.choices}" if parameter.choices
+                        else f"min {parameter.min}" if parameter.min is not None else "")
+                where = f"  [{parameter.config.file}]" if parameter.config else ""
+                print(f"  {parameter.name}={parameter.default}  {rule}{where}".rstrip())
+        applied = config_overlay.applied_values(pattern.slug)
+        if applied:
+            values = ", ".join(f"{name}={value}" for name, value in applied.items())
+            print(f"the session runs with experiment values: {values} (just reload restores the committed config)")
+        print("run:  just experiment <name> [parameter=value ...]")
+        return 0
+    overrides = {}
+    for item in args.values:
+        key, sep, value = item.partition("=")
+        if not sep:
+            raise ValueError(f"expected parameter=value, got {item!r}")
+        overrides[key] = value
+    run = run_experiment(pattern, args.name, overrides, report=_progress)
+    print(json.dumps(run["results"], indent=2))
+    return 0
+
+
 def _cmd_stop(_args) -> int:
     active = stop_session(report=_progress)
     print(f"STOPPED  {active.slug}")
@@ -973,6 +1007,11 @@ def main() -> int:
     sp.add_argument("--update", action="store_true",
                     help="regenerate expected.txt from verify.sql output, keeping any leading '#' annotation lines")
     sp.set_defaults(func=lambda a: _guard(lambda: _cmd_validate(a), None))
+
+    sp = sub.add_parser("experiment", help="list or run an experiment of the active pattern")
+    sp.add_argument("name", nargs="?", help="experiment name; omit to list them")
+    sp.add_argument("values", nargs="*", help="parameter=value overrides")
+    sp.set_defaults(func=lambda a: _guard(lambda: _cmd_experiment(a), None))
 
     sub.add_parser("reload", help="rebuild the active pattern from source").set_defaults(
         func=lambda a: _guard(lambda: _cmd_reload(a), None)

@@ -46,6 +46,7 @@ def test_python_load_output_is_streamed_to_reporter(tmp_path):
         'print("reprocessing done (committed offset 8000)")\n'
     )
     pattern = SimpleNamespace(
+        slug="streamed-load",
         load="load.py",
         dir=tmp_path,
         path=lambda name: tmp_path / name,

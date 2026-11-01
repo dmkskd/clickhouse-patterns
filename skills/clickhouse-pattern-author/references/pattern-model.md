@@ -208,6 +208,116 @@ native configuration files in `config/` in its Configuration panel. The loader
 must actually read these files; discovery only displays them. Run `just reload`
 and `just validate` after editing them. Reload rebuilds the demo and clears data.
 
+### Experiments (`spec.experiments`)
+
+An experiment is a script in the pattern folder that runs on demand against the
+active session: a workload, a setting change, a fault. It never runs as part of
+`just run`, `just test` or `just validate`. Readers start it from the
+Explorer's **Experiments** panel or with `just experiment <name>
+[parameter=value ...]`; each completed run adds one row to the panel's results
+table. The four database CDC patterns have a `replication-latency` experiment
+to copy from.
+
+```yaml
+spec:
+  experiments:
+    - name: replication-latency
+      title: Replication latency
+      description: Inserts orders into Postgres at a fixed rate and measures the time from the Postgres write to the ClickHouse insert.
+      script: experiments/replication_latency.py
+      parameters:
+        - name: flush_timeout_ms              # config parameter: written to the file, then the session reloads
+          label: walshadow flush timeout (ms)
+          short: flush ms
+          group: walshadow
+          default: 1000
+          min: 1
+          config: {file: config/latency.toml, key: flush_timeout_ms}
+        - name: rate                          # script parameter: passed as --rate 50
+          label: Rows per second
+          short: requested/s
+          group: Postgres
+          default: 50
+          min: 1
+      results:
+        - name: p50_ms
+          label: p50
+          group: End to end (ms)
+          description: Median time from the Postgres write to the ClickHouse insert, per row.
+      groups: [Postgres, walshadow, ClickHouse, End to end (ms)]
+      timeline_total: Average row latency (write to insert)
+```
+
+Parameters:
+
+- `name` (snake case), `label` (the form field), `short` (the table column) and
+  `group` (the table header group).
+- `default` is a number or text. A number accepts any value at or above `min`;
+  set `min` explicitly, because there is no implicit lower bound. Text needs
+  `choices`, rendered as a dropdown, so a free-form string never reaches a
+  config file or a command line. `choices` also works for numbers.
+- With `config: {file, key}`, the runner sets the first `key` line in a copy of
+  that pattern file under `.runtime/experiment-config/<slug>/`; the pattern file
+  is never edited. It handles `key = value` (TOML, SQL options), `key: value`
+  (YAML) and `"key": "value"` (JSON). When the copies change, the session
+  reloads to read them, which clears its data. The session keeps the copies
+  after the run, so further runs at the same values need no reload; the
+  Explorer shows the values in use with a **Restore committed config** button,
+  and any `just reload`, `just stop` or new start goes back to the pattern's
+  files.
+- The pattern must read the file at session start. A
+  `spec.services.<service>.config` mount picks up the copy automatically. A
+  loader that reads `config/` itself must open it through
+  `config_file(Path(__file__).parent, "config/<file>")` from
+  `pattern_explorer.orchestration.config_overlay`, or it ignores the
+  experiment's value.
+- Without `config`, the value is passed to the script as
+  `--<name-with-dashes> <value>`.
+
+Results, groups and timeline:
+
+- `results` declares the label, `group` and one-line `description` of each key
+  the script reports. The panel shows the description on hover and in the
+  legend. Undeclared keys still appear, after the declared ones.
+- `groups` orders the header groups left to right. Name groups after pipeline
+  stages (source database, replication tool, ClickHouse, end to end) so a column
+  such as INSERTs reads as ClickHouse's.
+- `timeline_total` labels the sum of the stages in the timeline tooltip.
+
+The script contract:
+
+- It runs with the repository root on `PYTHONPATH`, from the pattern
+  directory. Every stdout line appears in the Explorer log.
+- The last line is `RESULT {json}`: result name to number or text. Text results,
+  such as a verdict or a mode, display and sort as text. An optional `stages`
+  list of `{label, ms, extra}` draws the per-run timeline bar; segments are
+  drawn in list order, and `extra: true` marks a segment that is shown but not
+  added to `timeline_total`, such as a per-statement average next to per-row
+  stages.
+- A non-zero exit fails the run, and failed runs are not saved. **Stop** in the
+  Explorer sends the script SIGTERM; it cannot interrupt a config reload.
+- Runs are saved to `.runtime/experiments/<slug>.jsonl`, outside the pattern's
+  volumes, so they survive reloads; **Reset** in the panel deletes them.
+
+`pattern_explorer/orchestration/probe.py` has the shared pieces for CDC
+workloads: `workload_args()` (`--rate`, `--rows-per-txn`, `--duration`),
+`postgres_workload()` and `paced()` for writing a fresh id range at a fixed rate,
+`latency_summary()` and `stage_summary()` for the ClickHouse side, and
+`insert_stage()` and `result_line()` for the output.
+
+Rules for measurements:
+
+- Build a stage boundary only from a column whose meaning is confirmed in the
+  tool's source at the pinned version, and cite the file in a comment next to the
+  expression. When a tool records no time for a step, merge the steps into one
+  stage and say so in its label.
+- Report stages as averages, not medians, so they add up to the average total.
+- Take the run's start time from ClickHouse (`now64()`), not the host, when
+  filtering `system.part_log` or `system.query_log`.
+- Write a fresh id range above the rows `load.py` writes, so runs do not mix.
+- Report what the workload achieved next to what it requested
+  (`achieved_rate`), so a source that cannot keep up is visible.
+
 ### ClickHouse version bounds (`requires`)
 
 When a pattern only works on a range of ClickHouse versions, declare it. Before applying schema, the runner queries `SELECT version()` on `driver_node` and fails fast with a clear message if the running server is out of range.

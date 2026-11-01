@@ -14,14 +14,15 @@ import urllib.request
 
 import psycopg
 
+from pattern_explorer.orchestration.config_overlay import config_file
 from pattern_explorer.orchestration.nodes import connect as ch_connect
 from pattern_explorer.orchestration.sql import run_sql_file
 from pattern_explorer.orchestration.wait import wait_for
 
 CONNECT = os.environ.get("CONNECT_URL", "http://localhost:8083")
-CONFIG_DIR = Path(__file__).with_name("config")
-SOURCE = json.loads((CONFIG_DIR / "source.json").read_text())
-SINK = json.loads((CONFIG_DIR / "sink.json").read_text())
+# An experiment's edited copy, when one is active, replaces the file.
+SOURCE = json.loads(config_file(Path(__file__).parent, "config/source.json").read_text())
+SINK = json.loads(config_file(Path(__file__).parent, "config/sink.json").read_text())
 
 
 def register(name: str, config: dict) -> None:

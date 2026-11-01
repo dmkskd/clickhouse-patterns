@@ -6,6 +6,7 @@ from pathlib import Path
 
 import psycopg
 
+from pattern_explorer.orchestration.config_overlay import config_file
 from pattern_explorer.orchestration.nodes import connect
 from pattern_explorer.orchestration.sql import run_sql_file
 from pattern_explorer.orchestration.wait import wait_for
@@ -61,7 +62,8 @@ with connect_peerdb() as peerdb:
         )
         """
     )
-    peerdb.execute(Path(__file__).with_name("config").joinpath("mirror.sql").read_text())
+    # An experiment's sync_interval copy, when one is active, replaces the file.
+    peerdb.execute(config_file(Path(__file__).parent, "config/mirror.sql").read_text())
 print("created PeerDB source, target, and two-table orders mirror")
 
 ch = connect("ch")

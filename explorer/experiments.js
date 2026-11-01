@@ -11,8 +11,8 @@ window.PE.experiments = (() => {
   function create(deps) {
     // deps: command(path, payload), confirmAction(message, label),
     //       showToast(message, kind), openLogs(), rerender()
-    // An experiment that changes a config file also changes the catalog, and
-    // the live-revision check reloads the page; keep the panel open across it.
+    // The open panel and typed values survive a page reload (an edit to the
+    // pattern's source reloads the page through the live-revision check).
     let experimentsOpen = false;
     try { experimentsOpen = sessionStorage.getItem("experiments-open") === "1"; } catch (_error) { /* storage blocked */ }
     function setExperimentsOpen(open) {
@@ -22,6 +22,7 @@ window.PE.experiments = (() => {
     let experimentsPattern = null;  // pattern whose experiment forms are rendered
     let experimentsSeen = null;     // finished_at of the last experiment whose runs were fetched
     let experimentRuns = [];
+    let appliedValues = {};         // experiment config values the running session uses
     const sortState = {};           // experiment name -> { column, direction }
 
     function setVisible(id, visible) {
@@ -33,7 +34,11 @@ window.PE.experiments = (() => {
       try {
         const response = await fetch(apiUrl(`api/experiments?pattern=${encodeURIComponent(slug)}`), { cache: "no-store" });
         if (!response.ok) return;
-        experimentRuns = (await response.json()).runs || [];
+        const data = await response.json();
+        // A slow response for a pattern the reader has left must not replace the current runs.
+        if (experimentsPattern?.slug !== slug) return;
+        experimentRuns = data.runs || [];
+        appliedValues = data.applied || {};
       } catch (_error) {
         return;
       }
@@ -51,7 +56,7 @@ window.PE.experiments = (() => {
         description.textContent = experiment.description;
         const form = document.createElement("form");
         form.className = "experiment-form";
-        // Typed values survive the page reload a config change triggers.
+        // Typed values survive a page reload.
         const storageKey = `experiment-values:${pattern.slug}:${experiment.name}`;
         let saved = {};
         try { saved = JSON.parse(sessionStorage.getItem(storageKey) || "{}"); } catch (_error) { saved = {}; }
@@ -63,13 +68,21 @@ window.PE.experiments = (() => {
           const label = document.createElement("label");
           const name = document.createElement("span");
           name.textContent = parameter.label || parameter.name;
-          const input = document.createElement("input");
-          Object.assign(input, { type: "number", min: "1", step: Number.isInteger(parameter.default) ? "1" : "any", name: parameter.name, value: saved[parameter.name] ?? parameter.default, required: true });
+          const value = saved[parameter.name] ?? parameter.default;
+          let input;
+          if (parameter.choices?.length) {
+            input = document.createElement("select");
+            parameter.choices.forEach((choice) => input.add(new Option(String(choice), String(choice))));
+            input.value = String(value);
+          } else {
+            input = document.createElement("input");
+            Object.assign(input, { type: "number", step: Number.isInteger(parameter.default) ? "1" : "any", value, required: true });
+            if (parameter.min != null) input.min = String(parameter.min);
+          }
+          input.name = parameter.name;
           label.append(name, input);
           if (parameter.config) {
-            const hint = document.createElement("small");
-            hint.textContent = `${parameter.config.file} · a change reloads the session`;
-            label.append(hint);
+            label.title = `Set in ${parameter.config.file}. A new value restarts the session before the run.`;
           }
           form.append(label);
         });
@@ -127,20 +140,21 @@ window.PE.experiments = (() => {
 
     // Timeline: the run's per-row stages (averages, so they add up to the
     // average latency), then the average ClickHouse INSERT execution, which is
-    // per statement and drawn hatched.
+    // per statement.
+    // Segments in the order the script reports them; each takes the next
+    // palette slot, so neighbours are always a validated pair. `extra`
+    // segments (such as per-statement INSERT time) are drawn but not summed.
     function runTimeline(run) {
-      const segments = (run.results.stages || []).map((stage, index) => ({ label: stage.label, ms: Math.max(0, Number(stage.ms) || 0), index }));
-      if (segments.length && run.results.insert_avg_ms != null) {
-        segments.push({ label: "ClickHouse INSERT execution (avg per statement)", ms: Number(run.results.insert_avg_ms) || 0, index: "insert" });
-      }
-      return segments;
+      return (run.results.stages || []).map((stage, index) => ({
+        label: stage.label, ms: Math.max(0, Number(stage.ms) || 0), index, extra: Boolean(stage.extra),
+      }));
     }
 
-    function timelineBar(segments, longest) {
+    function timelineBar(segments, longest, totalLabel) {
       const bar = document.createElement("div");
       bar.className = "timeline-bar";
       if (!segments.length) return bar;
-      bar.addEventListener("mouseenter", () => showTimelineTip(bar, segments));
+      bar.addEventListener("mouseenter", () => showTimelineTip(bar, segments, totalLabel));
       bar.addEventListener("mouseleave", hideTimelineTip);
       segments.forEach((segment) => {
         const piece = document.createElement("span");
@@ -154,16 +168,15 @@ window.PE.experiments = (() => {
     // One shared tooltip for every bar: each stage with its colour, time and
     // share of the row latency, then the total.
     let timelineTip = null;
-    function showTimelineTip(bar, segments) {
+    function showTimelineTip(bar, segments, totalLabel) {
       if (!timelineTip) {
         timelineTip = document.createElement("div");
         timelineTip.className = "timeline-tip";
         timelineTip.setAttribute("role", "tooltip");
         document.body.append(timelineTip);
       }
-      // Shares are of the whole bar: the row latency stages plus the INSERT
-      // execution that follows the ClickHouse insert timestamp.
-      const latency = segments.filter((segment) => segment.index !== "insert")
+      // Shares are of the whole bar, extra segments included.
+      const total = segments.filter((segment) => !segment.extra)
         .reduce((sum, segment) => sum + segment.ms, 0);
       const whole = segments.reduce((sum, segment) => sum + segment.ms, 0);
       const tipRow = (swatchClass, text, ms, share, extraClass = "") => {
@@ -182,9 +195,11 @@ window.PE.experiments = (() => {
       };
       const rows = segments.map((segment) =>
         tipRow(`timeline-stage stage-${segment.index}`, segment.label, segment.ms, whole ? segment.ms / whole : null));
-      const hasInsert = segments.some((segment) => segment.index === "insert");
-      const totals = [tipRow("", "Average row latency (write to insert)", latency, null, "total")];
-      if (hasInsert) totals.push(tipRow("", "Including INSERT execution", whole, 1, "total-sub"));
+      const extras = segments.filter((segment) => segment.extra);
+      const totals = [tipRow("", totalLabel, total, null, "total")];
+      if (extras.length) {
+        totals.push(tipRow("", `Including ${extras.map((segment) => segment.label).join(", ")}`, whole, 1, "total-sub"));
+      }
       timelineTip.replaceChildren(...rows, ...totals);
       const box = bar.getBoundingClientRect();
       timelineTip.hidden = false;
@@ -213,8 +228,24 @@ window.PE.experiments = (() => {
       return legend;
     }
 
+    // Config parameters are applied through copies of the pattern's files, and
+    // the session keeps them after a run. Say so, and offer the way back.
+    function renderAppliedValues() {
+      const note = $("experiments-applied");
+      const entries = Object.entries(appliedValues);
+      note.hidden = !entries.length;
+      if (!entries.length) return;
+      const parameters = (experimentsPattern?.experiments || []).flatMap((experiment) => experiment.parameters);
+      const describe = ([name, value]) => {
+        const parameter = parameters.find((item) => item.name === name);
+        return `${parameter?.label || name} = ${value}`;
+      };
+      note.querySelector("span").textContent = `Session runs with experiment values: ${entries.map(describe).join(", ")}.`;
+    }
+
     function renderExperimentResults() {
       hideTimelineTip();  // a rebuilt table removes the hovered bar without a mouseleave
+      renderAppliedValues();
       document.querySelectorAll("#experiments-body .experiment").forEach((section) => {
         const experiment = experimentsPattern?.experiments.find((item) => item.name === section.dataset.experiment);
         const target = section.querySelector(".experiment-results");
@@ -223,60 +254,101 @@ window.PE.experiments = (() => {
           target.textContent = "No saved runs.";
           return;
         }
-        const parameterNames = experiment.parameters.map((parameter) => parameter.name);
-        // Declared results first, in manifest order, then any extra keys a script reports.
+        // Columns, grouped under a header row by pipeline stage (source, tool,
+        // ClickHouse, end to end), in the order the manifest's `groups` gives.
         const declared = new Map((experiment.results || []).map((result) => [result.name, result]));
         const resultNames = [...new Set([...declared.keys(), ...runs.flatMap((run) => Object.keys(run.results))])]
           .filter((name) => name !== "stages");
-        // Sort by the chosen column; the default is newest first.
+        const columns = [
+          { key: "time", label: "time", group: "Run", value: (run) => new Date(run.started_at).getTime(),
+            text: (run) => new Date(run.started_at).toLocaleTimeString() },
+          ...experiment.parameters.map((parameter) => ({
+            key: parameter.name, label: parameter.short || parameter.name, title: parameter.label,
+            group: parameter.group || (parameter.config ? "Settings" : "Workload"),
+            value: (run) => run.parameters[parameter.name],
+          })),
+          ...resultNames.map((name) => ({
+            key: name, label: declared.get(name)?.label || name, title: declared.get(name)?.description,
+            group: declared.get(name)?.group || "Results", value: (run) => run.results[name],
+          })),
+          // Only when some run reports stages.
+          ...(runs.some((run) => run.results.stages?.length) ? [{
+            key: "timeline", label: "where time goes", group: "Timeline",
+            value: (run) => runTimeline(run).reduce((sum, segment) => sum + segment.ms, 0),
+          }] : []),
+        ];
+        const declaredOrder = experiment.groups || [];
+        const groupOrder = [...new Set(["Run", ...declaredOrder, ...columns.map((column) => column.group)])]
+          .filter((group) => group !== "Timeline" && columns.some((column) => column.group === group))
+          .concat(columns.some((column) => column.group === "Timeline") ? ["Timeline"] : []);
+        columns.sort((a, b) => groupOrder.indexOf(a.group) - groupOrder.indexOf(b.group));  // stable: keeps order within a group
+
+        // Sort rows by the chosen column; the default is newest first.
         const sort = sortState[experiment.name] || { column: "time", direction: -1 };
+        const sortColumn = columns.find((column) => column.key === sort.column) || columns[0];
+        // Numbers sort numerically, text (a verdict, a mode) alphabetically; empty cells last.
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
         const sortValue = (run) => {
-          if (sort.column === "time") return new Date(run.started_at).getTime();
-          if (sort.column === "timeline") return runTimeline(run).reduce((sum, segment) => sum + segment.ms, 0);
-          const value = parameterNames.includes(sort.column) ? run.parameters[sort.column] : run.results[sort.column];
-          return value == null || value === "" ? null : Number(value);
+          const value = sortColumn.value(run);
+          return value == null || value === "" ? null : value;
         };
         runs.sort((a, b) => {
           const x = sortValue(a), y = sortValue(b);
-          if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;  // empty cells last
-          return sort.direction * (x - y);
+          if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
+          const numeric = typeof x === "number" && typeof y === "number";
+          return sort.direction * (numeric ? x - y : collator.compare(String(x), String(y)));
         });
         const timelines = runs.map(runTimeline);
         const longest = Math.max(1, ...timelines.map((segments) => segments.reduce((sum, segment) => sum + segment.ms, 0)));
+
         const table = document.createElement("table");
         table.className = "experiment-table";
-        const head = table.createTHead().insertRow();
-        ["time", ...parameterNames, ...resultNames, "timeline"].forEach((name) => {
+        const thead = table.createTHead();
+        const groupRow = thead.insertRow();
+        groupRow.className = "group-row";
+        groupOrder.forEach((group, index) => {
           const cell = document.createElement("th");
-          cell.textContent = declared.get(name)?.label || name;
+          cell.colSpan = columns.filter((column) => column.group === group).length;
+          cell.textContent = group === "Run" ? "" : group;
+          if (index > 0) cell.className = "group-start";
+          groupRow.append(cell);
+        });
+        const head = thead.insertRow();
+        columns.forEach((column, index) => {
+          const cell = document.createElement("th");
+          cell.textContent = column.label;
           cell.className = "sortable";
-          if (sort.column === name) cell.setAttribute("aria-sort", sort.direction === 1 ? "ascending" : "descending");
+          if (index > 0 && columns[index - 1].group !== column.group) cell.classList.add("group-start");
+          if (column.title) cell.title = column.title;
+          if (sort.column === column.key) cell.setAttribute("aria-sort", sort.direction === 1 ? "ascending" : "descending");
           cell.addEventListener("click", () => {
             // A new column starts descending (largest first); clicking again reverses.
-            sortState[experiment.name] = { column: name, direction: sort.column === name ? -sort.direction : -1 };
+            sortState[experiment.name] = { column: column.key, direction: sort.column === column.key ? -sort.direction : -1 };
             renderExperimentResults();
           });
-          if (declared.get(name)?.description) cell.title = declared.get(name).description;
           head.append(cell);
         });
         const body = table.createTBody();
-        runs.forEach((run) => {
+        runs.forEach((run, runIndex) => {
           const row = body.insertRow();
-          row.insertCell().textContent = new Date(run.started_at).toLocaleTimeString();
-          parameterNames.forEach((name) => { row.insertCell().textContent = run.parameters[name] ?? ""; });
-          resultNames.forEach((name) => { row.insertCell().textContent = run.results[name] ?? ""; });
-          row.insertCell().append(timelineBar(timelines[runs.indexOf(run)], longest));
+          columns.forEach((column, index) => {
+            const cell = row.insertCell();
+            if (index > 0 && columns[index - 1].group !== column.group) cell.className = "group-start";
+            if (column.key === "timeline") cell.append(timelineBar(timelines[runIndex], longest, experiment.timeline_total || "Total"));
+            else cell.textContent = column.text ? column.text(run) : (column.value(run) ?? "");
+          });
         });
         const caption = table.createCaption();
         const sortLabel = sort.column === "time" && sort.direction === -1 ? "newest first"
-          : `sorted by ${declared.get(sort.column)?.label || sort.column}, ${sort.direction === 1 ? "ascending" : "descending"}`;
+          : `sorted by ${sortColumn.group === "Run" ? "" : `${sortColumn.group} `}${sortColumn.label}, ${sort.direction === 1 ? "ascending" : "descending"}`;
         caption.textContent = `${runs.length} saved run${runs.length === 1 ? "" : "s"}, ${sortLabel}`;
         const stageLegend = timelineLegend(timelines.find((segments) => segments.length) || []);
         const legend = document.createElement("dl");
         legend.className = "experiment-legend";
         resultNames.filter((name) => declared.get(name)?.description).forEach((name) => {
           const term = document.createElement("dt");
-          term.textContent = declared.get(name).label;
+          const group = declared.get(name).group;
+          term.textContent = group ? `${group}: ${declared.get(name).label}` : declared.get(name).label;
           const definition = document.createElement("dd");
           definition.textContent = declared.get(name).description;
           legend.append(term, definition);
@@ -302,19 +374,26 @@ window.PE.experiments = (() => {
         loadExperimentRuns(selected.slug);
       }
       // While this experiment runs, Run gives way to Stop; Reset waits.
+      $("restore-config").disabled = busy;
       document.querySelectorAll("#experiments-body .experiment-form").forEach((form) => {
         form.querySelector("button[type=submit]").hidden = experimenting;
         form.querySelector("button.stop").hidden = !experimenting;
         form.querySelector("button.secondary").disabled = busy;
         form.querySelector("button[type=submit]").disabled = busy;
       });
-      const finished = operation?.name === "experiment" && operation.status !== "running" ? operation.finished_at : null;
+      const finished = ["experiment", "restore config"].includes(operation?.name) && operation.status !== "running"
+        ? operation.finished_at : null;
       if (finished && finished !== experimentsSeen) {
         experimentsSeen = finished;
         loadExperimentRuns(selected.slug);
       }
     }
 
+    $("restore-config").addEventListener("click", async () => {
+      deps.openLogs();
+      try { await deps.command(apiUrl("api/session/experiment/restore")); }
+      catch (error) { deps.showToast(error.message, "error"); }
+    });
     $("toggle-experiments").addEventListener("click", () => {
       setExperimentsOpen(!experimentsOpen);
       deps.rerender();

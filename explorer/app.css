@@ -278,6 +278,11 @@ button, input { font: inherit; }
 .pattern-detail > .session-bar .session-progress { padding: 11px 14px 14px; }
 /* Experiments sit in the sticky session bar, so the panel scrolls on its own. */
 .experiments-panel #experiments-body { max-height: 46vh; overflow-y: auto; }
+.experiments-applied { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 10px 0 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); font-size: 11.5px; }
+.experiments-applied span { color: var(--text); }
+.experiments-applied button { padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
+.experiments-applied button:hover { color: var(--text); }
+.experiments-applied button:disabled { opacity: .45; cursor: wait; }
 .experiment { margin-top: 10px; }
 .experiment h4 { margin: 0; color: var(--text); font-size: 13px; }
 .experiment p { margin: 3px 0 0; color: var(--muted); font-size: 11.5px; white-space: pre-line; }
@@ -286,20 +291,29 @@ button, input { font: inherit; }
 .experiment-form button { margin-top: 19.5px; }
 .experiment-form label { display: grid; gap: 3px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .experiment-form input { width: 120px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
-.experiment-form small { color: var(--dim); font-size: 10px; }
 .experiment-form button { padding: 7px 14px; border: 1px solid #2d765b; border-radius: 7px; background: #153729; color: #8ef0c1; font-size: 11px; cursor: pointer; }
 .experiment-form button.secondary { margin-left: -6px; border-color: var(--line); background: transparent; color: var(--muted); }
 .experiment-form button.secondary:hover { color: var(--text); }
 .experiment-form button.stop { border-color: #653b44; background: transparent; color: #f2a1a8; }
 .experiment-form button[hidden] { display: none; }
 .experiment-form button:disabled { opacity: .45; cursor: wait; }
-/* Timeline: bars share one scale (the longest run), so rows compare directly. */
-.timeline-bar { display: flex; width: 160px; height: 10px; border-radius: 2px; background: color-mix(in srgb, var(--line) 50%, transparent); overflow: hidden; }
+/* Timeline: bars share one scale (the longest run), so rows compare directly.
+   Stage colours are the first four slots of the validated categorical palette
+   (dataviz reference: blue, orange, aqua, yellow), stepped per scheme, taken in
+   order so adjacent segments are always a validated pair. */
+.experiments-panel { --stage-0: #3987e5; --stage-1: #d95926; --stage-2: #199e70; --stage-3: #c98500; }
+[data-scheme="light"] .experiments-panel, [data-scheme="light"] .timeline-tip { --stage-0: #2a78d6; --stage-1: #eb6834; --stage-2: #1baf7a; --stage-3: #eda100; }
+.timeline-tip { --stage-0: #3987e5; --stage-1: #d95926; --stage-2: #199e70; --stage-3: #c98500; }
+.timeline-bar { display: flex; width: 160px; height: 10px; border-radius: 2px; background: color-mix(in srgb, var(--line) 40%, transparent); overflow: hidden; }
 .timeline-stage { display: block; height: 100%; }
-.timeline-stage.stage-0 { background: var(--blue); }
-.timeline-stage.stage-1 { background: var(--violet); }
-.timeline-stage.stage-2 { background: var(--amber); }
-.timeline-stage.stage-insert { background: repeating-linear-gradient(135deg, var(--green) 0 3px, color-mix(in srgb, var(--green) 45%, transparent) 3px 6px); }
+.timeline-bar .timeline-stage + .timeline-stage { margin-left: 2px; }
+.timeline-stage.stage-0 { background: var(--stage-0); }
+.timeline-stage.stage-1 { background: var(--stage-1); }
+.timeline-stage.stage-2 { background: var(--stage-2); }
+.timeline-stage.stage-3 { background: var(--stage-3); }
+.timeline-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; color: var(--muted); font-size: 11px; }
+.timeline-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.timeline-legend i { width: 10px; height: 10px; border-radius: 2px; }
 .timeline-tip { position: fixed; z-index: 1000; min-width: 300px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: 0 8px 24px rgb(0 0 0 / .25); color: var(--text); font-size: 11.5px; pointer-events: none; }
 .timeline-tip[hidden] { display: none; }
 .timeline-tip-row { display: grid; grid-template-columns: 10px 1fr auto 34px; align-items: center; gap: 8px; padding: 2px 0; }
@@ -308,9 +322,6 @@ button, input { font: inherit; }
 .timeline-tip-row small { color: var(--muted); font-size: 10.5px; text-align: right; }
 .timeline-tip-row.total { margin-top: 5px; padding-top: 6px; border-top: 1px solid var(--line); color: var(--muted); }
 .timeline-tip-row.total-sub { color: var(--muted); }
-.timeline-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; color: var(--muted); font-size: 11px; }
-.timeline-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.timeline-legend i { width: 10px; height: 10px; border-radius: 2px; }
 .experiment-legend { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 10px 0 0; color: var(--muted); font-size: 11px; }
 .experiment-legend dt { color: var(--text); font-weight: 600; }
 .experiment-legend dd { margin: 0; }
@@ -319,6 +330,9 @@ button, input { font: inherit; }
 .experiment-table { border-collapse: collapse; color: var(--text); font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .experiment-table th { padding: 4px 12px 4px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-weight: 600; text-align: left; white-space: nowrap; }
 .experiment-table td { padding: 3px 12px 3px 0; white-space: nowrap; }
+.experiment-table thead .group-row th { padding-bottom: 2px; border-bottom: 0; color: var(--text); font: 600 10.5px system-ui, sans-serif; letter-spacing: .04em; text-align: center; }
+.experiment-table thead .group-row th:not(:empty) { border-bottom: 1px solid var(--line); }
+.experiment-table .group-start { padding-left: 14px; border-left: 1px solid var(--line); }
 .experiment-table th.sortable { cursor: pointer; user-select: none; }
 .experiment-table th.sortable:hover { color: var(--text); }
 .experiment-table th[aria-sort="ascending"]::after { content: " ▲"; font-size: 9px; }

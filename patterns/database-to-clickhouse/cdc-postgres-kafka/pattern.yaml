@@ -95,48 +95,72 @@ spec:
       parameters:
         - name: poll_interval_ms
           label: Debezium poll interval (ms)
+          short: poll ms
+          group: Debezium
           default: 500
+          min: 1
           config: {file: config/source.json, key: poll.interval.ms}
         - name: rate
           label: Rows per second
+          short: requested/s
+          group: Postgres
           default: 50
+          min: 1
         - name: rows_per_txn
           label: Rows per transaction
+          short: rows/txn
+          group: Postgres
           default: 1
+          min: 1
         - name: duration
           label: Duration (s)
+          short: secs
+          group: Postgres
           default: 10
+          min: 1
       results:
         - name: rows
-          label: Rows
+          label: rows
+          group: Postgres
           description: Rows inserted into Postgres during the run.
         - name: achieved_rate
-          label: Achieved rate (rows/s)
-          description: Rows per second actually written to the source; below the target rate when one connection cannot insert that fast.
+          label: actual/s
+          group: Postgres
+          description: Rows per second actually written to Postgres; below the requested rate when one connection cannot insert that fast.
         - name: p50_ms
-          label: p50 (ms)
+          label: p50
+          group: End to end (ms)
           description: Median time from the Postgres write to the ClickHouse insert, per row.
         - name: p95_ms
-          label: p95 (ms)
+          label: p95
+          group: End to end (ms)
           description: 95th percentile of the same per-row time.
         - name: p99_ms
-          label: p99 (ms)
+          label: p99
+          group: End to end (ms)
           description: 99th percentile of the same per-row time.
         - name: max_ms
-          label: Max (ms)
+          label: max
+          group: End to end (ms)
           description: Slowest row.
         - name: parts
-          label: Parts
+          label: parts
+          group: ClickHouse
           description: New data parts in test.orders during the run (system.part_log).
         - name: inserts
           label: INSERTs
+          group: ClickHouse
           description: INSERT statements ClickHouse executed into test.orders during the run (system.query_log).
         - name: insert_avg_ms
-          label: INSERT avg (ms)
+          label: avg ms
+          group: ClickHouse
           description: Average ClickHouse execution time of those INSERT statements.
         - name: insert_max_ms
-          label: INSERT max (ms)
+          label: max ms
+          group: ClickHouse
           description: Slowest of those INSERT statements.
+      groups: [Postgres, Debezium, ClickHouse, End to end (ms)]
+      timeline_total: Average row latency (write to insert)
 
   steps:
     schema: schema.sql

@@ -7,6 +7,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
+from . import config_overlay
 from . import session as sessions
 from ..catalog.manifest import Pattern
 from .nodes import connect
@@ -125,6 +126,7 @@ def start_session(
     owner: str = "detached",
 ) -> sessions.Session:
     with sessions.operation_lock():
+        config_overlay.clear(pattern.slug)  # a new session uses the committed config
         return _start_session(pattern, report=report, owner=owner)
 
 
@@ -162,6 +164,7 @@ def validate_and_record_session(report: Reporter | None = None) -> Result:
 def run_session(pattern: Pattern, report: Reporter | None = None) -> Result:
     """Prepare, validate, and leave a browser-owned session available."""
     with sessions.operation_lock():
+        config_overlay.clear(pattern.slug)  # a new session uses the committed config
         _start_session(pattern, report=report, owner="browser")
         try:
             result = _validate_session(report=report)
@@ -203,7 +206,9 @@ def _stop_session(report: Reporter | None = None) -> sessions.Session:
 
 def stop_session(report: Reporter | None = None) -> sessions.Session:
     with sessions.operation_lock():
-        return _stop_session(report=report)
+        active = _stop_session(report=report)
+        config_overlay.clear(active.slug)
+        return active
 
 
 def reset_environment(report: Reporter | None = None) -> dict:
@@ -235,13 +240,25 @@ def reset_environment(report: Reporter | None = None) -> dict:
     overrides = sorted(RUNTIME_OVERRIDES.glob("*.yaml")) if RUNTIME_OVERRIDES.exists() else []
     for path in overrides:
         path.unlink()
+    config_overlay.clear()
     if report:
-        report("RESET   session record and compose overrides cleared")
+        report("RESET   session record, compose overrides and experiment config cleared")
     return {"slug": slug, "profiles": profiles, "overrides_removed": len(overrides)}
 
 
-def reload_session(report: Reporter | None = None) -> sessions.Session:
+def reload_session(
+    report: Reporter | None = None, keep_experiment_config: bool = False
+) -> sessions.Session:
+    """Rebuild the session from source.
+
+    A reload asked for by a person clears experiment config copies, so edits to
+    the pattern's own files take effect. Experiments reload with
+    `keep_experiment_config=True` to apply the copies they just wrote.
+    """
     with sessions.operation_lock():
+        if not keep_experiment_config:
+            active = sessions.read_session(required=True)
+            config_overlay.clear(active.slug)
         return _reload_session(report=report)
 
 

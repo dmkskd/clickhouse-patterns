@@ -41,6 +41,8 @@ A reference pattern uses `mode: reference`, needs no profiles, and can render im
 
 Prefer a small representative dataset and current-state assertions. Verify declared table names, engines, ownership, and routing against the actual DDL or live metadata.
 
+When a pattern exposes settings whose effect readers should see, such as a flush interval, batch size or failure mode, add an experiment under `spec.experiments`: a script the Explorer runs on demand with chosen values, which records one result row per run. See "Experiments" in [references/pattern-model.md](references/pattern-model.md). `tests/test_experiments.py` checks that every experiment script and config key exists.
+
 ## Validate and hand off
 
 Run:
