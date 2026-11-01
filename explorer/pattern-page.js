@@ -159,11 +159,14 @@ window.PE.patternPage = (() => {
       const blocks = String(text ?? "").split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
       const nodes = blocks.map((block) => {
         const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-        // A "### " block is a section heading within the description.
-        if (lines.length === 1 && lines[0].startsWith("### ")) {
-          const heading = document.createElement("h3");
-          heading.className = "pattern-description-heading";
-          heading.innerHTML = formatDescInline(lines[0].slice(4));
+        // A "### " block is a section heading within the description, and a
+        // "#### " block a subsection of the section above it.
+        const marker = lines.length === 1 && /^(###|####) /.exec(lines[0]);
+        if (marker) {
+          const sub = marker[1] === "####";
+          const heading = document.createElement(sub ? "h4" : "h3");
+          heading.className = `pattern-description-heading${sub ? " sub" : ""}`;
+          heading.innerHTML = formatDescInline(lines[0].slice(marker[0].length));
           return heading;
         }
         if (!lines[0]?.startsWith("- ")) {

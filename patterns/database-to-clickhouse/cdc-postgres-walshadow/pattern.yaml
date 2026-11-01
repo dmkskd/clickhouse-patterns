@@ -24,8 +24,8 @@ metadata:
 
     Edit the files in `config/`, then run `just reload` to rebuild the demo with the new settings. The **Configuration** panel displays the files.
 
-
     The **Experiments** panel runs a timed insert workload with chosen values for the `config/` latency settings and records latency, parts and INSERT cost per run.
+
     ### Delivery guarantees
 
     From **walshadow**'s [ordering and consistency](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/limitations.md) and [destination tables](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/destination-tables.md) documentation:
@@ -47,6 +47,10 @@ metadata:
 
     ### walshadow internals
 
+    **walshadow** streams physical WAL from the source **Postgres** server to a **shadow Postgres** in its container, which replays only the catalog changes, and decodes each row change with the table definition the shadow holds at that record's LSN.
+
+    #### WAL level
+
     The source **Postgres** server runs with `wal_level = logical`, the same setting logical decoding requires. At this level, WAL records contain the row data **walshadow** decodes:
 
     - the complete new tuple of each INSERT and UPDATE; an out-of-line (TOAST) value left unchanged by an UPDATE is logged only as a pointer, which **walshadow** resolves from its own copy of the TOAST data ([TOAST and type conversion](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/architecture/values.md))
@@ -54,14 +58,20 @@ metadata:
 
     At the default `wal_level = replica`, an UPDATE record can contain only the changed bytes of the new tuple, and a DELETE record contains only the tuple's location.
 
+    #### Physical replication and logical decoding
+
     A client reads this WAL through physical replication (WAL records as written to the WAL files) or logical decoding (rows decoded by **Postgres**). Both use the streaming replication protocol, and the replication command the client sends selects the mode:
 
     - PeerDB and Debezium send `START_REPLICATION SLOT <slot> LOGICAL`. The server runs logical decoding and sends row changes.
     - **walshadow** sends `START_REPLICATION PHYSICAL`. The server sends the WAL records as written.
 
+    #### Decoding a WAL record
+
     A heap WAL record identifies a tuple by relfilenode, block number and item offset. Insert and update records contain the new tuple in heap page format. Decoding the record requires the table catalog as of the record's LSN. **walshadow** runs a **shadow Postgres** in its container and streams WAL to it with user-table records replaced by no-ops. The shadow replays catalog changes and by default stores only catalog data. **walshadow** reads table descriptors from the shadow at the replay LSN, decodes rows from the original WAL records, and inserts them into ClickHouse over the Native protocol.
 
-    **walshadow** creates the **shadow Postgres** instance and loads existing table rows in separate steps:
+    #### Initial load
+
+    **walshadow** creates a **shadow Postgres** instance and loads existing table rows in separate steps:
 
     - On first start, **walshadow** streams a base backup of the source **Postgres** server and writes only its catalog and recovery files to the **shadow Postgres** data directory.
     - Existing rows are loaded per table, as set by `initial_load`. `copy` reads the visible rows with `COPY` in a SQL snapshot at a selected LSN. `base_backup` reads heap pages from a new base backup of the whole cluster; `object_store` reads them from the latest wal-g backup plus archived WAL ([table selection](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/table-selection.md)).
@@ -69,7 +79,11 @@ metadata:
 
     In this pattern, `walshadow-stream init --table public orders` sets `initial_load = "copy"` for `public.orders`.
 
+    #### ClickHouse destination table
+
     The destination engine is `ReplacingMergeTree(_lsn, _is_deleted)`. `FINAL` returns the row with the highest `_lsn` per sorting key and excludes rows with `_is_deleted = true`.
+
+    #### Postgres version
 
     The shadow starts from a physical base backup and replays source WAL, so it runs the source **Postgres** major version. The pattern builds the **walshadow** image from upstream commit `97f9305` for **Postgres** 16. The **walshadow** repository is licensed AGPL-3.0.
   graph: |-

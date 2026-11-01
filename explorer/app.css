@@ -118,6 +118,7 @@ button, input { font: inherit; }
 .pattern-section-link { padding: 4px 10px; border: 0; background: transparent; color: var(--dim); font: inherit; font-size: 11.5px; line-height: 1.35; text-align: left; cursor: pointer; }
 .pattern-section-link:hover { color: var(--muted); }
 .pattern-section-link.active { color: var(--text); }
+.pattern-section-link.sub { padding-left: 22px; }
 .architecture-panel, .pattern-description-heading, #tradeoffs, #pattern-links { scroll-margin-top: 96px; }
 
 .pattern-main { min-width: 0; padding: 28px; }
@@ -701,6 +702,7 @@ button, input { font: inherit; }
 .pattern-description strong { color: var(--text); font-weight: 600; }
 .pattern-description-heading { margin: 28px 0 10px; color: var(--text); font-size: 16px; font-weight: 600; }
 .pattern-description > .pattern-description-heading:first-child { margin-top: 0; }
+.pattern-description-heading.sub { margin: 20px 0 8px; font-size: 14px; }
 .pattern-description a { color: #4cc3f7; text-decoration: none; }
 .pattern-description a:hover { text-decoration: underline; }
 /* On light schemes the bright blue reads badly; keep links in text color with

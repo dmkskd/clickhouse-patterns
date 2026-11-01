@@ -546,7 +546,8 @@ window.PE.catalogView = (() => {
       list.replaceChildren(...sectionTargets().map(([element, label]) => {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = "pattern-section-link";
+        // Subsections are indented under their section.
+        button.className = `pattern-section-link${element.classList.contains("sub") ? " sub" : ""}`;
         button.textContent = label;
         button.addEventListener("click", () => element.scrollIntoView({ behavior: "smooth", block: "start" }));
         button.sectionTarget = element;
