@@ -703,7 +703,7 @@ def _cmd_reload(_args) -> int:
 
 def _cmd_experiment(args) -> int:
     from .orchestration import config_overlay
-    from .orchestration.experiments import run_experiment
+    from .orchestration.experiments import run_experiments
 
     active = sessions.read_session(required=True)
     pattern = sessions.load_session_pattern(active)
@@ -722,16 +722,21 @@ def _cmd_experiment(args) -> int:
         if applied:
             values = ", ".join(f"{name}={value}" for name, value in applied.items())
             print(f"the session runs with experiment values: {values} (just reload restores the committed config)")
-        print("run:  just experiment <name> [parameter=value ...]")
+        print("run:  just experiment <name> [parameter=value ...] [/ parameter=value ...]")
         return 0
-    overrides = {}
+    # A `/` separates parameter sets; each set is one run, in order.
+    overrides_list = [{}]
     for item in args.values:
+        if item == "/":
+            overrides_list.append({})
+            continue
         key, sep, value = item.partition("=")
         if not sep:
-            raise ValueError(f"expected parameter=value, got {item!r}")
-        overrides[key] = value
-    run = run_experiment(pattern, args.name, overrides, report=_progress)
-    print(json.dumps(run["results"], indent=2))
+            raise ValueError(f"expected parameter=value or /, got {item!r}")
+        overrides_list[-1][key] = value
+    runs = run_experiments(pattern, args.name, overrides_list, report=_progress)
+    for run in runs:
+        print(json.dumps(run["results"], indent=2))
     return 0
 
 
@@ -1010,7 +1015,7 @@ def main() -> int:
 
     sp = sub.add_parser("experiment", help="list or run an experiment of the active pattern")
     sp.add_argument("name", nargs="?", help="experiment name; omit to list them")
-    sp.add_argument("values", nargs="*", help="parameter=value overrides")
+    sp.add_argument("values", nargs="*", help="parameter=value overrides; a / starts the next run's set")
     sp.set_defaults(func=lambda a: _guard(lambda: _cmd_experiment(a), None))
 
     sub.add_parser("reload", help="rebuild the active pattern from source").set_defaults(

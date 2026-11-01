@@ -8,6 +8,9 @@ after the run, so repeated runs at the same values need no reload. A normal
 reload, stop or start goes back to the committed files. Other parameters are
 passed to the script as arguments.
 
+run_experiments() runs a list of parameter sets one after another against the
+same session, so they never compete for its resources.
+
 Each run appends one JSON line to .runtime/experiments/<slug>.jsonl, so results
 survive the reloads that tear down the pattern's volumes.
 """
@@ -21,6 +24,7 @@ import sys
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from . import config_overlay
 from .config_overlay import edit_config
@@ -204,3 +208,54 @@ def run_experiment(
     _record(run)
     report("EXPERIMENT " + ", ".join(f"{key}={value}" for key, value in result.items() if key != "stages"))
     return run
+
+
+def run_experiments(
+    pattern: Pattern,
+    name: str,
+    overrides_list: list[dict],
+    report: Reporter | None = None,
+    on_status: Callable[[list[str]], None] | None = None,
+) -> list[dict]:
+    """Run one experiment once per parameter set, in order. Every set is
+    checked before the first run starts. A failed run is reported and the next
+    one starts; a stop ends the whole list. on_status receives each run's
+    status (queued, running, done, failed, stopped, skipped) after every change."""
+    report = report or print
+    experiment = find_experiment(pattern, name)
+    if not overrides_list:
+        raise ValueError("no parameter sets to run")
+    for index, overrides in enumerate(overrides_list, 1):
+        try:
+            resolve_values(experiment, overrides)
+        except ValueError as exc:
+            raise ValueError(f"run {index}: {exc}") from None
+    total = len(overrides_list)
+    statuses = ["queued"] * total
+
+    def set_status(index: int, status: str) -> None:
+        statuses[index] = status
+        if on_status:
+            on_status(list(statuses))
+
+    runs, failures = [], 0
+    for index, overrides in enumerate(overrides_list):
+        set_status(index, "running")
+        if total > 1:
+            report(f"EXPERIMENT run {index + 1} of {total}")
+        try:
+            runs.append(run_experiment(pattern, name, overrides, report=report))
+        except Exception as exc:  # noqa: BLE001 - one failed run must not end the list
+            if _stop_requested:
+                set_status(index, "stopped")
+                for rest in range(index + 1, total):
+                    set_status(rest, "skipped")
+                raise
+            set_status(index, "failed")
+            failures += 1
+            report(f"EXPERIMENT run {index + 1} of {total} failed: {str(exc).splitlines()[0]}")
+            continue
+        set_status(index, "done")
+    if failures:
+        raise RuntimeError(f"{failures} of {total} runs failed")
+    return runs

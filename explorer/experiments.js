@@ -7,6 +7,10 @@ window.PE.experiments = (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
   const apiUrl = (path) => new URL(path.replace(/^\//, ""), document.baseURI).toString();
+  const icon = (paths) => `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+  const ICON_DUPLICATE = icon('<path d="M8 3v10M3 8h10"/>');
+  const ICON_REMOVE = icon('<path d="M4 4l8 8M12 4l-8 8"/>');
+  const ICON_COPY = icon('<rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/>');
 
   function create(deps) {
     // deps: command(path, payload), confirmAction(message, label),
@@ -20,7 +24,7 @@ window.PE.experiments = (() => {
       try { sessionStorage.setItem("experiments-open", open ? "1" : "0"); } catch (_error) { /* storage blocked */ }
     }
     let experimentsPattern = null;  // pattern whose experiment forms are rendered
-    let experimentsSeen = null;     // finished_at of the last operation whose runs were fetched
+    let experimentsSeen = null;     // last finished operation or finished run whose runs were fetched
     let experimentRuns = [];
     let appliedValues = null;       // experiment config values the running session uses; null until fetched
     const sortState = {};           // experiment name -> { column, direction }
@@ -52,18 +56,28 @@ window.PE.experiments = (() => {
     // A config field shows the value the session runs with: the experiment
     // value when one is applied, otherwise the pattern's committed default. A
     // new session starts from the committed files, so its fields go back to
-    // the defaults. Script arguments keep what was typed.
+    // the defaults. Script arguments keep what was typed, and so does a list
+    // of several rows.
     function showSessionConfig() {
       document.querySelectorAll("#experiments-body .experiment").forEach((section) => {
         const experiment = experimentsPattern?.experiments.find((item) => item.name === section.dataset.experiment);
         const form = section.querySelector(".experiment-form");
-        if (!experiment || !form) return;
+        const rows = form?.querySelectorAll(".experiment-row") || [];
+        if (!experiment || rows.length !== 1) return;
         experiment.parameters.filter((parameter) => parameter.config).forEach((parameter) => {
-          const input = form.elements.namedItem(parameter.name);
+          const input = rows[0].querySelector(`[name="${parameter.name}"]`);
           if (input) input.value = String(appliedValues[parameter.name] ?? parameter.default);
         });
         form.dispatchEvent(new Event("input"));  // saves the shown values
       });
+    }
+
+    function rowValue(row) {
+      return Object.fromEntries([...row.querySelectorAll("input, select")].map((input) => [input.name, input.value]));
+    }
+
+    function rowValues(form) {
+      return [...form.querySelectorAll(".experiment-row")].map(rowValue);
     }
 
     function renderExperimentForms(pattern) {
@@ -77,36 +91,70 @@ window.PE.experiments = (() => {
         description.textContent = experiment.description;
         const form = document.createElement("form");
         form.className = "experiment-form";
-        // Typed values survive a page reload.
+        // One row per run; Run submits them in order. Typed rows survive a page reload.
+        const rows = document.createElement("div");
+        rows.className = "experiment-rows";
         const storageKey = `experiment-values:${pattern.slug}:${experiment.name}`;
-        let saved = {};
-        try { saved = JSON.parse(sessionStorage.getItem(storageKey) || "{}"); } catch (_error) { saved = {}; }
-        form.addEventListener("input", () => {
-          try { sessionStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(new FormData(form).entries()))); }
+        let saved = [];
+        try { saved = JSON.parse(sessionStorage.getItem(storageKey) || "[]"); } catch (_error) { saved = []; }
+        if (!Array.isArray(saved)) saved = [saved];  // one object before rows existed
+        const saveRows = () => {
+          try { sessionStorage.setItem(storageKey, JSON.stringify(rowValues(form))); }
           catch (_error) { /* storage blocked */ }
-        });
-        experiment.parameters.forEach((parameter) => {
-          const label = document.createElement("label");
-          const name = document.createElement("span");
-          name.textContent = parameter.label || parameter.name;
-          const value = saved[parameter.name] ?? parameter.default;
-          let input;
-          if (parameter.choices?.length) {
-            input = document.createElement("select");
-            parameter.choices.forEach((choice) => input.add(new Option(String(choice), String(choice))));
-            input.value = String(value);
-          } else {
-            input = document.createElement("input");
-            Object.assign(input, { type: "number", step: Number.isInteger(parameter.default) ? "1" : "any", value, required: true });
-            if (parameter.min != null) input.min = String(parameter.min);
-          }
-          input.name = parameter.name;
-          label.append(name, input);
-          if (parameter.config) {
-            label.title = `Set in ${parameter.config.file}. A new value restarts the session before the run.`;
-          }
-          form.append(label);
-        });
+        };
+        form.addEventListener("input", saveRows);
+        const updateRows = () => {
+          const count = rows.children.length;
+          rows.querySelectorAll("button.remove-row").forEach((button) => { button.hidden = count === 1; });
+          run.title = count === 1 ? "" : `Run all ${count} in order`;
+          saveRows();
+        };
+        const addRow = (values, after = null) => {
+          const row = document.createElement("div");
+          row.className = "experiment-row";
+          experiment.parameters.forEach((parameter) => {
+            const label = document.createElement("label");
+            const name = document.createElement("span");
+            name.textContent = parameter.label || parameter.name;
+            const value = values[parameter.name] ?? parameter.default;
+            let input;
+            if (parameter.choices?.length) {
+              input = document.createElement("select");
+              parameter.choices.forEach((choice) => input.add(new Option(String(choice), String(choice))));
+              input.value = String(value);
+            } else {
+              input = document.createElement("input");
+              Object.assign(input, { type: "number", step: Number.isInteger(parameter.default) ? "1" : "any", value, required: true });
+              if (parameter.min != null) input.min = String(parameter.min);
+            }
+            input.name = parameter.name;
+            label.append(name, input);
+            if (parameter.config) {
+              label.title = `Set in ${parameter.config.file}. A new value restarts the session before the run.`;
+            }
+            row.append(label);
+          });
+          const duplicate = document.createElement("button");
+          duplicate.type = "button";
+          duplicate.className = "row-action duplicate-row";
+          duplicate.innerHTML = ICON_DUPLICATE;
+          duplicate.title = "Add run";
+          duplicate.setAttribute("aria-label", "Add run");
+          duplicate.addEventListener("click", () => addRow(rowValue(row), row));
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "row-action remove-row";
+          remove.innerHTML = ICON_REMOVE;
+          remove.title = "Remove run";
+          remove.setAttribute("aria-label", "Remove run");
+          remove.addEventListener("click", () => { row.remove(); updateRows(); });
+          const status = document.createElement("span");
+          status.className = "row-status";
+          row.append(duplicate, remove, status);
+          if (after) after.after(row);
+          else rows.append(row);
+          updateRows();
+        };
         const run = document.createElement("button");
         run.type = "submit";
         run.className = "primary";
@@ -127,12 +175,15 @@ window.PE.experiments = (() => {
           try { await deps.command(apiUrl("api/session/experiment/stop")); }
           catch (error) { deps.showToast(error.message, "error"); }
         });
-        form.append(run, stop, reset);
+        const actions = document.createElement("div");
+        actions.className = "experiment-actions";
+        actions.append(run, stop, reset);
+        (saved.length ? saved : [{}]).forEach((values) => addRow(values));
+        form.append(rows, actions);
         form.addEventListener("submit", async (event) => {
           event.preventDefault();
           deps.openLogs();
-          const parameters = Object.fromEntries(new FormData(form).entries());
-          try { await deps.command(apiUrl("api/session/experiment"), { experiment: experiment.name, parameters }); }
+          try { await deps.command(apiUrl("api/session/experiment"), { experiment: experiment.name, runs: rowValues(form) }); }
           catch (error) { deps.showToast(error.message, "error"); }
         });
         const results = document.createElement("div");
@@ -363,6 +414,14 @@ window.PE.experiments = (() => {
         const sortLabel = sort.column === "time" && sort.direction === -1 ? "newest first"
           : `sorted by ${sortColumn.group === "Run" ? "" : `${sortColumn.group} `}${sortColumn.label}, ${sort.direction === 1 ? "ascending" : "descending"}`;
         caption.textContent = `${runs.length} saved run${runs.length === 1 ? "" : "s"}, ${sortLabel}`;
+        const copy = document.createElement("button");
+        copy.type = "button";
+        copy.className = "copy-table";
+        copy.innerHTML = ICON_COPY;
+        copy.title = "Copy table";
+        copy.setAttribute("aria-label", "Copy table");
+        copy.addEventListener("click", () => copyTable(experiment, columns, runs));
+        caption.append(copy);
         const stageLegend = timelineLegend(timelines.find((segments) => segments.length) || []);
         const legend = document.createElement("dl");
         legend.className = "experiment-legend";
@@ -376,6 +435,44 @@ window.PE.experiments = (() => {
         });
         target.replaceChildren(table, ...(stageLegend ? [stageLegend] : []), ...(legend.childElementCount ? [legend] : []));
       });
+    }
+
+    // Copies the runs in the table's order, as HTML (pastes as a table into
+    // docs and spreadsheets) and tab-separated text. The timeline becomes one
+    // column per stage, in ms.
+    async function copyTable(experiment, columns, runs) {
+      const stageLabels = [...new Set(runs.flatMap((run) => runTimeline(run).map((segment) => segment.label)))];
+      const plain = new Set(["Run", "Settings", "Workload"]);
+      const header = [
+        ...columns.filter((column) => column.key !== "timeline")
+          .map((column) => plain.has(column.group) ? column.title || column.label : `${column.group} ${column.label}`),
+        ...stageLabels.map((label) => `${label} (ms)`),
+      ];
+      const rows = runs.map((run) => {
+        const stages = new Map(runTimeline(run).map((segment) => [segment.label, segment.ms.toFixed(1)]));
+        return [
+          ...columns.filter((column) => column.key !== "timeline")
+            .map((column) => String(column.text ? column.text(run) : (column.value(run) ?? ""))),
+          ...stageLabels.map((label) => stages.get(label) ?? ""),
+        ];
+      });
+      const text = [header, ...rows].map((cells) => cells.join("\t")).join("\n");
+      const escape = (value) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      const html = `<table><thead><tr>${header.map((cell) => `<th>${escape(cell)}</th>`).join("")}</tr></thead><tbody>${
+        rows.map((cells) => `<tr>${cells.map((cell) => `<td>${escape(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+      try {
+        if (window.ClipboardItem) {
+          await navigator.clipboard.write([new ClipboardItem({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([text], { type: "text/plain" }),
+          })]);
+        } else {
+          await navigator.clipboard.writeText(text);
+        }
+        deps.showToast(`Copied ${runs.length} ${experiment.title} run${runs.length === 1 ? "" : "s"}`, "ok");
+      } catch (error) {
+        deps.showToast(`Copy failed: ${error.message}`, "error");
+      }
     }
 
     function render(selected, active, compact, busy, operation) {
@@ -402,12 +499,26 @@ window.PE.experiments = (() => {
         form.querySelector("button.stop").hidden = !experimenting;
         form.querySelector("button.secondary").disabled = busy;
         form.querySelector("button[type=submit]").disabled = busy;
+        form.querySelectorAll("button.row-action").forEach((button) => { button.disabled = busy; });
+        // Each row shows its run's status while the list runs and after it ends,
+        // as long as the rows still match the list that was submitted.
+        const rows = form.querySelectorAll(".experiment-row");
+        const statuses = operation?.name === "experiment" && operation.experiment === form.parentElement.dataset.experiment
+          && operation.runs?.length === rows.length && rows.length > 1 ? operation.runs : [];
+        rows.forEach((row, index) => {
+          const status = statuses[index] || "";
+          row.querySelector(".row-status").textContent = status;
+          row.dataset.status = status;
+        });
       });
       // Any finished operation can change the session's config: an experiment
-      // or a reload applies values, a stop and a new start drop them.
+      // or a reload applies values, a stop and a new start drop them. Each
+      // finished run in a list adds a saved run.
       const finished = operation && operation.status !== "running" ? operation.finished_at : null;
-      if (finished && finished !== experimentsSeen) {
-        experimentsSeen = finished;
+      const runsFinished = (operation?.runs || []).filter((status) => !["queued", "running"].includes(status)).length;
+      const seen = finished || (runsFinished ? `${operation.started_at}:${runsFinished}` : null);
+      if (seen && seen !== experimentsSeen) {
+        experimentsSeen = seen;
         loadExperimentRuns(selected.slug);
       }
     }

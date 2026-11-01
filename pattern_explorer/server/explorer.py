@@ -21,7 +21,7 @@ from ..orchestration import config_overlay
 from ..orchestration.experiments import (
     clear_runs,
     read_runs,
-    run_experiment,
+    run_experiments,
     stop_experiment,
 )
 from ..rendering.site import (
@@ -273,7 +273,9 @@ class ExplorerController:
 
         return report
 
-    def _start_operation(self, name: str, slug: str | None, action) -> dict:
+    def _start_operation(
+        self, name: str, slug: str | None, action, details: dict | None = None
+    ) -> dict:
         with self._state_lock:
             if self._operation and self._operation["status"] == "running":
                 raise ExplorerConflict(
@@ -286,6 +288,7 @@ class ExplorerController:
                 "started_at": datetime.now(timezone.utc).isoformat(),
                 "event_sequence": self.events.next_sequence(),
                 "error": None,
+                **(details or {}),
             }
             self._operation = operation
 
@@ -371,15 +374,24 @@ class ExplorerController:
             lambda: validate_and_record_session(report=self._reporter(active.slug)),
         )
 
-    def experiment(self, name: str, parameters: dict) -> dict:
+    def experiment(self, name: str, runs: list[dict]) -> dict:
+        """Run the parameter sets in order; the operation's `runs` lists each
+        one's status so the browser can mark its row."""
         active = sessions.read_session(required=True)
         pattern = sessions.load_session_pattern(active)
+
+        def on_status(statuses: list[str]) -> None:
+            with self._state_lock:
+                if self._operation and self._operation["name"] == "experiment":
+                    self._operation["runs"] = statuses
+
         return self._start_operation(
             "experiment",
             active.slug,
-            lambda: run_experiment(
-                pattern, name, parameters, report=self._reporter(active.slug)
+            lambda: run_experiments(
+                pattern, name, runs, report=self._reporter(active.slug), on_status=on_status
             ),
+            details={"experiment": name, "runs": ["queued"] * len(runs)},
         )
 
     def restore_config(self) -> dict:
@@ -621,12 +633,15 @@ class ExplorerRequestHandler(SimpleHTTPRequestHandler):
                 operation = self.controller.switch(slug)
             elif route == "/api/session/experiment":
                 name = payload.get("experiment")
-                parameters = payload.get("parameters") or {}
+                # `runs` lists parameter sets to run in order; `parameters` is one set.
+                runs = payload.get("runs") or [payload.get("parameters") or {}]
                 if not isinstance(name, str) or not name:
                     raise ValueError("`experiment` is required")
-                if not isinstance(parameters, dict):
-                    raise ValueError("`parameters` must be an object")
-                operation = self.controller.experiment(name, parameters)
+                if not isinstance(runs, list) or not all(isinstance(run, dict) for run in runs):
+                    raise ValueError("`runs` must be a list of objects")
+                if len(runs) > 50:
+                    raise ValueError("at most 50 runs per request")
+                operation = self.controller.experiment(name, runs)
             elif route == "/api/session/experiment/stop":
                 if not stop_experiment():
                     raise ValueError(
