@@ -71,7 +71,7 @@ metadata:
 
     :::fold Example: decoding the INSERT of one `public.orders` row
 
-    The 91-byte WAL record of `INSERT ... (5, 'erin', 500)` from a run of this pattern, at LSN `0/03014CC0`. Transaction IDs, LSNs and the relfilenode differ in every run. `pg_waldump -r Heap` in the `postgres` container lists the records; the bytes are at the LSN's offset in the WAL segment file.
+    The 91-byte WAL record of `INSERT ... (5, 'erin', 500)` from a run of this pattern, at LSN `0/03014CC0`. `pg_waldump -r Heap` in the `postgres` container lists the records; the bytes are at the LSN's offset in the WAL segment file.
 
     ```
     offset  bytes                    meaning
