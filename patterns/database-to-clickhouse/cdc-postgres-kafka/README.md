@@ -114,7 +114,10 @@ just test cdc-postgres-kafka
 
 `replication_latency_ms` measures source row write → ClickHouse insert in milliseconds, using `updated_at` and `ch_inserted_at`. Snapshot and delete rows show `NULL`.
 
-Lower latency: reduce `poll.interval.ms` in `config/source.json` (default: 500 ms) to shorten idle polling delays, at the cost of increased CPU use.
+Latency has two stages, one per connector:
+
+- **Postgres to Kafka (Debezium):** Debezium collects change events into a batch until it holds `max.batch.size` events (default 2048) or `poll.interval.ms` passes (`config/source.json`, default 500 ms), then publishes the batch. A lower interval publishes smaller batches sooner and raises CPU use on the Connect worker.
+- **Kafka to ClickHouse (sink):** the sink inserts the records of each consumer poll in one synchronous INSERT (it sets `async_insert=0`), and each INSERT creates a new part. `bufferCount` and `bufferFlushTime` in `config/sink.json` (default 0, off) collect records across polls into fewer, larger INSERTs, at the cost of latency.
 
 Inspect `test.orders` in **Contents** to follow `updated_at` → `__source_ts_ms` (Debezium source-event time, epoch milliseconds) → `__timestamp` (Kafka record time) → `ch_inserted_at`. The source SMT preserves Debezium's snapshot marker as `__snapshot` as well as its event timestamp. The Kafka topic, partition and offset identify the intermediate record. These connector timestamps are kept separate from the source business write time.
 

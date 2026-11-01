@@ -1073,6 +1073,13 @@ button, input { font: inherit; }
 [data-theme="soft"] .session-actions button:hover, [data-theme="soft"] .session-links a:hover, [data-theme="soft"] .session-links .console-split:hover { color: var(--text); }
 [data-theme="soft"] .session-actions button.primary { color: var(--text); }
 [data-theme="soft"] .session-actions button.danger { color: #f2a1a8; }
+[data-theme="soft"] .experiment-actions button { border: 0; background: var(--bg); box-shadow: var(--raised-sm); color: var(--muted); }
+[data-theme="soft"] .experiment-actions button:hover:not(:disabled) { color: var(--text); }
+[data-theme="soft"] .experiment-actions button.primary { color: var(--text); }
+[data-theme="soft"] .experiment-actions button.stop { color: var(--danger, #f2a1a8); }
+[data-theme="soft"] .experiment-form input, [data-theme="soft"] .experiment-form select { border: 0; background: var(--bg); box-shadow: var(--pressed-sm); }
+[data-theme="soft"] .experiments-applied { border: 0; box-shadow: var(--pressed-sm); }
+[data-theme="soft"] .experiments-applied button { border: 0; background: var(--bg); box-shadow: var(--raised-sm); }
 [data-theme="soft"] .explorer-mode { border: 0; background: var(--bg); box-shadow: var(--pressed-sm); color: var(--dim); }
 [data-theme="soft"] .explorer-mode.local { color: var(--blue); }
 [data-theme="soft"] .session-progress { border-top: 1px solid var(--groove); }
@@ -1404,6 +1411,8 @@ button, input { font: inherit; }
 [data-theme="flat"][data-scheme="light"] .definition-tabs button:hover { border-color: #b8c2d8; color: var(--text); }
 [data-theme="flat"][data-scheme="light"] .session-actions button.primary { border-color: #9fd8bf; background: #eafaf2; color: var(--text); }
 [data-theme="flat"][data-scheme="light"] .session-actions button.danger { border-color: #ecc5c8; color: #c14b47; }
+[data-theme="flat"][data-scheme="light"] .experiment-actions button.primary { border-color: #9fd8bf; background: #eafaf2; color: var(--text); }
+[data-theme="flat"][data-scheme="light"] .experiment-actions button.stop { border-color: #ecc5c8; color: #c14b47; }
 [data-theme="flat"][data-scheme="light"] .session-progress { border-top-color: var(--line); }
 [data-theme="flat"][data-scheme="light"] .session-progress ol { color: var(--muted); }
 
