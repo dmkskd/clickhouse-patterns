@@ -549,7 +549,11 @@ window.PE.catalogView = (() => {
         // Subsections are indented under their section.
         button.className = `pattern-section-link${element.classList.contains("sub") ? " sub" : ""}`;
         button.textContent = label;
-        button.addEventListener("click", () => element.scrollIntoView({ behavior: "smooth", block: "start" }));
+        button.addEventListener("click", () => {
+          // A heading inside a closed fold has no position until the fold opens.
+          element.closest("details")?.setAttribute("open", "");
+          element.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
         button.sectionTarget = element;
         return button;
       }));

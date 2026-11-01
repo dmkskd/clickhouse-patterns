@@ -154,43 +154,96 @@ window.PE.patternPage = (() => {
 
     // renderDescription paints the styled paragraphs into the DOM; the inline
     // markup and plain-text helpers it uses live in util.js.
+    // Blank lines separate description blocks. A ``` fence keeps its lines as
+    // written, blank lines included. ":::fold Title" ... ":::" puts the blocks
+    // between the two markers in a collapsed <details> titled Title.
+    function descriptionNodes(text) {
+      const nodes = [];
+      const lines = String(text ?? "").split("\n");
+      let block = [];
+      const flush = () => {
+        if (block.join("").trim()) nodes.push(blockNode(block.join("\n").trim()));
+        block = [];
+      };
+      // Index of the line that closes the fence or fold opened at `start`;
+      // fences inside a fold are skipped, so their lines cannot close it.
+      const closing = (start, marker) => {
+        for (let index = start + 1; index < lines.length; index += 1) {
+          const line = lines[index].trim();
+          if (marker === ":::" && line.startsWith("```")) index = closing(index, "```");
+          else if (line === marker) return index;
+        }
+        return lines.length;
+      };
+      for (let index = 0; index < lines.length; index += 1) {
+        const line = lines[index].trim();
+        if (line.startsWith("```")) {
+          flush();
+          const end = closing(index, "```");
+          const pre = document.createElement("pre");
+          const code = document.createElement("code");
+          code.textContent = lines.slice(index + 1, end).join("\n");
+          pre.append(code);
+          nodes.push(pre);
+          index = end;
+        } else if (line.startsWith(":::fold")) {
+          flush();
+          const end = closing(index, ":::");
+          const fold = document.createElement("details");
+          fold.className = "pattern-description-fold";
+          const summary = document.createElement("summary");
+          summary.innerHTML = formatDescInline(line.slice(":::fold".length).trim() || "Details");
+          fold.append(summary, ...descriptionNodes(lines.slice(index + 1, end).join("\n")));
+          nodes.push(fold);
+          index = end;
+        } else if (!line) {
+          flush();
+        } else {
+          block.push(lines[index]);
+        }
+      }
+      flush();
+      return nodes;
+    }
+
+    function blockNode(block) {
+      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+      // A "### " block is a section heading within the description, and a
+      // "#### " block a subsection of the section above it.
+      const marker = lines.length === 1 && /^(###|####) /.exec(lines[0]);
+      if (marker) {
+        const sub = marker[1] === "####";
+        const heading = document.createElement(sub ? "h4" : "h3");
+        heading.className = `pattern-description-heading${sub ? " sub" : ""}`;
+        heading.innerHTML = formatDescInline(lines[0].slice(marker[0].length));
+        return heading;
+      }
+      if (!lines[0]?.startsWith("- ")) {
+        const para = document.createElement("p");
+        para.innerHTML = formatDescInline(block);
+        return para;
+      }
+
+      const list = document.createElement("ul");
+      const items = [];
+      for (const line of lines) {
+        if (line.startsWith("- ")) {
+          items.push(line.slice(2));
+        } else if (items.length) {
+          items[items.length - 1] += ` ${line}`;
+        }
+      }
+      for (const item of items) {
+        const li = document.createElement("li");
+        li.innerHTML = formatDescInline(item);
+        list.append(li);
+      }
+      return list;
+    }
+
     function renderDescription(text) {
       const el = $("pattern-description");
-      const blocks = String(text ?? "").split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
-      const nodes = blocks.map((block) => {
-        const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-        // A "### " block is a section heading within the description, and a
-        // "#### " block a subsection of the section above it.
-        const marker = lines.length === 1 && /^(###|####) /.exec(lines[0]);
-        if (marker) {
-          const sub = marker[1] === "####";
-          const heading = document.createElement(sub ? "h4" : "h3");
-          heading.className = `pattern-description-heading${sub ? " sub" : ""}`;
-          heading.innerHTML = formatDescInline(lines[0].slice(marker[0].length));
-          return heading;
-        }
-        if (!lines[0]?.startsWith("- ")) {
-          const para = document.createElement("p");
-          para.innerHTML = formatDescInline(block);
-          return para;
-        }
-
-        const list = document.createElement("ul");
-        const items = [];
-        for (const line of lines) {
-          if (line.startsWith("- ")) {
-            items.push(line.slice(2));
-          } else if (items.length) {
-            items[items.length - 1] += ` ${line}`;
-          }
-        }
-        for (const item of items) {
-          const li = document.createElement("li");
-          li.innerHTML = formatDescInline(item);
-          list.append(li);
-        }
-        return list;
-      });
+      const nodes = descriptionNodes(text);
       // The first block is the lede and renders above the architecture panel;
       // the rest of the description follows it.
       const lede = $("pattern-description-lede");

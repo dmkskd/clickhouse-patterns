@@ -703,6 +703,11 @@ button, input { font: inherit; }
 .pattern-description-heading { margin: 28px 0 10px; color: var(--text); font-size: 16px; font-weight: 600; }
 .pattern-description > .pattern-description-heading:first-child { margin-top: 0; }
 .pattern-description-heading.sub { margin: 20px 0 8px; font-size: 14px; }
+.pattern-description pre { margin: 10px 0 12px; padding: 10px 12px; overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; background: color-mix(in srgb, var(--text) 4%, transparent); }
+.pattern-description pre code { padding: 0; background: none; font-size: 12.5px; line-height: 1.55; white-space: pre; }
+.pattern-description-fold { margin: 10px 0 12px; }
+.pattern-description-fold > summary { color: var(--text); font-weight: 600; cursor: pointer; }
+.pattern-description-fold[open] > summary { margin-bottom: 8px; }
 .pattern-description a { color: #4cc3f7; text-decoration: none; }
 .pattern-description a:hover { text-decoration: underline; }
 /* On light schemes the bright blue reads badly; keep links in text color with
