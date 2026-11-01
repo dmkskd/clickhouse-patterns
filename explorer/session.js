@@ -524,29 +524,67 @@ window.PE.session = (() => {
     }
 
     // Sections marked data-tab stay stacked; a sticky tab row above them scrolls
-    // to each one, and the tab of the section at the top is marked active.
+    // to each one, and the tab of the section at the top is marked active. When
+    // the sections are grouped by table (data-table), a row of table tabs sits
+    // above and shows one table's sections at a time.
+    const visibleSections = () => [...resourceInspectorBody.querySelectorAll(".resource-inspector-section[data-tab]")]
+      .filter((section) => !section.closest("[hidden]"));
+
     function addSectionTabs() {
-      const sections = [...resourceInspectorBody.querySelectorAll(".resource-inspector-section[data-tab]")];
-      if (sections.length < 2) return;
+      const tables = [...resourceInspectorBody.querySelectorAll(".resource-inspector-table[data-table]")];
       const bar = document.createElement("div");
-      bar.className = "definition-tabs resource-inspector-tabs";
-      sections.forEach((section) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.textContent = section.dataset.tab;
-        button.addEventListener("click", () => section.scrollIntoView({ behavior: "smooth", block: "start" }));
-        bar.append(button);
-      });
+      bar.className = "resource-inspector-tabs";
+      const sectionRow = document.createElement("div");
+      sectionRow.className = "definition-tabs resource-inspector-section-tabs";
+      const showSectionRow = () => {
+        const sections = visibleSections();
+        sectionRow.replaceChildren(...sections.map((section) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = section.dataset.tab;
+          // Scroll by the sticky bar's height, which grows with the table row.
+          button.addEventListener("click", () => resourceInspectorBody.scrollTo({
+            top: resourceInspectorBody.scrollTop + section.getBoundingClientRect().top
+              - resourceInspectorBody.getBoundingClientRect().top - bar.offsetHeight - 8,
+            behavior: "smooth"
+          }));
+          return button;
+        }));
+        sectionRow.hidden = sections.length < 2;
+        resourceInspectorBody.scrollTop = 0;
+        markSectionTab();
+      };
+      if (tables.length > 1) {
+        const tableRow = document.createElement("div");
+        tableRow.className = "definition-tabs";
+        tables.forEach((table) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = table.dataset.table;
+          button.addEventListener("click", () => {
+            tables.forEach((other) => { other.hidden = other !== table; });
+            tableRow.querySelectorAll("button").forEach((other) => other.classList.toggle("active", other === button));
+            showSectionRow();
+          });
+          tableRow.append(button);
+        });
+        bar.append(tableRow);
+        tables.forEach((table, index) => { table.hidden = index > 0; });
+        tableRow.firstChild.classList.add("active");
+      } else if (visibleSections().length < 2) {
+        return;
+      }
+      bar.append(sectionRow);
       resourceInspectorBody.prepend(bar);
-      resourceInspectorBody.scrollTop = 0;
-      markSectionTab();
+      showSectionRow();
     }
 
     function markSectionTab() {
-      const bar = resourceInspectorBody.querySelector(".resource-inspector-tabs");
+      const bar = resourceInspectorBody.querySelector(".resource-inspector-section-tabs");
       if (!bar) return;
-      const sections = [...resourceInspectorBody.querySelectorAll(".resource-inspector-section[data-tab]")];
-      const top = resourceInspectorBody.getBoundingClientRect().top + bar.offsetHeight + 8;
+      const sections = visibleSections();
+      if (!sections.length) return;
+      const top = resourceInspectorBody.getBoundingClientRect().top + bar.parentElement.offsetHeight + 12;
       const atBottom = resourceInspectorBody.scrollTop + resourceInspectorBody.clientHeight >= resourceInspectorBody.scrollHeight - 2;
       let current = sections[0];
       sections.forEach((section) => { if (section.getBoundingClientRect().top <= top) current = section; });
@@ -725,26 +763,26 @@ window.PE.session = (() => {
       $("resource-inspector-title").textContent = payload.title;
       $("resource-inspector-subtitle").textContent = payload.subtitle;
       const several = payload.tables.length > 1;
-      // Several tables repeat the same three headings, so only a single table
-      // gets the tab row.
-      const tab = (label) => several ? "" : ` data-tab="${label}"`;
+      // Several tables each get a table tab; the section tabs below it cover
+      // the table shown.
       resourceInspectorBody.innerHTML = payload.tables.map((table) => {
         const name = several ? ` · ${esc(table.schema)}.${esc(table.table)}` : "";
         const sample = table.sample;
-        return `
-        <section class="resource-inspector-section"${tab("Definition")}>
+        return `<div class="resource-inspector-table" data-table="${esc(table.schema)}.${esc(table.table)}">
+        <section class="resource-inspector-section" data-tab="Definition">
           <h3>Table definition${name}</h3>
           ${sqlBlock(table.create_statement)}
         </section>
-        <section class="resource-inspector-section"${tab("Columns")}>
+        <section class="resource-inspector-section" data-tab="Columns">
           <h3>Columns${name}</h3>
           ${window.PE.util.dataTable(["Column", "Type", "Default"], table.columns.map((c) => [c.name, c.type, c.default]))}
         </section>
-        <section class="resource-inspector-section"${tab("Contents")}>
+        <section class="resource-inspector-section" data-tab="Contents">
           <h3>Contents${name}</h3>
           ${table.sample_error ? `<p class="resource-inspector-note">The definition loaded, but this table could not be sampled: ${esc(table.sample_error)}</p>` : ""}
           ${sample ? `<p class="resource-sample-meta">Up to ${sample.limit} rows</p>${window.PE.util.dataTable(sample.columns, sample.rows)}` : ""}
-        </section>`;
+        </section>
+        </div>`;
       }).join("");
       addSectionTabs();
     }
