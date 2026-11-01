@@ -207,6 +207,7 @@ The remaining commands operate on the recorded session:
 | `just status` | Show phase, profiles, driver URL, reachability, and source drift |
 | `just status --json` | Return the same information, including the exact `pattern_dir`, for an agent or script |
 | `just reload` | Validate the edited manifest, destroy the stack, and start it cleanly |
+| `just experiment [<name> parameter=value ...]` | List the pattern's experiments, or run one and save its result row (the Explorer's Experiments panel runs the same) |
 | `just stop` | Destroy the stack and its volumes, then clear session state |
 
 A foreground Codex inspection session uses two terminals:
