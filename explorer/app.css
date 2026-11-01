@@ -839,6 +839,8 @@ button, input { font: inherit; }
 .resource-inspector-loading::before { content: ""; display: block; width: 20px; height: 20px; margin: 0 auto 13px; border: 2px solid #34405f; border-top-color: var(--green); border-radius: 50%; animation: inspector-spin .8s linear infinite; }
 @keyframes inspector-spin { to { transform: rotate(360deg); } }
 .resource-inspector-section + .resource-inspector-section { margin-top: 23px; }
+.resource-inspector-tabs { position: sticky; top: -20px; z-index: 1; margin: -20px -20px 18px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.resource-inspector-section[data-tab] { scroll-margin-top: 64px; }
 .resource-inspector-section h3 { margin: 0 0 10px; color: #8d98b8; font: 700 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .13em; text-transform: uppercase; }
 .resource-inspector-note { margin: 0 0 12px; padding: 10px 12px; border: 1px solid #554a2d; border-radius: 8px; background: #211d12; color: #e2c679; font-size: 12px; line-height: 1.45; }
 .resource-inspector pre { max-height: 280px; overflow: auto; margin: 0; padding: 14px; border: 1px solid #252c45; border-radius: 9px; background: #070910; color: #d9deed; font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; }

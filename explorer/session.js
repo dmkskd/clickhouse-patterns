@@ -523,6 +523,40 @@ window.PE.session = (() => {
       await refreshSession();
     }
 
+    // Sections marked data-tab stay stacked; a sticky tab row above them scrolls
+    // to each one, and the tab of the section at the top is marked active.
+    function addSectionTabs() {
+      const sections = [...resourceInspectorBody.querySelectorAll(".resource-inspector-section[data-tab]")];
+      if (sections.length < 2) return;
+      const bar = document.createElement("div");
+      bar.className = "definition-tabs resource-inspector-tabs";
+      sections.forEach((section) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = section.dataset.tab;
+        button.addEventListener("click", () => section.scrollIntoView({ behavior: "smooth", block: "start" }));
+        bar.append(button);
+      });
+      resourceInspectorBody.prepend(bar);
+      resourceInspectorBody.scrollTop = 0;
+      markSectionTab();
+    }
+
+    function markSectionTab() {
+      const bar = resourceInspectorBody.querySelector(".resource-inspector-tabs");
+      if (!bar) return;
+      const sections = [...resourceInspectorBody.querySelectorAll(".resource-inspector-section[data-tab]")];
+      const top = resourceInspectorBody.getBoundingClientRect().top + bar.offsetHeight + 8;
+      const atBottom = resourceInspectorBody.scrollTop + resourceInspectorBody.clientHeight >= resourceInspectorBody.scrollHeight - 2;
+      let current = sections[0];
+      sections.forEach((section) => { if (section.getBoundingClientRect().top <= top) current = section; });
+      if (atBottom) current = sections[sections.length - 1];
+      bar.querySelectorAll("button").forEach((button) => {
+        button.classList.toggle("active", button.textContent === current.dataset.tab);
+      });
+    }
+    resourceInspectorBody.addEventListener("scroll", markSectionTab);
+
     function renderClickHouseInspector(payload) {
       $("resource-inspector-title").textContent = `${payload.database}.${payload.table}`;
       $("resource-inspector-subtitle").textContent = payload.node
@@ -545,20 +579,21 @@ window.PE.session = (() => {
       const columnsHeading = target ? `Columns in ${esc(target)}` : "Columns";
       const contentsHeading = target ? `Rows in ${esc(target)}` : "Contents";
       resourceInspectorBody.innerHTML = `
-        <section class="resource-inspector-section">
+        <section class="resource-inspector-section" data-tab="Definition">
           <h3>Table definition</h3>
           ${sqlBlock(payload.create_statement)}
         </section>
-        <section class="resource-inspector-section">
+        <section class="resource-inspector-section" data-tab="Columns">
           <h3>${columnsHeading}</h3>
           ${window.PE.util.dataTable(["Column", "Type", "Default"], columnRows)}
         </section>
-        <section class="resource-inspector-section">
+        <section class="resource-inspector-section" data-tab="Contents">
           <h3>${contentsHeading}</h3>
           ${payload.sample_disabled ? `<p class="resource-inspector-note">${esc(payload.sample_disabled)}</p>` : ""}
           ${payload.sample_error ? `<p class="resource-inspector-note">The definition loaded, but this resource could not be sampled: ${esc(payload.sample_error)}</p>` : ""}
           ${sample ? `<p class="resource-sample-meta">Up to ${sample.limit} rows</p>${window.PE.util.dataTable(sample.columns, sample.rows)}` : ""}
         </section>`;
+      addSectionTabs();
     }
 
     // Object paths render as a breadcrumb: each folder at or below the
@@ -665,48 +700,53 @@ window.PE.session = (() => {
       if (payload.last_exception) stateRows.push(["Last exception", String(payload.last_exception)]);
       const sample = payload.sample;
       resourceInspectorBody.innerHTML = `
-        <section class="resource-inspector-section">
+        <section class="resource-inspector-section" data-tab="Definition">
           <h3>Dictionary definition</h3>
           ${sqlBlock(payload.create_statement)}
         </section>
-        <section class="resource-inspector-section">
+        <section class="resource-inspector-section" data-tab="Load state">
           <h3>Load state</h3>
           ${window.PE.util.dataTable(["Property", "Value"], stateRows)}
         </section>
-        <section class="resource-inspector-section">
+        <section class="resource-inspector-section" data-tab="Columns">
           <h3>Key and attributes</h3>
           ${window.PE.util.dataTable(["Column", "Type", "Role"], columnRows)}
         </section>
-        <section class="resource-inspector-section">
+        <section class="resource-inspector-section" data-tab="Contents">
           <h3>Contents</h3>
           ${payload.sample_disabled ? `<p class="resource-inspector-note">${esc(payload.sample_disabled)}</p>` : ""}
           ${payload.sample_error ? `<p class="resource-inspector-note">The definition loaded, but this dictionary could not be sampled: ${esc(payload.sample_error)}</p>` : ""}
           ${sample ? `<p class="resource-sample-meta">Up to ${sample.limit} rows, as dictGet would resolve them now</p>${window.PE.util.dataTable(sample.columns, sample.rows)}` : ""}
         </section>`;
+      addSectionTabs();
     }
 
     function renderDatabaseInspector(payload) {
       $("resource-inspector-title").textContent = payload.title;
       $("resource-inspector-subtitle").textContent = payload.subtitle;
       const several = payload.tables.length > 1;
+      // Several tables repeat the same three headings, so only a single table
+      // gets the tab row.
+      const tab = (label) => several ? "" : ` data-tab="${label}"`;
       resourceInspectorBody.innerHTML = payload.tables.map((table) => {
         const name = several ? ` · ${esc(table.schema)}.${esc(table.table)}` : "";
         const sample = table.sample;
         return `
-        <section class="resource-inspector-section">
+        <section class="resource-inspector-section"${tab("Definition")}>
           <h3>Table definition${name}</h3>
           ${sqlBlock(table.create_statement)}
         </section>
-        <section class="resource-inspector-section">
+        <section class="resource-inspector-section"${tab("Columns")}>
           <h3>Columns${name}</h3>
           ${window.PE.util.dataTable(["Column", "Type", "Default"], table.columns.map((c) => [c.name, c.type, c.default]))}
         </section>
-        <section class="resource-inspector-section">
+        <section class="resource-inspector-section"${tab("Contents")}>
           <h3>Contents${name}</h3>
           ${table.sample_error ? `<p class="resource-inspector-note">The definition loaded, but this table could not be sampled: ${esc(table.sample_error)}</p>` : ""}
           ${sample ? `<p class="resource-sample-meta">Up to ${sample.limit} rows</p>${window.PE.util.dataTable(sample.columns, sample.rows)}` : ""}
         </section>`;
       }).join("");
+      addSectionTabs();
     }
 
     function renderKafkaTopicInspector(payload) {
@@ -715,15 +755,16 @@ window.PE.session = (() => {
       const partitionRows = payload.partitions.map((p) => [String(p.partition), String(p.low), String(p.high), String(p.messages)]);
       const sample = payload.sample;
       resourceInspectorBody.innerHTML = `
-        <section class="resource-inspector-section">
+        <section class="resource-inspector-section" data-tab="Partitions">
           <h3>Partitions</h3>
           ${window.PE.util.dataTable(["Partition", "Low offset", "High offset", "Messages"], partitionRows)}
         </section>
-        <section class="resource-inspector-section">
+        <section class="resource-inspector-section" data-tab="Messages">
           <h3>Latest messages</h3>
           <p class="resource-sample-meta">Up to ${sample.limit} most recent, read without a consumer group or offset commits</p>
           ${sample.rows.length ? window.PE.util.dataTable(sample.columns, sample.rows) : '<p class="resource-inspector-note">The topic holds no messages.</p>'}
         </section>`;
+      addSectionTabs();
     }
 
     function renderResourceInspector(payload, resourceKey, folder) {
