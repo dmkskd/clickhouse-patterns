@@ -74,18 +74,18 @@ metadata:
     The 91-byte WAL record of `INSERT ... (5, 'erin', 500)` from a run of this pattern, at LSN `0/03014CC0`. `pg_waldump -r Heap` in the `postgres` container lists the records; the bytes are at the LSN's offset in the WAL segment file.
 
     ```
-    offset  bytes                    meaning
+    offset  bytes                    field
     00      5b 00 00 00              record length: 91
     04      ea 02 00 00              transaction id 746
     08      90 4c 01 03 00 00 00 00  previous record: LSN 0/03014C90
     16      00 0a 00 00              INSERT, resource manager 10 (Heap)
     20      f9 81 70 34              CRC
-    24      00 20 2a 00              block 0, followed by 42 bytes of row data
+    24      00 20 2a 00              block reference 0, 42 bytes of block data
     28      7f 06 00 00              tablespace 1663
     32      00 40 00 00              database 16384
     36      13 40 00 00              relfilenode 16403      <- the table
-    40      00 00 00 00              page 0
-    44      ff 03                    3 bytes of INSERT data at the end
+    40      00 00 00 00              block number 0
+    44      ff 03                    main data: 3 bytes
     46      06 00 02 08 18           tuple header: 6 columns, variable-width values, data at byte 24
     51      00                       padding
     52      05 00 00 00              5                      <- id: integer, 4 bytes, least significant byte first
@@ -95,7 +95,7 @@ metadata:
     68      9e 7b 6a 9b 34 02 03 00  2026-11-01 12:04:59.133854 UTC  <- created_at: timestamptz, 8 bytes, microseconds since 2000-01-01
     76      9e 7b 6a 9b 34 02 03 00  same value             <- updated_at: timestamptz, 8 bytes
     84      09 6e 65 77              'new'                  <- status: text, length byte 09 (3 characters follow), then n e w
-    88      07 00 08                 row slot 7 on the page; flag: the record contains the new row
+    88      07 00 08                 main data: offset number 7, flags 08 (contains new tuple)
     ```
 
     The table appears only as relfilenode 16403 (bytes 36-39). A variable-length value (`varchar`, `text`) starts with a length byte ([variable-length storage](https://www.postgresql.org/docs/16/storage-toast.html)). Bytes 52-87 are the column values without names or types: splitting them into `id`, `customer`, `amount` and the rest requires the table definition.
