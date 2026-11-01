@@ -8,14 +8,13 @@ test.orders (source write to ClickHouse insert), added by latency.sql.
 from __future__ import annotations
 
 from pattern_explorer.orchestration.nodes import connect
-from pattern_explorer.orchestration.probe import (
+from pattern_explorer.orchestration.pattern_specific.cdc_latency import (
     latency_summary,
     postgres_workload,
-    result_line,
-    insert_stage,
+    split_clickhouse_insert,
     stage_summary,
-    workload_args,
 )
+from pattern_explorer.orchestration.probe import result_line, workload_args
 from pattern_explorer.orchestration.wait import wait_for
 
 args = workload_args()
@@ -34,8 +33,12 @@ result["achieved_rate"] = round(args.rows / elapsed)
 # stream.go at v0.37.0). PeerDB records no time for the raw-table insert, so
 # batching, staging and normalize are one stage.
 read = "fromUnixTimestamp64Nano(toInt64(_peerdb_version), 'UTC')"
-result["stages"] = stage_summary(ch, "test", "orders", first, last, [
+stages = stage_summary(ch, "test", "orders", first, last, [
     ("Postgres write to PeerDB read", f"dateDiff('microsecond', updated_at, {read}) / 1000.0"),
     ("PeerDB read to ClickHouse insert (batch, raw table, normalize)", f"dateDiff('microsecond', {read}, ch_inserted_at) / 1000.0"),
-]) + [insert_stage(result)]
+])
+result["stages"] = split_clickhouse_insert(
+    ch, "test", "orders", started_at, stages,
+    "PeerDB read to ClickHouse INSERT received (batch, raw table, normalize)",
+)
 print(result_line(result))

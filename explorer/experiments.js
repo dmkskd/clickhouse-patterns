@@ -160,11 +160,10 @@ window.PE.experiments = (() => {
     }
 
     // Timeline: the run's per-row stages (averages, so they add up to the
-    // average latency), then the average ClickHouse INSERT execution, which is
-    // per statement.
+    // average latency).
     // Segments in the order the script reports them; each takes the next
     // palette slot, so neighbours are always a validated pair. `extra`
-    // segments (such as per-statement INSERT time) are drawn but not summed.
+    // segments are drawn but not summed.
     function runTimeline(run) {
       return (run.results.stages || []).map((stage, index) => ({
         label: stage.label, ms: Math.max(0, Number(stage.ms) || 0), index, extra: Boolean(stage.extra),
@@ -278,8 +277,9 @@ window.PE.experiments = (() => {
         // Columns, grouped under a header row by pipeline stage (source, tool,
         // ClickHouse, end to end), in the order the manifest's `groups` gives.
         const declared = new Map((experiment.results || []).map((result) => [result.name, result]));
-        const resultNames = [...new Set([...declared.keys(), ...runs.flatMap((run) => Object.keys(run.results))])]
-          .filter((name) => name !== "stages");
+        // Declared results only: runs saved before a manifest change can hold
+        // keys the experiment no longer reports.
+        const resultNames = [...declared.keys()].filter((name) => name !== "stages");
         const columns = [
           { key: "time", label: "time", group: "Run", value: (run) => new Date(run.started_at).getTime(),
             text: (run) => new Date(run.started_at).toLocaleTimeString() },

@@ -9,14 +9,13 @@ ClickHouse sink), added by latency.sql.
 from __future__ import annotations
 
 from pattern_explorer.orchestration.nodes import connect
-from pattern_explorer.orchestration.probe import (
+from pattern_explorer.orchestration.pattern_specific.cdc_latency import (
     latency_summary,
     postgres_workload,
-    result_line,
-    insert_stage,
+    split_clickhouse_insert,
     stage_summary,
-    workload_args,
 )
+from pattern_explorer.orchestration.probe import result_line, workload_args
 from pattern_explorer.orchestration.wait import wait_for
 
 args = workload_args()
@@ -34,9 +33,13 @@ result["achieved_rate"] = round(args.rows / elapsed)
 # precision). __timestamp: Kafka record timestamp, the producer's CreateTime
 # when Connect sent the record (runs show a positive commit-to-Kafka stage).
 commit = "fromUnixTimestamp64Milli(assumeNotNull(__source_ts_ms), 'UTC')"
-result["stages"] = stage_summary(ch, "test", "orders", first, last, [
+stages = stage_summary(ch, "test", "orders", first, last, [
     ("Postgres write to commit", f"dateDiff('microsecond', updated_at, {commit}) / 1000.0"),
     ("Commit to Kafka (Debezium)", f"dateDiff('microsecond', {commit}, __timestamp) / 1000.0"),
     ("Kafka to ClickHouse insert (sink)", "dateDiff('microsecond', __timestamp, ch_inserted_at) / 1000.0"),
-]) + [insert_stage(result)]
+])
+result["stages"] = split_clickhouse_insert(
+    ch, "test", "orders", started_at, stages,
+    "Kafka to ClickHouse INSERT received (sink)",
+)
 print(result_line(result))

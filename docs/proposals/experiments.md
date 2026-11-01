@@ -18,8 +18,9 @@ effect on latency and ClickHouse parts is the question readers ask.
 
 - **Declared per pattern.** `spec.experiments` names a script in the pattern
   folder, its parameters, the labels and groups of its results, and the group
-  order. The script owns the workload; shared pieces live in
-  `pattern_explorer/orchestration/probe.py`.
+  order. The script owns the workload; pieces common to every experiment
+  live in `pattern_explorer/orchestration/probe.py`, and helpers for one
+  pattern family in `pattern_explorer/orchestration/pattern_specific/`.
 - **Two kinds of parameter.** A `config` parameter rewrites one line of a
   pattern config file and reloads the session; any other parameter is a script
   argument. Values are numbers with an explicit `min`, or a fixed list of

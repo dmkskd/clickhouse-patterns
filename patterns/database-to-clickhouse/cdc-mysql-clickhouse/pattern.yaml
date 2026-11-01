@@ -19,7 +19,7 @@ metadata:
 
     The connector cannot transform records in flight: single-message transforms run inside the Kafka Connect runtime, which this lightweight deployment does not include. Records are inserted as Debezium produces them, so all shaping happens in ClickHouse, either in the target DDL or in a materialized view.
 
-    This repository pins Altinity sink `2.9.1-lt` to ClickHouse `25.3` because its startup JDBC metadata reads fail against ClickHouse `26.6`.
+    The pattern runs Altinity sink `2.11.0-lt` on ClickHouse `26.9`. The sink bundles `clickhouse-jdbc` 0.9.8, which decodes only LZ4-compressed responses; ClickHouse 26.9 compresses responses with ZSTD by default ([clickhouse-java #3105](https://github.com/ClickHouse/clickhouse-java/issues/3105)). `compress=0` in `config/connector.yaml` turns response compression off for the sink's three JDBC connections.
 
     ### Following a row through the pipeline
 
@@ -29,9 +29,9 @@ metadata:
 
     Edit the files in `config/`, then run `just reload` to rebuild the demo with the new settings. The **Configuration** panel displays the files.
 
-    Inspect `test.orders` and `test.orders_existing` in **Contents**: the source write times, connector `_version` and `is_deleted`, and destination insert time remain visible together. `_version` orders versions; the connector builds it from the MySQL commit time (`source.ts_ms`, milliseconds) and the GTID transaction number. The materialized view copies `ch_inserted_at` and `replication_latency_ms` unchanged, so `test.orders_transformed` reports the arrival time in `test.orders`.
+    Inspect `test.orders` and `test.orders_existing` in **Contents**: the source write times, connector `_version` and `is_deleted`, and destination insert time remain visible together. `_version` orders versions; the connector builds it from a source timestamp in milliseconds, floored so it never decreases, and the GTID transaction number. The materialized view copies `ch_inserted_at` and `replication_latency_ms` unchanged, so `test.orders_transformed` reports the arrival time in `test.orders`.
 
-    The **Experiments** panel runs a timed insert workload with chosen values for the `config/` latency settings and records latency, parts and INSERT cost per run.
+    The **Experiments** panel runs a timed insert workload with chosen values for the `config/` latency settings and records the latency per stage and the new parts per run.
   graph: |-
     snapshot:
       mysql:source_tables(label=2 MySQL sources,tables=test.orders + test.orders_existing)
@@ -66,14 +66,16 @@ metadata:
   order: 3
   tags: [cdc, mysql]
   references:
-    - label: Altinity lightweight insert scheduler (2.9.1)
-      url: https://github.com/Altinity/clickhouse-sink-connector/blob/999b63d712212502583b4efe41a84d760c161e6a/sink-connector-lightweight/src/main/java/com/altinity/clickhouse/debezium/embedded/cdc/DebeziumChangeEventCapture.java#L893
+    - label: Altinity lightweight insert scheduler (2.11.0)
+      url: https://github.com/Altinity/clickhouse-sink-connector/blob/f6474042d0ab4dacd15f118b752c4fb8a8a0b1d8/sink-connector-lightweight/src/main/java/com/altinity/clickhouse/debezium/embedded/cdc/DebeziumChangeEventCapture.java#L3263-L3284
     - label: Altinity ClickHouse Sink Connector
       url: https://github.com/Altinity/clickhouse-sink-connector
-    - label: Altinity 2.9.1 supported ClickHouse versions (24.8+)
-      url: https://github.com/Altinity/clickhouse-sink-connector/blob/999b63d712212502583b4efe41a84d760c161e6a/doc/feature_matrix.md#L3-L9
-    - label: Altinity 2.9.1 lightweight JDBC dependency (0.6.5)
-      url: https://github.com/Altinity/clickhouse-sink-connector/blob/999b63d712212502583b4efe41a84d760c161e6a/sink-connector-lightweight/pom.xml#L474-L480
+    - label: Altinity 2.11.0 supported ClickHouse versions (24.8+)
+      url: https://github.com/Altinity/clickhouse-sink-connector/blob/f6474042d0ab4dacd15f118b752c4fb8a8a0b1d8/doc/feature_matrix.md#L3-L9
+    - label: Altinity 2.11.0 lightweight JDBC dependency (0.9.8)
+      url: https://github.com/Altinity/clickhouse-sink-connector/blob/f6474042d0ab4dacd15f118b752c4fb8a8a0b1d8/sink-connector-lightweight/pom.xml#L529-L534
+    - label: clickhouse-java compressed reads fail on ClickHouse 26.9+ (#3105)
+      url: https://github.com/ClickHouse/clickhouse-java/issues/3105
     - label: Sink connector architecture (lightweight vs Kafka deployment)
       url: https://github.com/Altinity/clickhouse-sink-connector/blob/develop/doc/architecture.md
     - label: Debezium transformations (single-message transforms)
@@ -100,15 +102,11 @@ metadata:
       - Recovery is a process restart from the last flushed offset; there is no workflow history, no retry policy per step, and no second instance to fail over to.
       - Connector offsets and schema history are operational state that must remain durable and consistent with the ClickHouse targets.
       - Existing schemas must remain compatible with Debezium values while connector DDL and schema evolution are disabled.
-      - This verified connector release is pinned to ClickHouse 25.3 in the pattern because its bundled JDBC startup path failed against the tested 26.6 release.
+      - "The bundled `clickhouse-jdbc` 0.9.8 fails every compressed read against ClickHouse 26.9+; the pattern sets `compress=0`."
 
 spec:
   profiles: [cdc-ch, mysql, cdc-mysql]
   driver_node: ch-cdc
-
-  requires:
-    clickhouse_max: '25.3'
-    note: Ceiling is the Altinity sink's bundled clickhouse-jdbc, not a ClickHouse limit; its JDBC startup broke on ClickHouse 26.6.
 
   services:
     cdc-mysql:
@@ -185,18 +183,14 @@ spec:
           label: parts
           group: ClickHouse
           description: New data parts in test.orders during the run (system.part_log).
-        - name: inserts
-          label: INSERTs
+        - name: part_write_avg_ms
+          label: write avg
           group: ClickHouse
-          description: INSERT statements ClickHouse executed into test.orders during the run (system.query_log).
-        - name: insert_avg_ms
-          label: avg ms
+          description: Average time in ms ClickHouse took to write one new part (system.part_log duration_ms).
+        - name: part_write_max_ms
+          label: write max
           group: ClickHouse
-          description: Average ClickHouse execution time of those INSERT statements.
-        - name: insert_max_ms
-          label: max ms
-          group: ClickHouse
-          description: Slowest of those INSERT statements.
+          description: Slowest part write, in ms.
       groups: [MySQL, Altinity connector, ClickHouse, End to end (ms)]
       timeline_total: Average row latency (write to insert)
 

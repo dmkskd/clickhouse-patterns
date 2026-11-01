@@ -26,7 +26,7 @@ metadata:
 
     Inspect `test.orders` in **Contents** to follow `updated_at` → `__source_ts_ms` (Debezium source-event time, epoch milliseconds) → `__timestamp` (Kafka record time) → `ch_inserted_at`. The source SMT preserves Debezium's snapshot marker as `__snapshot` as well as its event timestamp. The Kafka topic, partition and offset identify the intermediate record. These connector timestamps are kept separate from the source business write time.
 
-    The **Experiments** panel runs a timed insert workload with chosen values for the `config/` latency settings and records latency, parts and INSERT cost per run.
+    The **Experiments** panel runs a timed insert workload with chosen values for the `config/` latency settings and records the latency per stage and the new parts per run.
   graph: |-
     changes:
       postgres:orders(label=public.orders,note=**Live OLTP source**\nOne replication slot serves every consumer downstream.)
@@ -147,18 +147,22 @@ spec:
           label: parts
           group: ClickHouse
           description: New data parts in test.orders during the run (system.part_log).
-        - name: inserts
-          label: INSERTs
+        - name: async_buffer_avg_ms
+          label: buffer avg
           group: ClickHouse
-          description: INSERT statements ClickHouse executed into test.orders during the run (system.query_log).
-        - name: insert_avg_ms
-          label: avg ms
+          description: Average time in ms an INSERT's data waited in ClickHouse's async insert buffer until the flush (system.asynchronous_insert_log). Empty when the INSERTs are synchronous.
+        - name: async_buffer_max_ms
+          label: buffer max
           group: ClickHouse
-          description: Average ClickHouse execution time of those INSERT statements.
-        - name: insert_max_ms
-          label: max ms
+          description: Longest async insert buffer wait, in ms.
+        - name: part_write_avg_ms
+          label: write avg
           group: ClickHouse
-          description: Slowest of those INSERT statements.
+          description: Average time in ms ClickHouse took to write one new part (system.part_log duration_ms).
+        - name: part_write_max_ms
+          label: write max
+          group: ClickHouse
+          description: Slowest part write, in ms.
       groups: [Postgres, Debezium, ClickHouse, End to end (ms)]
       timeline_total: Average row latency (write to insert)
 

@@ -8,14 +8,13 @@ from load.py.
 from __future__ import annotations
 
 from pattern_explorer.orchestration.nodes import connect
-from pattern_explorer.orchestration.probe import (
+from pattern_explorer.orchestration.pattern_specific.cdc_latency import (
     latency_summary,
     postgres_workload,
-    result_line,
-    insert_stage,
+    split_clickhouse_insert,
     stage_summary,
-    workload_args,
 )
+from pattern_explorer.orchestration.probe import result_line, workload_args
 from pattern_explorer.orchestration.wait import wait_for
 
 args = workload_args()
@@ -29,8 +28,12 @@ wait_for(
 )
 result = latency_summary(ch, "walshadow", "public_orders", first, last, started_at)
 result["achieved_rate"] = round(args.rows / elapsed)
-result["stages"] = stage_summary(ch, "walshadow", "public_orders", first, last, [
+stages = stage_summary(ch, "walshadow", "public_orders", first, last, [
     ("Postgres write to commit", "dateDiff('microsecond', updated_at, _commit_ts) / 1000.0"),
     ("Commit to ClickHouse insert (walshadow)", "dateDiff('microsecond', _commit_ts, ch_inserted_at) / 1000.0"),
-]) + [insert_stage(result)]
+])
+result["stages"] = split_clickhouse_insert(
+    ch, "walshadow", "public_orders", started_at, stages,
+    "Commit to ClickHouse INSERT received (walshadow)",
+)
 print(result_line(result))

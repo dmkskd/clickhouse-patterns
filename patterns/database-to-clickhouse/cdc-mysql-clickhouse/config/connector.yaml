@@ -31,12 +31,12 @@ clickhouse.server.password: "cdc"
 clickhouse.server.port: "8123"
 auto.create.tables: "true"
 clickhouse.datetime.timezone: "UTC"
-clickhouse.jdbc.params: "socket_timeout=30000,connection_timeout=30000"
+clickhouse.jdbc.params: "socket_timeout=30000,connection_timeout=30000,compress=0"
 
 # --- state store: ClickHouse (offsets) ---
 offset.storage: "io.debezium.storage.jdbc.offset.JdbcOffsetBackingStore"
 offset.storage.jdbc.table.name: "altinity_sink_connector.replica_source_info"
-offset.storage.jdbc.url: "jdbc:clickhouse://ch-cdc:8123/altinity_sink_connector"
+offset.storage.jdbc.url: "jdbc:clickhouse://ch-cdc:8123/altinity_sink_connector?compress=0"
 offset.storage.jdbc.user: "cdc"
 offset.storage.jdbc.password: "cdc"
 offset.storage.jdbc.table.ddl: "CREATE TABLE if not exists %s
@@ -56,7 +56,7 @@ offset.storage.jdbc.table.select: "SELECT id, offset_key, offset_val FROM %s FIN
 
 # --- state store: ClickHouse (schema history) ---
 schema.history.internal: "io.debezium.storage.jdbc.history.JdbcSchemaHistory"
-schema.history.internal.jdbc.url: "jdbc:clickhouse://ch-cdc:8123/altinity_sink_connector"
+schema.history.internal.jdbc.url: "jdbc:clickhouse://ch-cdc:8123/altinity_sink_connector?compress=0"
 schema.history.internal.jdbc.user: "cdc"
 schema.history.internal.jdbc.password: "cdc"
 schema.history.internal.jdbc.table.name: "altinity_sink_connector.replicate_schema_history"

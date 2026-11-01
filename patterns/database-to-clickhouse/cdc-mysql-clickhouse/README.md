@@ -28,24 +28,26 @@ nullable.
 
 ## Compatibility
 
-This pattern intentionally runs ClickHouse 25.3 with the
-`altinity/clickhouse-sink-connector:2.9.1-lt` image. A control run on
-2026-07-25 recorded the following.
+This pattern runs ClickHouse 26.9 with the
+`altinity/clickhouse-sink-connector:2.11.0-lt` image. A run on 2026-11-01
+recorded the following.
 
-- With ClickHouse 26.6.1.1193, the server completed the connector's JDBC
-  startup metadata and `SELECT VERSION()` queries without server exceptions,
-  but the connector logged `java.sql.SQLException: Query failed` while reading
-  them. CDC did not start, `test.orders` was not created, and the pattern timed
-  out after 120 seconds.
-- With ClickHouse 25.3 restored, the same test passed all six convergence
-  checks and matched the nine-row expected output.
+- With default JDBC settings, every query from the sink failed with
+  `java.sql.SQLException: Invalid LZ4 magic byte: '-112'`. CDC did not start,
+  `test.orders` was not created, and the pattern timed out after 120 seconds.
+  A plain `SELECT version()` through the same driver failed the same way.
+- With `compress=0` on the sink's three JDBC connections, the pattern passed
+  validation and the replication-latency experiment.
 
-The upstream 2.9.1 source
-[bundles `clickhouse-jdbc` 0.6.5](https://github.com/Altinity/clickhouse-sink-connector/blob/999b63d712212502583b4efe41a84d760c161e6a/sink-connector-lightweight/pom.xml#L474-L480),
-while its
-[feature matrix says ClickHouse 24.8 and above is supported](https://github.com/Altinity/clickhouse-sink-connector/blob/999b63d712212502583b4efe41a84d760c161e6a/doc/feature_matrix.md#L3-L9).
-No matching upstream issue was found, so this is recorded as a reproduced
-compatibility discrepancy rather than a cited upstream limitation.
+The 2.11.0 source
+[bundles `clickhouse-jdbc` 0.9.8](https://github.com/Altinity/clickhouse-sink-connector/blob/f6474042d0ab4dacd15f118b752c4fb8a8a0b1d8/sink-connector-lightweight/pom.xml#L529-L534).
+Its response reader decodes only LZ4, and ClickHouse 26.9 compresses responses
+with ZSTD by default
+([clickhouse-java #3105](https://github.com/ClickHouse/clickhouse-java/issues/3105));
+clickhouse-java 0.11.0 adds ZSTD support. Until the sink bundles 0.11.0 or
+later, `config/connector.yaml` sets `compress=0`. The sink's earlier `2.9.1-lt`
+release, with `clickhouse-jdbc` 0.6.5, failed JDBC startup against ClickHouse
+26.6 and ran only on 25.3.
 
 ```text
 MySQL orders -> Altinity sink -> test.orders

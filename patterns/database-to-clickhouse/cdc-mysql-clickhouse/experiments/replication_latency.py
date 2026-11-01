@@ -10,15 +10,13 @@ from __future__ import annotations
 import pymysql
 
 from pattern_explorer.orchestration.nodes import connect
-from pattern_explorer.orchestration.probe import (
+from pattern_explorer.orchestration.pattern_specific.cdc_latency import (
     ID_FLOOR,
     latency_summary,
-    paced,
-    result_line,
-    insert_stage,
+    split_clickhouse_insert,
     stage_summary,
-    workload_args,
 )
+from pattern_explorer.orchestration.probe import paced, result_line, workload_args
 from pattern_explorer.orchestration.wait import wait_for
 
 args = workload_args()
@@ -53,12 +51,15 @@ wait_for(
 )
 result = latency_summary(ch, "test", "orders", first, last, started_at)
 result["achieved_rate"] = round(args.rows / elapsed)
-# _version is the connector's snowflake ID (2.9.1 ClickHouseStruct.calculateVersion):
-# source.ts_ms, the MySQL commit time in milliseconds, in the top bits since the
-# Twitter epoch (1288834974657).
-commit = "fromUnixTimestamp64Milli(toInt64(bitShiftRight(_version, 22) + 1288834974657), 'UTC')"
-result["stages"] = stage_summary(ch, "test", "orders", first, last, [
-    ("MySQL write to commit", f"dateDiff('microsecond', updated_at, {commit}) / 1000.0"),
-    ("Commit to ClickHouse insert (Altinity connector)", f"dateDiff('microsecond', {commit}, ch_inserted_at) / 1000.0"),
-]) + [insert_stage(result)]
+# One stage: test.orders records no MySQL commit time. In 2.11 the timestamp in
+# _version is the connector's effectiveTs (VersionSequencer: source time floored
+# so it never goes backwards), not the commit time; decoded, it fell after
+# ch_inserted_at for some rows.
+stages = stage_summary(ch, "test", "orders", first, last, [
+    ("MySQL write to ClickHouse insert (Altinity connector)", "dateDiff('microsecond', updated_at, ch_inserted_at) / 1000.0"),
+])
+result["stages"] = split_clickhouse_insert(
+    ch, "test", "orders", started_at, stages,
+    "MySQL write to ClickHouse INSERT received (Altinity connector)",
+)
 print(result_line(result))

@@ -278,32 +278,54 @@ Results, groups and timeline:
 
 - `results` declares the label, `group` and one-line `description` of each key
   the script reports. The panel shows the description on hover and in the
-  legend. Undeclared keys still appear, after the declared ones.
+  legend. The table shows declared keys only; a key the script reports but
+  `results` does not declare is saved with the run and not displayed.
 - `groups` orders the header groups left to right. Name groups after pipeline
   stages (source database, replication tool, ClickHouse, end to end) so a column
-  such as INSERTs reads as ClickHouse's.
+  such as parts reads as ClickHouse's.
 - `timeline_total` labels the sum of the stages in the timeline tooltip.
 
 The script contract:
 
-- It runs with the repository root on `PYTHONPATH`, from the pattern
-  directory. Every stdout line appears in the Explorer log.
+- It runs as `python <pattern>/<script>` with the pattern directory as the
+  working directory and the repository root on `PYTHONPATH`. Every stdout line
+  appears in the Explorer log.
+- It can import modules from its own folder (Python puts the script's folder
+  on the import path) and from `pattern_explorer`.
 - The last line is `RESULT {json}`: result name to number or text. Text results,
   such as a verdict or a mode, display and sort as text. An optional `stages`
   list of `{label, ms, extra}` draws the per-run timeline bar; segments are
   drawn in list order, and `extra: true` marks a segment that is shown but not
-  added to `timeline_total`, such as a per-statement average next to per-row
-  stages.
+  added to `timeline_total`.
 - A non-zero exit fails the run, and failed runs are not saved. **Stop** in the
   Explorer sends the script SIGTERM; it cannot interrupt a config reload.
 - Runs are saved to `.runtime/experiments/<slug>.jsonl`, outside the pattern's
   volumes, so they survive reloads; **Reset** in the panel deletes them.
 
-`pattern_explorer/orchestration/probe.py` has the shared pieces for CDC
-workloads: `workload_args()` (`--rate`, `--rows-per-txn`, `--duration`),
-`postgres_workload()` and `paced()` for writing a fresh id range at a fixed rate,
-`latency_summary()` and `stage_summary()` for the ClickHouse side, and
-`insert_stage()` and `result_line()` for the output.
+Where experiment logic lives:
+
+| Logic used by | Location | Example |
+|---|---|---|
+| one pattern | a module next to the script, in the pattern's own folder: `experiments/<name>.py`, imported as `import <name>` | logic for a workspace pattern |
+| one pattern family | `pattern_explorer/orchestration/pattern_specific/<family>.py` | `cdc_latency.py` for the database CDC patterns |
+| every experiment | `pattern_explorer/orchestration/probe.py` | `paced()`, `result_line()` |
+
+Workspace patterns (created with `new` or `clone`) follow the same rule: logic
+only that pattern needs goes in its own `experiments/` folder, not in
+`pattern_explorer`. Move logic to `pattern_specific/` only when a second
+pattern of the same family needs it, and to `probe.py` only when it holds for
+every experiment.
+
+`pattern_explorer/orchestration/probe.py` has the pieces common to every
+experiment: `workload_args()` (`--rate`, `--rows-per-txn`, `--duration`),
+`paced()` for writing at a fixed rate, and `result_line()` for the output.
+
+Helpers for one pattern family live in
+`pattern_explorer/orchestration/pattern_specific/`. `cdc_latency.py` serves the
+database CDC experiments only: `postgres_workload()` for writing a fresh id
+range, `latency_summary()` and `stage_summary()` for the ClickHouse side, and
+`split_clickhouse_insert()` to separate ClickHouse's async insert buffer wait
+and part write from the client's last stage.
 
 Rules for measurements:
 

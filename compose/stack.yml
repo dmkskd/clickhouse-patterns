@@ -186,15 +186,14 @@ services:
     depends_on:
       keeper: { condition: service_healthy }
 
-  # ── cdc-ch: ClickHouse pinned for CDC ──────────────────────────────────────
-  # Altinity sink 2.9.1-lt bundles clickhouse-jdbc 0.6.5. On 2026-07-25 the
-  # cdc-mysql-clickhouse test failed during JDBC startup metadata reads against
-  # ClickHouse 26.6.1.1193, while the same test passed on 25.3. See the pattern
-  # README's Compatibility section; this service stays separate so other
-  # patterns can use 26.9.
+  # ── cdc-ch: ClickHouse for the Altinity CDC sink ───────────────────────────
+  # Altinity sink 2.11.0-lt bundles clickhouse-jdbc 0.9.8, which cannot decode
+  # the ZSTD responses ClickHouse 26.9 sends by default; the pattern's connector
+  # config sets compress=0. See the cdc-mysql-clickhouse README's Compatibility
+  # section.
   ch-cdc:
     <<: *ch-node
-    image: clickhouse/clickhouse-server:25.3
+    image: clickhouse/clickhouse-server:26.9
     profiles: [cdc-ch]
     ports:
       - "8123:8123"
@@ -231,7 +230,7 @@ services:
       start_period: 20s
 
   cdc-mysql:
-    image: altinity/clickhouse-sink-connector:2.9.1-lt
+    image: altinity/clickhouse-sink-connector:2.11.0-lt
     profiles: [cdc-mysql]
     depends_on:
       mysql: { condition: service_healthy }

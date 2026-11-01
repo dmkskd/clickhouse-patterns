@@ -139,6 +139,7 @@ window.PE.session = (() => {
     let liveRevision = null;
     let sessionLogsExpanded = false;
     let sessionLogsClosed = false;
+    let experimentRunning = false;   // an experiment operation was running at the last render
     let clearedLogSequence = 0;
     let connInfoOpen = false;   // reveal the ClickHouse connection by clicking the Local server pill
 
@@ -288,6 +289,13 @@ window.PE.session = (() => {
       const operation = snapshot.operation;
       const busy = operation?.status === "running";
       const starting = active?.phase === "starting";
+      // A completed experiment run collapses the log it opened; its results
+      // show in the Experiments panel. A failed run keeps the log open.
+      if (busy && operation.name === "experiment") experimentRunning = true;
+      else if (experimentRunning && !busy) {
+        experimentRunning = false;
+        if (operation?.status === "complete") sessionLogsExpanded = false;
+      }
       if (busy) panel.classList.add("busy");
       else if (active?.phase === "failed") panel.classList.add("failed");
       else if (active) panel.classList.add("active");
