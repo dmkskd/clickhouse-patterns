@@ -104,12 +104,20 @@ metadata:
 
     **walshadow** runs a **shadow Postgres** in its container and streams WAL to it with user-table records replaced by no-ops. The shadow replays catalog changes and by default stores only catalog data. **walshadow** reads table descriptors from the shadow at the replay LSN, decodes rows from the original WAL records, and inserts them into ClickHouse over the Native protocol.
 
+    #### From decoded row to ClickHouse
+
+    The row decoded in the example belongs to transaction 746. **walshadow** sends it to ClickHouse in three steps ([pipeline](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/src/emit/pipeline/mod.rs)):
+
+    - **Wait for COMMIT**: the row stays in memory until the COMMIT record of transaction 746. An ABORT record discards it.
+    - **Batch per table**: at COMMIT, the row gets the COMMIT record's LSN as `_lsn` and joins the committed rows of other transactions buffered for `walshadow.public_orders`. The buffer is sent as one `INSERT ... FORMAT Native` `flush_timeout_ms` after its first row.
+    - **Insert in parallel**: several ClickHouse connections send INSERTs, which can complete out of order. `ReplacingMergeTree(_lsn, _is_deleted)` keeps the row with the highest `_lsn` per key.
+
     #### Initial load
 
     **walshadow** creates a **shadow Postgres** instance and loads existing table rows in separate steps:
 
     - On first start, **walshadow** streams a base backup of the source **Postgres** server and writes only its catalog and recovery files to the **shadow Postgres** data directory.
-    - Existing rows are loaded per table, as set by `initial_load`. `copy` reads the visible rows with `COPY` after the table is selected; COPY rows get the selection LSN as `_lsn`, and WAL changes committed later carry a higher `_lsn` and replace them. `base_backup` reads heap pages from a new base backup of the whole cluster; `object_store` reads them from the latest wal-g backup plus archived WAL ([table selection](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/table-selection.md)).
+    - Existing rows are loaded per table, as set by `initial_load`. `copy` reads the visible rows with `COPY` after the table is selected; COPY rows get the selection LSN as `_lsn`, and WAL changes committed later get a higher `_lsn` and replace them. `base_backup` reads heap pages from a new base backup of the whole cluster; `object_store` reads them from the latest wal-g backup plus archived WAL ([table selection](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/table-selection.md)).
     - Changes committed after the load LSN are inserted from WAL with a higher `_lsn` ([initial loads](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/architecture/bootstrap.md)).
 
     In this pattern, `walshadow-stream init --table public orders` sets `initial_load = "copy"` for `public.orders`.
