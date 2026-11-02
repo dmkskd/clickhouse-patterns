@@ -78,8 +78,8 @@ def resolve_values(experiment: Experiment, overrides: dict) -> dict[str, int | f
         except (TypeError, ValueError):
             kind = "a whole number" if isinstance(parameter.default, int) else "a number"
             raise ValueError(f"{name} must be {kind}") from None
-        if parameter.choices and value not in parameter.choices:
-            raise ValueError(f"{name} must be one of {parameter.choices}")
+        if parameter.choices and value not in parameter.choice_values:
+            raise ValueError(f"{name} must be one of {parameter.choice_values}")
         if parameter.min is not None and value < parameter.min:
             raise ValueError(f"{name} must be at least {parameter.min}")
         values[name] = value

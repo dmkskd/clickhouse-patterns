@@ -9,6 +9,7 @@
   "password": "",
   "ssl": "false",
   "exactlyOnce": "false",
+  "clickhouseSettings": "async_insert=0",
   "topic2TableMap": "pg.public.orders=orders",
   "key.converter": "org.apache.kafka.connect.json.JsonConverter",
   "key.converter.schemas.enable": "false",

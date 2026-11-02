@@ -99,9 +99,11 @@ def clear(slug: str | None = None) -> bool:
 
 def _config_line(key: str) -> re.Pattern:
     # `key = value` (TOML, SQL options), `key: value` (YAML) or `"key": "value"`
-    # (JSON), keeping quotes, trailing commas and comments.
+    # (JSON), keeping quotes, trailing commas and comments. A quoted value runs
+    # to its closing quote, so it can hold commas (`"a=1,b=2"`).
     return re.compile(
-        rf'^(\s*"?{re.escape(key)}"?\s*[:=]\s*"?)([^\s#,"]+)(.*)$', re.MULTILINE
+        rf'^(\s*"?{re.escape(key)}"?\s*[:=]\s*(?:"(?=[^"\n]*"))?)((?<=")[^"\n]*|[^\s#,"]+)(.*)$',
+        re.MULTILINE,
     )
 
 

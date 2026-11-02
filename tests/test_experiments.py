@@ -71,6 +71,21 @@ def test_edit_config_rewrites_one_value_in_each_format(text, key, expected):
     assert edit_config(text, key, 200) == expected
 
 
+def test_edit_config_keeps_commas_inside_a_quoted_value():
+    text = '{\n  "clickhouseSettings": "async_insert=0",\n  "x": 1\n}\n'
+    edited = edit_config(text, "clickhouseSettings", "async_insert=1,wait_for_async_insert=1")
+    assert edited == '{\n  "clickhouseSettings": "async_insert=1,wait_for_async_insert=1",\n  "x": 1\n}\n'
+    assert config_overlay.read_config(edited, "clickhouseSettings") == "async_insert=1,wait_for_async_insert=1"
+
+
+def test_labelled_choices_resolve_by_value():
+    experiment = _experiment({"name": "mode", "default": "a=0",
+                              "choices": [{"value": "a=0", "label": "sync"}, {"value": "a=1,b=1", "label": "async"}]})
+    assert resolve_values(experiment, {"mode": "a=1,b=1"}) == {"mode": "a=1,b=1"}
+    with pytest.raises(ValueError, match="one of"):
+        resolve_values(experiment, {"mode": "async"})
+
+
 def test_edit_config_reports_no_change_and_missing_keys():
     assert edit_config("rate = 5\n", "rate", 5) is None
     with pytest.raises(ValueError, match="no `rate` line"):

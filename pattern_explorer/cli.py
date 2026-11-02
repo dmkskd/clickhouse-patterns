@@ -714,7 +714,7 @@ def _cmd_experiment(args) -> int:
         for experiment in pattern.experiments:
             print(f"{experiment.name}  {experiment.title}")
             for parameter in experiment.parameters:
-                rule = (f"one of {parameter.choices}" if parameter.choices
+                rule = (f"one of {parameter.choice_values}" if parameter.choices
                         else f"min {parameter.min}" if parameter.min is not None else "")
                 where = f"  [{parameter.config.file}]" if parameter.config else ""
                 print(f"  {parameter.name}={parameter.default}  {rule}{where}".rstrip())

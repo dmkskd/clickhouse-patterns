@@ -155,6 +155,15 @@ class ExperimentConfig(BaseModel):
     key: str
 
 
+class ExperimentChoice(BaseModel):
+    """A choice with a display label, for values too long to show as is."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    value: int | float | str
+    label: str
+
+
 class ExperimentParameter(BaseModel):
     """One input of an experiment.
 
@@ -164,7 +173,8 @@ class ExperimentParameter(BaseModel):
 
     A number takes any value at or above `min` (no bound when unset). `choices`
     restricts the value to a list and is required for a text default, so a
-    free-form string never reaches a config file or a command line.
+    free-form string never reaches a config file or a command line. A choice is
+    a plain value or `{value, label}`; the Explorer shows the label.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -174,7 +184,7 @@ class ExperimentParameter(BaseModel):
     short: str = ""      # results-table column header; falls back to name
     group: str = ""      # results-table header group (pipeline stage), e.g. "Postgres"
     default: int | float | str
-    choices: list[int | float | str] = Field(default_factory=list)
+    choices: list[ExperimentChoice | int | float | str] = Field(default_factory=list)
     min: int | float | None = None
     config: ExperimentConfig | None = None
 
@@ -182,11 +192,15 @@ class ExperimentParameter(BaseModel):
     def _check_value_rules(self) -> "ExperimentParameter":
         if isinstance(self.default, str) and not self.choices:
             raise ValueError(f"parameter {self.name!r}: a text default needs `choices`")
-        if self.choices and self.default not in self.choices:
+        if self.choices and self.default not in self.choice_values:
             raise ValueError(f"parameter {self.name!r}: default {self.default!r} is not in choices")
         if self.min is not None and (isinstance(self.default, str) or self.default < self.min):
             raise ValueError(f"parameter {self.name!r}: `min` needs a numeric default at or above it")
         return self
+
+    @property
+    def choice_values(self) -> list[int | float | str]:
+        return [c.value if isinstance(c, ExperimentChoice) else c for c in self.choices]
 
 
 class ExperimentResult(BaseModel):

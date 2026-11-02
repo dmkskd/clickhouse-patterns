@@ -296,7 +296,12 @@ button, input { font: inherit; }
 .experiment-row + .experiment-row label > span { height: 0; overflow: hidden; visibility: hidden; }
 .experiment-actions { display: flex; gap: 10px 14px; }
 .experiment-form label { display: grid; gap: 3px; color: var(--muted); font-size: 11px; line-height: 1.5; }
-.experiment-form input { width: 120px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.experiment-form input, .experiment-form select { width: 120px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background-color: var(--bg); color: var(--text); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* A choice input matches the number inputs: same box, a drawn chevron in
+   place of the native control. */
+.experiment-form select { width: auto; min-width: 120px; padding-right: 26px; appearance: none; -webkit-appearance: none; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a93a8' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 9px center; }
 .experiment-form button { padding: 7px 14px; border: 1px solid #2d765b; border-radius: 7px; background: #153729; color: #8ef0c1; font-size: 11px; cursor: pointer; }
 .experiment-form button.secondary { margin-left: -6px; border-color: var(--line); background: transparent; color: var(--muted); }
 .experiment-form button.secondary:hover { color: var(--text); }
@@ -1089,7 +1094,7 @@ button, input { font: inherit; }
 [data-theme="soft"] .experiment-actions button:hover:not(:disabled) { color: var(--text); }
 [data-theme="soft"] .experiment-actions button.primary { color: var(--text); }
 [data-theme="soft"] .experiment-actions button.stop { color: var(--danger, #f2a1a8); }
-[data-theme="soft"] .experiment-form input, [data-theme="soft"] .experiment-form select { border: 0; background: var(--bg); box-shadow: var(--pressed-sm); }
+[data-theme="soft"] .experiment-form input, [data-theme="soft"] .experiment-form select { border: 0; background-color: var(--bg); box-shadow: var(--pressed-sm); }
 [data-theme="soft"] .experiments-applied { border: 0; box-shadow: var(--pressed-sm); }
 [data-theme="soft"] .experiments-applied button { border: 0; background: var(--bg); box-shadow: var(--raised-sm); }
 [data-theme="soft"] .explorer-mode { border: 0; background: var(--bg); box-shadow: var(--pressed-sm); color: var(--dim); }

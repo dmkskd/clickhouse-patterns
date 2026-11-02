@@ -120,7 +120,10 @@ window.PE.experiments = (() => {
             let input;
             if (parameter.choices?.length) {
               input = document.createElement("select");
-              parameter.choices.forEach((choice) => input.add(new Option(String(choice), String(choice))));
+              parameter.choices.forEach((choice) => {
+                const value = String(choice?.value ?? choice);
+                input.add(new Option(choiceLabel(parameter, value), value));
+              });
               input.value = String(value);
             } else {
               input = document.createElement("input");
@@ -299,6 +302,12 @@ window.PE.experiments = (() => {
       return legend;
     }
 
+    // A choice is a plain value or {value, label}; show the label when there is one.
+    function choiceLabel(parameter, value) {
+      const choice = (parameter.choices || []).find((item) => String(item?.value ?? item) === String(value));
+      return choice?.label ?? String(value);
+    }
+
     // Config parameters are applied through copies of the pattern's files, and
     // the session keeps them after a run. Say so, and offer the way back.
     function renderAppliedValues() {
@@ -309,7 +318,7 @@ window.PE.experiments = (() => {
       const parameters = (experimentsPattern?.experiments || []).flatMap((experiment) => experiment.parameters);
       const describe = ([name, value]) => {
         const parameter = parameters.find((item) => item.name === name);
-        return `${parameter?.label || name} = ${value}`;
+        return `${parameter?.label || name} = ${parameter ? choiceLabel(parameter, value) : value}`;
       };
       note.querySelector("span").textContent = `Session runs with experiment values: ${entries.map(describe).join(", ")}.`;
     }
@@ -338,6 +347,7 @@ window.PE.experiments = (() => {
             key: parameter.name, label: parameter.short || parameter.name, title: parameter.label,
             group: parameter.group || (parameter.config ? "Settings" : "Workload"),
             value: (run) => run.parameters[parameter.name],
+            text: (run) => choiceLabel(parameter, run.parameters[parameter.name] ?? ""),
           })),
           ...resultNames.map((name) => ({
             key: name, label: declared.get(name)?.label || name, title: declared.get(name)?.description,
