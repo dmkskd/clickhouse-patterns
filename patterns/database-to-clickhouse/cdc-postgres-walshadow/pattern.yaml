@@ -142,7 +142,7 @@ metadata:
     changes:
       postgres:orders
         -[physical WAL · streaming replication]-> connector:wal_stream(label=WAL stream · filter,system=walshadow,note=**walshadow-stream process**\nPasses original WAL records to the decoder and sends the shadow a copy with user-table records replaced by no-ops.)
-        -[original WAL records]-> connector:decoder(label=row decoder · inserters,system=walshadow,note=**walshadow-stream process**\nDecodes rows from original WAL records with table definitions read from the shadow.\n- inserts Native protocol blocks)
+        -[original WAL records]-> connector:decoder(label=row decoder · inserters,system=walshadow,note=**walshadow-stream process**\nDecodes rows from original WAL records with table definitions read from the shadow.\n- decodes in parallel and sends Native INSERTs over several connections\n- holds rows until COMMIT; drops aborted transactions)
         -[row versions · Native INSERT]-> mergetree:public_orders
 
     catalog:
