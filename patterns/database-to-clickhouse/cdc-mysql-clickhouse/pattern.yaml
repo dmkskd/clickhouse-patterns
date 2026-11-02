@@ -29,7 +29,7 @@ metadata:
 
     Edit the files in `config/`, then run `just reload` to rebuild the demo with the new settings. The **Configuration** panel displays the files.
 
-    Inspect `test.orders` and `test.orders_existing` in **Contents**: the source write times, connector `_version` and `is_deleted`, and destination insert time remain visible together. `_version` orders versions; the connector builds it from a source timestamp in milliseconds, floored so it never decreases, and the GTID transaction number. The materialized view copies `ch_inserted_at` and `replication_latency_ms` unchanged, so `test.orders_transformed` reports the arrival time in `test.orders`.
+    Inspect `test.orders` and `test.orders_existing` in **Data**: the source write times, connector `_version` and `is_deleted`, and destination insert time remain visible together. `_version` orders versions; the connector builds it from a source timestamp in milliseconds, floored so it never decreases, and the GTID transaction number. The materialized view copies `ch_inserted_at` and `replication_latency_ms` unchanged, so `test.orders_transformed` reports the arrival time in `test.orders`.
 
     The **Experiments** panel runs a timed insert workload with chosen values for the `config/` latency settings and records the latency per stage and the new parts per run.
   graph: |-

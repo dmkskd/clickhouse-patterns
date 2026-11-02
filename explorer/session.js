@@ -535,7 +535,7 @@ window.PE.session = (() => {
       const bar = document.createElement("div");
       bar.className = "resource-inspector-tabs";
       const sectionRow = document.createElement("div");
-      sectionRow.className = "definition-tabs resource-inspector-section-tabs";
+      sectionRow.className = "inspector-segments resource-inspector-section-tabs";
       const showSectionRow = () => {
         const sections = visibleSections();
         sectionRow.replaceChildren(...sections.map((section) => {
@@ -556,7 +556,7 @@ window.PE.session = (() => {
       };
       if (tables.length > 1) {
         const tableRow = document.createElement("div");
-        tableRow.className = "definition-tabs";
+        tableRow.className = "inspector-segments";
         tables.forEach((table) => {
           const button = document.createElement("button");
           button.type = "button";
@@ -615,7 +615,7 @@ window.PE.session = (() => {
       // belong to the table it writes into, and the headings say so.
       const target = payload.target;
       const columnsHeading = target ? `Columns in ${esc(target)}` : "Columns";
-      const contentsHeading = target ? `Rows in ${esc(target)}` : "Contents";
+      const contentsHeading = target ? `Rows in ${esc(target)}` : "Data";
       resourceInspectorBody.innerHTML = `
         <section class="resource-inspector-section" data-tab="Definition">
           <h3>Table definition</h3>
@@ -625,7 +625,7 @@ window.PE.session = (() => {
           <h3>${columnsHeading}</h3>
           ${window.PE.util.dataTable(["Column", "Type", "Default"], columnRows)}
         </section>
-        <section class="resource-inspector-section" data-tab="Contents">
+        <section class="resource-inspector-section" data-tab="Data">
           <h3>${contentsHeading}</h3>
           ${payload.sample_disabled ? `<p class="resource-inspector-note">${esc(payload.sample_disabled)}</p>` : ""}
           ${payload.sample_error ? `<p class="resource-inspector-note">The definition loaded, but this resource could not be sampled: ${esc(payload.sample_error)}</p>` : ""}
@@ -750,8 +750,8 @@ window.PE.session = (() => {
           <h3>Key and attributes</h3>
           ${window.PE.util.dataTable(["Column", "Type", "Role"], columnRows)}
         </section>
-        <section class="resource-inspector-section" data-tab="Contents">
-          <h3>Contents</h3>
+        <section class="resource-inspector-section" data-tab="Data">
+          <h3>Data</h3>
           ${payload.sample_disabled ? `<p class="resource-inspector-note">${esc(payload.sample_disabled)}</p>` : ""}
           ${payload.sample_error ? `<p class="resource-inspector-note">The definition loaded, but this dictionary could not be sampled: ${esc(payload.sample_error)}</p>` : ""}
           ${sample ? `<p class="resource-sample-meta">Up to ${sample.limit} rows, as dictGet would resolve them now</p>${window.PE.util.dataTable(sample.columns, sample.rows)}` : ""}
@@ -777,8 +777,8 @@ window.PE.session = (() => {
           <h3>Columns${name}</h3>
           ${window.PE.util.dataTable(["Column", "Type", "Default"], table.columns.map((c) => [c.name, c.type, c.default]))}
         </section>
-        <section class="resource-inspector-section" data-tab="Contents">
-          <h3>Contents${name}</h3>
+        <section class="resource-inspector-section" data-tab="Data">
+          <h3>Data${name}</h3>
           ${table.sample_error ? `<p class="resource-inspector-note">The definition loaded, but this table could not be sampled: ${esc(table.sample_error)}</p>` : ""}
           ${sample ? `<p class="resource-sample-meta">Up to ${sample.limit} rows</p>${window.PE.util.dataTable(sample.columns, sample.rows)}` : ""}
         </section>

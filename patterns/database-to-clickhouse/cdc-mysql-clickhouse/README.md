@@ -142,7 +142,7 @@ schema history in `altinity_sink_connector`.
 
 Lower latency: reduce `poll.interval.ms` and `buffer.flush.time.ms` in `config/connector.yaml`; shorter waits increase CPU use and ClickHouse insert frequency.
 
-Inspect `test.orders` and `test.orders_existing` in **Contents**: the source write times, connector `_version` and `is_deleted`, and destination insert time remain visible together. `_version` orders versions; the connector builds it from the MySQL commit time (`source.ts_ms`, milliseconds) and the GTID transaction number. The materialized view copies `ch_inserted_at` and `replication_latency_ms` unchanged, so `test.orders_transformed` reports the arrival time in `test.orders`.
+Inspect `test.orders` and `test.orders_existing` in **Data**: the source write times, connector `_version` and `is_deleted`, and destination insert time remain visible together. `_version` orders versions; the connector builds it from the MySQL commit time (`source.ts_ms`, milliseconds) and the GTID transaction number. The materialized view copies `ch_inserted_at` and `replication_latency_ms` unchanged, so `test.orders_transformed` reports the arrival time in `test.orders`.
 
 ## Editing connector settings
 

@@ -170,7 +170,7 @@ just validate
 
 Lower latency: reduce `sync_interval` in `config/mirror.sql` (seconds; default: 10); this demo already sets 1 second, at the cost of more frequent MinIO and ClickHouse loads.
 
-Inspect `test.orders` and `test.orders_existing` in **Contents**: source write times sit alongside `_peerdb_synced_at` (PeerDB metadata) and `ch_inserted_at` (destination execution). The raw mirror table and MinIO objects expose the intermediate CDC batch. `_peerdb_synced_at` is kept separate from the source write time and is not treated as a Postgres commit timestamp. The materialized view copies `ch_inserted_at` and `replication_latency_ms` unchanged, so `test.orders_transformed` reports the arrival time in `test.orders`.
+Inspect `test.orders` and `test.orders_existing` in **Data**: source write times sit alongside `_peerdb_synced_at` (PeerDB metadata) and `ch_inserted_at` (destination execution). The raw mirror table and MinIO objects expose the intermediate CDC batch. `_peerdb_synced_at` is kept separate from the source write time and is not treated as a Postgres commit timestamp. The materialized view copies `ch_inserted_at` and `replication_latency_ms` unchanged, so `test.orders_transformed` reports the arrival time in `test.orders`.
 
 ## Editing connector settings
 

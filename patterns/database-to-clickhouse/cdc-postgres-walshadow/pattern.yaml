@@ -14,11 +14,11 @@ metadata:
 
     ### Demo setup
 
-    **walshadow** copies `public.orders` into `walshadow.public_orders`, ordered by the source primary key `id`. The demo then replicates inserts, updates, deletes and schema changes. Click `walshadow.public_orders` in the diagram to open its table details. The **Contents** section shows a row sample that can include earlier versions and delete markers.
+    **walshadow** copies `public.orders` into `walshadow.public_orders`, ordered by the source primary key `id`. The demo then replicates inserts, updates, deletes and schema changes. Click `walshadow.public_orders` in the diagram to open its table details. The **Data** section shows a row sample that can include earlier versions and delete markers.
 
     ### Following a row through the pipeline
 
-    In **Contents**, `replication_latency_ms` measures the time from a row write in Postgres to its insert in ClickHouse. Initial-load and delete rows show `NULL`.
+    In **Data**, `replication_latency_ms` measures the time from a row write in Postgres to its insert in ClickHouse. Initial-load and delete rows show `NULL`.
 
     Reducing `[ch] flush_timeout_ms` in `config/latency.toml` (default: 1,000 ms) flushes smaller batches sooner: latency drops, and ClickHouse receives more INSERTs and creates more parts.
 

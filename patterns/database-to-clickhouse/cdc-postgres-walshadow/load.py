@@ -84,7 +84,7 @@ with psycopg.connect(
     source.execute("UPDATE orders SET status = 'shipped' WHERE id = 4")
     print("applied INSERT/UPDATE/DELETE and ADD COLUMN DEFAULT to public.orders")
 
-    # Keep business columns together in SELECT * and the live Contents view.
+    # Keep business columns together in SELECT * and the live Data view.
     wait_for(
         ch,
         "SELECT count() FROM system.columns WHERE database = 'walshadow'"
