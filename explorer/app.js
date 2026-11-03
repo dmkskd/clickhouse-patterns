@@ -146,7 +146,15 @@
   });
   // The brand is "start over": back to the home page with nothing narrowed.
   $("show-catalog-home").addEventListener("click", showHome);
-  $("clone-pattern")?.addEventListener("click", () => $("clone-modal").showModal());
+  // Cloning runs `just clone` in a checkout, so the static catalog explains how
+  // to run patterns locally instead.
+  $("clone-pattern")?.addEventListener("click", () => {
+    const isLocal = control.mode === "local" && control.interactive;
+    $("clone-modal-title").textContent = isLocal ? "Clone this pattern" : "Run patterns locally";
+    $("clone-modal-local").hidden = !isLocal;
+    $("clone-modal-static").hidden = isLocal;
+    $("clone-modal").showModal();
+  });
   $("clone-modal-close")?.addEventListener("click", () => $("clone-modal").close());
   $("clone-modal")?.addEventListener("click", (event) => {
     if (event.target === $("clone-modal")) $("clone-modal").close();

@@ -321,6 +321,7 @@ window.PE.catalogView = (() => {
       // had before this copy moved into the intro.
       slot.querySelectorAll('a[href*="github.com/dmkskd/clickhouse-patterns"]').forEach((link) => {
         link.className = "clone-guide-link";
+        if (link.hash === "#run-patterns-locally") link.title = "Run the patterns' services in Docker";
         link.insertAdjacentHTML("afterbegin", GITHUB_MARK);
         // A paragraph that is only this link is a control, not prose: it moves to
         // the top-right of the intro so the copy keeps one straight left edge.
