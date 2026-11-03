@@ -74,6 +74,22 @@ library pattern, an unrecognized directory, or the workspace pattern used by
 the running session. Finish the foreground `just run`, or use `just stop` for
 an advanced detached session, before deleting it.
 
+### Author with an agent
+
+Use `just setup` once to install the repository's agent skills, then ask an
+LLM to use the authoring skill. In Codex, paste this prompt:
+
+```text
+Use $clickhouse-pattern-author to create a workspace pattern for <describe the
+system or feature>. Start from a suitable existing pattern if one fits;
+otherwise create a new one. Define the data flow, documentation, and the
+Docker-based runtime needed to validate it. Keep the curated patterns unchanged.
+```
+
+In Claude Code, use `/clickhouse-pattern-author` instead. The companion
+`clickhouse-pattern-lab` skill can run, inspect, reload, and validate a runnable
+pattern as it evolves.
+
 ## Pattern descriptions
 
 Diagrams use one boundary-first vocabulary across every pattern. Ingestion
@@ -100,6 +116,44 @@ infrastructure, the
 Pattern Explorer prints the manifest-derived explanation and execution plan. It then
 labels each live phase (`INFRA`, `SCHEMA`, `LOAD`, `WAIT`, `CHECK`, and
 `VERIFY`) so the terminal output explains what is happening.
+
+## Command line
+
+```bash
+just list                          # list the available patterns
+just describe                      # explain what each pattern demonstrates
+just run kafka-ingest-replicated   # validate a pattern, then clean up on Enter
+just test kafka-ingest-replicated  # non-interactive run that tears down at the end
+just reset                         # recovery: remove every container and clear the session
+```
+
+Use `just reset` when the lab and the recorded session disagree: a run that was
+interrupted, containers left behind, or a session pointing at a pattern that has
+since been renamed. It removes the Compose project across every profile and
+deletes the session state, so the next `just run` starts from a clean state.
+`just stop` remains the ordinary way to end a session.
+
+For example, `kafka-ingest-replicated` sends 20,000 Kafka messages into a
+two-replica ClickHouse table and checks that every message reached both replicas:
+
+```text
+$ just run kafka-ingest-replicated
+...
+  LOAD    load.py -> ch-01
+produced 20000 messages to 'events' on localhost:9092
+  CHECK   ch-01: ... == (20000,20000,0,19999)
+  CHECK   ch-02: ... == (20000,20000,0,19999)
+  VERIFY  matched (1 row(s))
+  RESULT
+          20000  20000  0  19999  6667  6666  6667
+PASS  kafka-ingest-replicated
+
+  BROWSE
+    SQL console        http://localhost:8123/play
+    schema visualizer  http://localhost:8123/schema
+
+  Press Enter to finish and remove containers and volumes (Ctrl+C also finishes).
+```
 
 ## Explore a validated pattern
 
