@@ -262,13 +262,10 @@ window.PE.session = (() => {
       const anchor = selected ? $("pattern-body") : $("catalog-home");
       if (bar.nextElementSibling !== anchor) anchor.before(bar);
       panel.hidden = !isLocal;
-      const cloneButton = $("clone-pattern");
-      if (cloneButton) {
-        cloneButton.textContent = isLocal ? "Clone" : "Run locally";
-        cloneButton.title = isLocal
-          ? ""
-          : "Run this pattern's services in Docker";
-      }
+      // Cloning runs `just clone` in a checkout, so the static catalog links to
+      // the local setup instead.
+      $("clone-pattern").hidden = !isLocal;
+      $("run-locally-link").hidden = isLocal;
       syncControlStrip();
       if (!isLocal) return;
       renderExplorerMode();
