@@ -19,7 +19,11 @@ services it needs, loads test data, and checks that it worked as expected.
 
 ## Run patterns locally
 
+Requires Docker, [`uv`](https://docs.astral.sh/uv/), and [`just`](https://just.systems/).
+
 ```bash
+git clone https://github.com/dmkskd/clickhouse-patterns.git
+cd clickhouse-patterns
 just setup      # install the Pattern Explorer and agent integrations
 just explore    # open the catalog at http://localhost:8765
 ```
