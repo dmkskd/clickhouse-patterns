@@ -2,10 +2,10 @@ manifest_version: 2
 metadata:
   title: CDC · Postgres logical WAL → Altinity lightweight sink → ClickHouse
   description: |-
-    The Altinity lightweight sink replicates **Postgres** tables into ClickHouse. It is one Java process that embeds the Debezium `PostgresConnector` and replicates in two phases:
+    The Altinity lightweight sink replicates **Postgres** tables into ClickHouse through logical decoding of the **Postgres** WAL. It is one Java process that embeds the Debezium `PostgresConnector` and replicates in two phases:
 
     - **Snapshot:** Debezium reads each table with `SELECT` over a Postgres SQL connection.
-    - **Streaming:** Debezium reads committed row changes from a logical replication slot over the Postgres streaming replication protocol. The `pgoutput` plugin on the **Postgres** server decodes them from the WAL.
+    - **Streaming:** the **Postgres** server decodes WAL records into committed row changes (INSERT, UPDATE, DELETE) with the logical decoding plugin `pgoutput`. Debezium reads the row changes from a logical replication slot over the Postgres streaming replication protocol.
 
     The sink inserts the rows of both phases through the ClickHouse HTTP interface with `clickhouse-jdbc`. Each change becomes a new row version with a higher `_version`, and each delete a row with `is_deleted = 1`, in a `ReplacingMergeTree(_version, is_deleted)` table. The sink stores its offsets (the last confirmed position in the WAL) and its schema history in ClickHouse tables.
 
@@ -21,9 +21,9 @@ metadata:
 
     ### Postgres source
 
-    - With the default replica identity, Postgres writes only the primary key of a deleted row to the WAL. The sink creates `created_at` and `updated_at` in `test.orders` as non-Nullable `DateTime64(6, 'UTC')`, and in a test run sink 2.11.0 failed to insert the delete (`CANNOT_PARSE_DATETIME`) and retried the batch indefinitely. `source-init.sql` sets `REPLICA IDENTITY FULL` on both source tables, and Postgres then writes the whole old row of each UPDATE and DELETE to the WAL.
+    - With the default replica identity (`REPLICA IDENTITY DEFAULT`), a **Postgres** DELETE record contains only the primary key. The sink inserts the tombstone row with NULL in every other column, including non-Nullable ClickHouse columns, and the INSERT can fail. Declare the non-key ClickHouse columns `Nullable`, or set `REPLICA IDENTITY FULL` on the source table, which writes the whole old row to the WAL for every UPDATE and DELETE ([REPLICA IDENTITY](https://www.postgresql.org/docs/16/sql-altertable.html#SQL-ALTERTABLE-REPLICA-IDENTITY)).
     - For each row change, the sink compares the record's columns with the ClickHouse table and adds the missing ones with `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` before the insert ([schema drift detection](https://github.com/Altinity/clickhouse-sink-connector/blob/f6474042d0ab4dacd15f118b752c4fb8a8a0b1d8/doc/architecture_and_flow_specification.md#step-23-postgresql-schema-drift-detection)). A column dropped in Postgres remains in the ClickHouse table.
-    - Postgres retains WAL for the slot `chp_slot` until the sink confirms its position, and `pg_wal` grows while the sink is stopped or behind ([WAL growth](https://github.com/Altinity/clickhouse-sink-connector/blob/f6474042d0ab4dacd15f118b752c4fb8a8a0b1d8/doc/postgres_wal_growth.md)).
+    - Postgres retains WAL for a logical replication slot until its consumer confirms the position it has processed, and `pg_wal` grows while the sink is stopped or behind ([WAL growth](https://github.com/Altinity/clickhouse-sink-connector/blob/f6474042d0ab4dacd15f118b752c4fb8a8a0b1d8/doc/postgres_wal_growth.md)).
 
     The pattern runs Altinity sink `2.11.0-lt` on ClickHouse `26.9`. The sink bundles `clickhouse-jdbc` 0.9.8, which decodes only LZ4-compressed responses, and ClickHouse 26.9 compresses responses with ZSTD by default ([clickhouse-java #3105](https://github.com/ClickHouse/clickhouse-java/issues/3105)). `compress=0` in `config/connector.yaml` turns off response compression for the sink's three JDBC connections.
 
