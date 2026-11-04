@@ -102,7 +102,7 @@ metadata:
 
     :::
 
-    **walshadow** runs a **shadow Postgres** in its container and streams WAL to it with user-table records replaced by no-ops. The shadow replays catalog changes and by default stores only catalog data. **walshadow** reads table descriptors from the shadow at the replay LSN, decodes rows from the original WAL records, and inserts them into ClickHouse over the Native protocol.
+    **walshadow** runs a **shadow Postgres** in its container and streams WAL to it with user-table records replaced by no-ops. The shadow replays catalog changes and by default stores only catalog data. At each schema change, **walshadow** reads the new table definition from the shadow and appends it to a descriptor history ordered by LSN. The shadow's replay can already be past a later `ALTER TABLE`, so the decoder takes the definition from that history: the latest entry at or before the record's LSN ([catalog history](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/architecture/catalog.md)). Decoded rows are inserted into ClickHouse over the Native protocol.
 
     #### From decoded row to ClickHouse
 
@@ -110,7 +110,9 @@ metadata:
 
     - **Wait for COMMIT**: the row stays in memory until the COMMIT record of transaction 746. An ABORT record discards it.
     - **Batch per table**: at COMMIT, the row gets the COMMIT record's LSN as `_lsn` and joins the committed rows of other transactions buffered for `walshadow.public_orders`. The buffer is sent as one `INSERT ... FORMAT Native` `flush_timeout_ms` after its first row.
-    - **Insert in parallel**: several ClickHouse connections send INSERTs, which can complete out of order. `ReplacingMergeTree(_lsn, _is_deleted)` keeps the row with the highest `_lsn` per key.
+    - **Insert in parallel**: `[ch] inserter_pool_size` ClickHouse connections (default: the vCPU count, between 3 and 8) send INSERTs, which can complete out of order. `ReplacingMergeTree(_lsn, _is_deleted)` keeps the row with the highest `_lsn` per key.
+
+    A transaction that changes a table definition or truncates a table is a barrier: **walshadow** finishes inserting the earlier transactions, applies the change to the ClickHouse table, then inserts the later rows ([reorder](https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/src/emit/pipeline/reorder.rs)).
 
     #### Initial load
 
@@ -148,7 +150,7 @@ metadata:
     catalog:
       connector:wal_stream
         -[filtered WAL · streaming replication]-> connector:shadow_pg
-        -[catalog reads at replay LSN]-> connector:decoder
+        -[table definitions by LSN]-> connector:decoder
 
     query:
       mergetree:public_orders
@@ -175,6 +177,8 @@ metadata:
       url: https://github.com/ClickHouse/walshadow/blob/97f9305316eb5ff89cb3e0071eff095722db4143/docs/limitations.md
     - label: WalShadow in ClickHouse Cloud
       url: https://clickhouse.com/cloud/postgres/walshadow
+    - label: Unifying Postgres and ClickHouse natively (CMU Database Group talk)
+      url: https://www.youtube.com/watch?v=l2ed26H07Ck&t=1s
 
   tradeoffs:
     benefits:
