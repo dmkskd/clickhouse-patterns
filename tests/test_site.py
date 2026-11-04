@@ -46,7 +46,7 @@ def _catalog_pattern(slug: str) -> dict:
 
 @pytest.mark.parametrize("slug, name, target, reader", [
     ("cdc-postgres-walshadow", "config/latency.toml", "/etc/walshadow/ch-config.d/10-pattern.toml", None),
-    ("cdc-mysql-clickhouse", "config/connector.yaml", "/config.yml", None),
+    ("cdc-postgres-altinity", "config/connector.yaml", "/config.yml", None),
     ("cdc-postgres-kafka", "config/source.json", None, "load.py"),
     ("cdc-postgres-kafka", "config/sink.json", None, "load.py"),
     ("cdc-postgres-peerdb", "config/mirror.sql", None, "load.py"),

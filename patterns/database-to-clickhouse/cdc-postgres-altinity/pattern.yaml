@@ -1,0 +1,265 @@
+manifest_version: 2
+metadata:
+  title: CDC · Postgres logical WAL → Altinity lightweight sink → ClickHouse
+  description: |-
+    The Altinity lightweight sink replicates **Postgres** tables into ClickHouse. It is one Java process that embeds the Debezium `PostgresConnector` and replicates in two phases:
+
+    - **Snapshot:** Debezium reads each table with `SELECT` over a Postgres SQL connection.
+    - **Streaming:** Debezium reads committed row changes from a logical replication slot over the Postgres streaming replication protocol. The `pgoutput` plugin on the **Postgres** server decodes them from the WAL.
+
+    The sink inserts the rows of both phases through the ClickHouse HTTP interface with `clickhouse-jdbc`. Each change becomes a new row version with a higher `_version`, and each delete a row with `is_deleted = 1`, in a `ReplacingMergeTree(_version, is_deleted)` table. The sink stores its offsets (the last confirmed position in the WAL) and its schema history in ClickHouse tables.
+
+    ### Demo setup
+
+    The sink runs in the `cdc-postgres` container, reads the slot `chp_slot` on the `postgres` service and stores its state in the ClickHouse database `altinity_sink_connector`. The CDC stream is inserted into three ClickHouse tables, each created differently:
+
+    - `test.orders` is created by the sink, with column types derived from the Debezium record schema.
+    - `test.orders_existing` is created by the ClickHouse init script before the sink starts, with `amount` as `Nullable(Int64)` and a `MATERIALIZED` column `amount_band`.
+    - `test.orders_transformed` is populated by the materialized view `test.orders_transform_mv` from the inserts into `test.orders`.
+
+    A query with `FINAL` and `is_deleted = 0` returns the current rows of the source table from each of the three ClickHouse tables.
+
+    ### Postgres source
+
+    - With the default replica identity, Postgres writes only the primary key of a deleted row to the WAL. The sink creates `created_at` and `updated_at` in `test.orders` as non-Nullable `DateTime64(6, 'UTC')`, and in a test run sink 2.11.0 failed to insert the delete (`CANNOT_PARSE_DATETIME`) and retried the batch indefinitely. `source-init.sql` sets `REPLICA IDENTITY FULL` on both source tables, and Postgres then writes the whole old row of each UPDATE and DELETE to the WAL.
+    - For each row change, the sink compares the record's columns with the ClickHouse table and adds the missing ones with `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` before the insert ([schema drift detection](https://github.com/Altinity/clickhouse-sink-connector/blob/f6474042d0ab4dacd15f118b752c4fb8a8a0b1d8/doc/architecture_and_flow_specification.md#step-23-postgresql-schema-drift-detection)). A column dropped in Postgres remains in the ClickHouse table.
+    - Postgres retains WAL for the slot `chp_slot` until the sink confirms its position, and `pg_wal` grows while the sink is stopped or behind ([WAL growth](https://github.com/Altinity/clickhouse-sink-connector/blob/f6474042d0ab4dacd15f118b752c4fb8a8a0b1d8/doc/postgres_wal_growth.md)).
+
+    The pattern runs Altinity sink `2.11.0-lt` on ClickHouse `26.9`. The sink bundles `clickhouse-jdbc` 0.9.8, which decodes only LZ4-compressed responses, and ClickHouse 26.9 compresses responses with ZSTD by default ([clickhouse-java #3105](https://github.com/ClickHouse/clickhouse-java/issues/3105)). `compress=0` in `config/connector.yaml` turns off response compression for the sink's three JDBC connections.
+
+    ### Following a row through the pipeline
+
+    `replication_latency_ms` is the time from a row write on the source Postgres server (`updated_at`, set by a trigger) to its insert into ClickHouse (`ch_inserted_at`). Snapshot and delete rows have `NULL`.
+
+    Lower `poll.interval.ms` and `buffer.flush.time.ms` values in `config/connector.yaml` reduce latency and increase the number of INSERTs and parts in ClickHouse.
+
+    Edit the files in `config/`, then run `just reload` to rebuild the demo with the new settings. The **Configuration** panel displays the files.
+
+    The sink computes `_version` as the source commit time in milliseconds, floored to stay monotonic, times 1,000,000 plus a counter ([VersionSequencer](https://github.com/Altinity/clickhouse-sink-connector/blob/f6474042d0ab4dacd15f118b752c4fb8a8a0b1d8/sink-connector-lightweight/src/main/java/com/altinity/clickhouse/debezium/embedded/cdc/VersionSequencer.java)). The materialized view copies `ch_inserted_at` and `replication_latency_ms` from `test.orders` unchanged.
+
+    The **Experiments** panel runs a timed insert workload with chosen values for the `config/` latency settings and records the latency per stage and the new parts per run.
+  graph: |-
+    snapshot:
+      postgres:source_tables(label=2 Postgres sources,tables=public.orders + public.orders_existing)
+        -[initial snapshot · Debezium]-> connector:altinity_sink(label=Altinity lightweight sink,system=Altinity CDC,state=offsets + schema history)
+
+    snapshot:
+      connector:altinity_sink
+        -[snapshot · create target]-> mergetree:orders(label=test.orders,owner=connector-created)
+
+    snapshot:
+      connector:altinity_sink
+        -[snapshot · existing target]-> mergetree:orders_existing(label=test.orders_existing,owner=pattern schema)
+
+    changes:
+      postgres:source_tables
+        -[logical WAL · pgoutput · slot chp_slot]-> connector:altinity_sink
+
+    changes:
+      connector:altinity_sink
+        -[versions + tombstones]-> mergetree:orders
+
+    changes:
+      connector:altinity_sink
+        -[versions + tombstones]-> mergetree:orders_existing
+
+    transformation:
+      mergetree:orders
+        -> mv:orders_transform_mv(reads=orders only)
+        -> mergetree:orders_transformed@mv-transformed(source=orders MV)
+  status: wip
+  topology: single
+  order: 3
+  tags: [cdc, postgres, altinity]
+  references:
+    - label: Altinity ClickHouse Sink Connector
+      url: https://github.com/Altinity/clickhouse-sink-connector
+    - label: Altinity lightweight quickstart (PostgreSQL)
+      url: https://github.com/Altinity/clickhouse-sink-connector/blob/f6474042d0ab4dacd15f118b752c4fb8a8a0b1d8/doc/quickstart_postgres.md
+    - label: Altinity 2.11.0 PostgreSQL example configuration
+      url: https://github.com/Altinity/clickhouse-sink-connector/blob/f6474042d0ab4dacd15f118b752c4fb8a8a0b1d8/sink-connector-lightweight/docker/config_postgres.yml
+    - label: Altinity 2.11.0 feature matrix
+      url: https://github.com/Altinity/clickhouse-sink-connector/blob/f6474042d0ab4dacd15f118b752c4fb8a8a0b1d8/doc/feature_matrix.md
+    - label: Debezium PostgreSQL connector
+      url: https://debezium.io/documentation/reference/stable/connectors/postgresql.html
+    - label: clickhouse-java compressed reads fail on ClickHouse 26.9+ (#3105)
+      url: https://github.com/ClickHouse/clickhouse-java/issues/3105
+
+  tradeoffs:
+    benefits:
+      - Runs as one container in addition to ClickHouse and the source Postgres server, and stores its offsets and schema history in ClickHouse tables.
+      - Reads the source Postgres server through logical replication with `pgoutput`, which managed Postgres services such as Amazon RDS offer.
+      - Inserts the same CDC stream into a sink-created table and into a pre-created ClickHouse table.
+      - Adds new Postgres columns to the ClickHouse table before inserting rows that contain them.
+    limitations:
+      - Current-state reads deduplicate row versions with FINAL or argMax and filter deletes with is_deleted = 0.
+      - "Source tables with `NOT NULL` timestamp columns need `REPLICA IDENTITY FULL`. With the default replica identity, the sink fails to insert deletes and retries the batch indefinitely. FULL adds the whole old row of each UPDATE and DELETE to the WAL."
+      - Schema drift handling adds columns, and a column dropped in Postgres remains in the ClickHouse table.
+      - Logical decoding runs on the source Postgres server, and the slot retains WAL while the sink is stopped or behind.
+      - The initial snapshot runs in one embedded Debezium process, and a failure restarts it from the beginning.
+      - "The bundled `clickhouse-jdbc` 0.9.8 fails to read compressed responses from ClickHouse 26.9 and later, and the pattern sets `compress=0`."
+
+spec:
+  profiles: [cdc-ch, postgres, cdc-postgres]
+  driver_node: ch-cdc
+
+  services:
+    cdc-postgres:
+      config:
+        - file: config/connector.yaml
+          target: /config.yml
+    postgres:
+      init: source-init.sql
+
+  experiments:
+    - name: replication-latency
+      title: Replication latency
+      description: Inserts orders into Postgres at a fixed rate and measures the time from the Postgres write to the ClickHouse insert.
+      script: experiments/replication_latency.py
+      parameters:
+        - name: poll_interval_ms
+          label: Debezium poll interval (ms)
+          short: poll ms
+          group: Altinity connector
+          default: 500
+          min: 1
+          config: {file: config/connector.yaml, key: poll.interval.ms}
+        - name: buffer_flush_time_ms
+          label: Sink buffer flush time (ms)
+          short: flush ms
+          group: Altinity connector
+          default: 30
+          min: 1
+          config: {file: config/connector.yaml, key: buffer.flush.time.ms}
+        - name: rate
+          label: Rows per second
+          short: requested/s
+          group: Postgres
+          default: 50
+          min: 1
+        - name: rows_per_txn
+          label: Rows per transaction
+          short: rows/txn
+          group: Postgres
+          default: 1
+          min: 1
+        - name: duration
+          label: Duration (s)
+          short: secs
+          group: Postgres
+          default: 10
+          min: 1
+      results:
+        - name: rows
+          label: rows
+          group: Postgres
+          description: Rows inserted into Postgres during the run.
+        - name: achieved_rate
+          label: actual/s
+          group: Postgres
+          description: Rows per second actually written to Postgres; below the requested rate when one connection cannot insert that fast.
+        - name: p50_ms
+          label: p50
+          group: End to end (ms)
+          description: Median time from the Postgres write to the ClickHouse insert, per row.
+        - name: p95_ms
+          label: p95
+          group: End to end (ms)
+          description: 95th percentile of the same per-row time.
+        - name: p99_ms
+          label: p99
+          group: End to end (ms)
+          description: 99th percentile of the same per-row time.
+        - name: max_ms
+          label: max
+          group: End to end (ms)
+          description: Slowest row.
+        - name: parts
+          label: parts
+          group: ClickHouse
+          description: New data parts in test.orders during the run (system.part_log).
+        - name: part_write_avg_ms
+          label: write avg
+          group: ClickHouse
+          description: Average time in ms ClickHouse took to write one new part (system.part_log duration_ms).
+        - name: part_write_max_ms
+          label: write max
+          group: ClickHouse
+          description: Slowest part write, in ms.
+      groups: [Postgres, Altinity connector, ClickHouse, End to end (ms)]
+      timeline_total: Average row latency (write to insert)
+
+  steps:
+    # ch-cdc initialization provides orders_existing before the connector starts;
+    # the connector still creates orders. load.py installs the transformation after
+    # the initial snapshot because its source table must exist first.
+    schema:
+    load: load.py
+
+    ready_when:
+      - query: SELECT engine FROM system.tables WHERE database = 'test' AND name = 'orders'
+        value: ReplacingMergeTree
+        node: ch-cdc
+        timeout: 60
+      - query: SELECT type FROM system.columns WHERE database = 'test' AND table = 'orders_existing' AND name = 'amount'
+        value: Nullable(Int64)
+        node: ch-cdc
+        timeout: 60
+      - query: SELECT type FROM system.columns WHERE database = 'test' AND table = 'orders_transformed' AND name = 'amount'
+        value: Nullable(Decimal(12, 2))
+        node: ch-cdc
+        timeout: 60
+      - query: SELECT count() FROM test.orders FINAL WHERE id = 3 AND is_deleted = 0
+        value: 0
+        node: ch-cdc
+        timeout: 60
+      - query: SELECT count() FROM test.orders_transformed FINAL WHERE id = 3 AND is_deleted = 0
+        value: 0
+        node: ch-cdc
+        timeout: 60
+      - query: SELECT count() FROM test.orders_existing FINAL WHERE id = 3 AND is_deleted = 0
+        value: 0
+        node: ch-cdc
+        timeout: 60
+
+      - query: SELECT count() FROM test.orders FINAL WHERE id IN (2, 4, 5, 6) AND replication_stage = 'CDC change' AND ch_inserted_at IS NOT NULL AND replication_latency_ms = dateDiff('microsecond', updated_at, ch_inserted_at) / 1000.0 AND updated_at >= created_at
+        value: 4
+        node: ch-cdc
+        timeout: 180
+      - query: SELECT count() FROM test.orders FINAL WHERE id = 1 AND replication_stage = 'Initial snapshot' AND ch_inserted_at IS NULL AND replication_latency_ms IS NULL
+        value: 1
+        node: ch-cdc
+        timeout: 180
+      - query: SELECT count() FROM test.orders_existing FINAL WHERE id IN (2, 4, 5, 6) AND replication_stage = 'CDC change' AND ch_inserted_at IS NOT NULL AND replication_latency_ms = dateDiff('microsecond', updated_at, ch_inserted_at) / 1000.0 AND updated_at >= created_at
+        value: 4
+        node: ch-cdc
+        timeout: 180
+      - query: SELECT count() FROM test.orders_existing FINAL WHERE id = 1 AND replication_stage = 'Initial snapshot' AND ch_inserted_at IS NULL AND replication_latency_ms IS NULL
+        value: 1
+        node: ch-cdc
+        timeout: 180
+      - query: SELECT count() FROM test.orders_transformed FINAL WHERE id IN (2, 4, 5, 6) AND replication_stage = 'CDC change' AND ch_inserted_at IS NOT NULL AND replication_latency_ms = dateDiff('microsecond', updated_at, ch_inserted_at) / 1000.0 AND updated_at >= created_at
+        value: 4
+        node: ch-cdc
+        timeout: 180
+      - query: SELECT count() FROM test.orders_transformed FINAL WHERE id = 1 AND replication_stage = 'Initial snapshot' AND ch_inserted_at IS NULL AND replication_latency_ms IS NULL
+        value: 1
+        node: ch-cdc
+        timeout: 180
+
+      - query: SELECT count() FROM test.orders WHERE is_deleted != 0 AND replication_latency_ms IS NOT NULL
+        value: 0
+        node: ch-cdc
+        timeout: 180
+      - query: SELECT count() FROM test.orders_existing WHERE is_deleted != 0 AND replication_latency_ms IS NOT NULL
+        value: 0
+        node: ch-cdc
+        timeout: 180
+      - query: SELECT count() FROM test.orders_transformed WHERE is_deleted != 0 AND replication_latency_ms IS NOT NULL
+        value: 0
+        node: ch-cdc
+        timeout: 180
+
+    verify:
+      sql: verify.sql
+      expected: expected.txt

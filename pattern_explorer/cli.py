@@ -539,7 +539,7 @@ def _print_pattern_plan(pattern, action: str) -> None:
         Text(_flow_summary(pattern), style="cyan"),
         Text(),
         Text("WHAT IT DEMONSTRATES", style="bold cyan"),
-        Text(pattern.description),
+        Text(_plain_description(pattern.description)),
     ]
     if pattern.tradeoffs:
         blocks.extend([Text(), Text("TRADE-OFFS", style="bold cyan")])

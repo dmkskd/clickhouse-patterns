@@ -10,6 +10,11 @@ intro: |-
   to use depends on freshness, source size, and whether the change history
   itself is needed.
 
+  The patterns use Postgres as the source database, and the same mechanisms apply
+  to MySQL. The `MySQL` table engine and the `mysql()` table function query MySQL
+  in place, and PeerDB, Debezium and the Altinity sink replicate MySQL from its
+  binlog. walshadow decodes the Postgres physical WAL and replicates Postgres only.
+
   They are ordered by how much machinery stands between the source and the
   query.
 

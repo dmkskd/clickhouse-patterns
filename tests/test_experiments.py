@@ -189,7 +189,7 @@ def test_paced_writes_whole_transactions_in_order():
 
 
 def test_cdc_experiments_reach_the_browser_catalog():
-    for slug in ("cdc-postgres-walshadow", "cdc-postgres-peerdb", "cdc-postgres-kafka", "cdc-mysql-clickhouse"):
+    for slug in ("cdc-postgres-walshadow", "cdc-postgres-peerdb", "cdc-postgres-kafka", "cdc-postgres-altinity"):
         (experiment,) = _browser_pattern(load_pattern(slug))["experiments"]
         assert experiment["name"] == "replication-latency"
         assert experiment["groups"][-1] == "End to end (ms)"

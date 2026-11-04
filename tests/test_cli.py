@@ -36,43 +36,41 @@ def test_show_renders_inline_pattern_link_label(capsys):
 
 
 def test_describe_explains_pattern_without_execution_details(capsys):
-    pattern = load_pattern("cdc-mysql-clickhouse")
+    pattern = load_pattern("cdc-postgres-altinity")
 
     assert _cmd_describe(SimpleNamespace()) == 0
 
     output = capsys.readouterr().out
     normalized = " ".join(output.split())
-    assert " ".join(pattern.description.split()) in normalized
+    assert " ".join(cli._plain_description(pattern.description).split()) in normalized
     assert " ".join(cli._flow_summary(pattern).split()) in normalized
     assert "DATABASES → CLICKHOUSE  (6 patterns)" in output
     assert "\n    profiles" not in output
     assert "\n    driver" not in output
-    assert "\n    schema" not in output
+    assert "\n    schema   " not in output
     assert "\n    validation" not in output
     assert "\n    verify" not in output
 
 
 def test_pattern_plan_explains_the_run(capsys):
-    pattern = load_pattern("cdc-mysql-clickhouse")
+    pattern = load_pattern("cdc-postgres-altinity")
 
     _print_pattern_plan(pattern, "end-to-end test with teardown")
 
     output = capsys.readouterr().out
     normalized = " ".join(output.replace("│", "").split())
     assert pattern.title in output
-    assert " ".join(pattern.description.split()) in normalized
+    assert " ".join(cli._plain_description(pattern.description).split()) in normalized
     assert " ".join(cli._flow_summary(pattern).split()) in normalized
     assert "DATA FLOW" in output
     assert "WHAT IT DEMONSTRATES" in output
     assert "RUN PLAN" in output
-    assert "Start ClickHouse, MySQL, and the MySQL CDC sink." in normalized
+    assert "Start ClickHouse, Postgres, and the Postgres CDC sink." in normalized
     assert "Prepare the CDC-created and existing ClickHouse targets." in normalized
     assert "Run load.py using ch-cdc as the driver." in normalized
     assert f"Wait for {len(pattern.ready_when)} convergence checks, then compare verify.sql with expected.txt." in normalized
     assert "Tear down the containers and volumes." in normalized
-    assert "pins Altinity sink `2.9.1-lt` to ClickHouse `25.3`" in normalized
-    assert "Altinity 2.9.1 supported ClickHouse versions (24.8+)" in normalized
-    assert "Altinity 2.9.1 lightweight JDBC dependency (0.6.5)" in normalized
+    assert "runs Altinity sink `2.11.0-lt` on ClickHouse `26.9`" in normalized
 
 
 def test_interactive_run_plan_waits_before_cleanup(capsys):

@@ -6,7 +6,12 @@ CREATE TABLE IF NOT EXISTS test.orders_transformed
     id Int32,
     customer LowCardinality(Nullable(String)),
     amount Nullable(Decimal(12, 2)),
+    replication_latency_ms Nullable(Float64),
+    replication_stage LowCardinality(String),
     amount_band LowCardinality(String),
+    created_at Nullable(DateTime64(6, 'UTC')),
+    updated_at Nullable(DateTime64(6, 'UTC')),
+    ch_inserted_at Nullable(DateTime64(6, 'UTC')),
     _version UInt64,
     is_deleted UInt8
 )
@@ -21,16 +26,19 @@ SELECT
     upper(customer) AS customer,
     toDecimal64(amount, 2) AS amount,
     if(ifNull(amount, 0) >= 250, 'high', 'standard') AS amount_band,
+    created_at, updated_at, ch_inserted_at, replication_stage, replication_latency_ms,
     _version,
     is_deleted
 FROM test.orders;
 
 INSERT INTO test.orders_transformed
+(id, customer, amount, amount_band, created_at, updated_at, ch_inserted_at, replication_stage, replication_latency_ms, _version, is_deleted)
 SELECT
     id,
     upper(customer),
     toDecimal64(amount, 2),
     if(ifNull(amount, 0) >= 250, 'high', 'standard'),
+    created_at, updated_at, ch_inserted_at, replication_stage, replication_latency_ms,
     _version,
     is_deleted
 FROM test.orders FINAL;

@@ -139,7 +139,7 @@ transformation at insert rather than after it, and it costs nothing extra.
 A Kafka Connect deployment differs structurally, because an SMT can rewrite each
 message between source and sink, and removing the broker removes that stage.
 [cdc-postgres-kafka](../cdc-postgres-kafka/) puts it back, and
-[cdc-mysql-clickhouse](../cdc-mysql-clickhouse/) reaches the same conclusion.
+[cdc-postgres-altinity](../cdc-postgres-altinity/) reaches the same conclusion.
 
 ## Cheaper options first
 

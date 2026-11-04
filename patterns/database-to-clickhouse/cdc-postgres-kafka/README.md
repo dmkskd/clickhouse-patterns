@@ -27,7 +27,7 @@ notice, because the number of slots stays at one.
 
 This is the pattern for an organisation where the change stream has more than
 one customer. Where ClickHouse is the only destination,
-[cdc-mysql-clickhouse](../cdc-mysql-clickhouse/) does the same job with one
+[cdc-postgres-altinity](../cdc-postgres-altinity/) does the same job with one
 service and no retention to manage.
 
 Topic retention also decouples the two halves. A ClickHouse outage is absorbed
@@ -49,7 +49,7 @@ is published:
 Every consumer therefore reads flat rows rather than envelopes. This stage does
 not exist in the single-process patterns, because with no broker between extract
 and apply a transform has no place to run, which is why both
-[cdc-mysql-clickhouse](../cdc-mysql-clickhouse/) and
+[cdc-postgres-altinity](../cdc-postgres-altinity/) and
 [cdc-postgres-peerdb](../cdc-postgres-peerdb/) do all their shaping inside
 ClickHouse instead.
 
@@ -95,7 +95,7 @@ The sink here is the official
 Anything that can consume the topic could take its place. Two worth naming:
 
 - The [Altinity sink in Kafka mode](https://github.com/Altinity/clickhouse-sink-connector/blob/develop/doc/quickstart_kafka.md)
-  is the same product used by [cdc-mysql-clickhouse](../cdc-mysql-clickhouse/),
+  is the same product used by [cdc-postgres-altinity](../cdc-postgres-altinity/),
   running as a Kafka Connect plugin instead of embedding Debezium in its own
   process. It consumes Debezium envelopes directly, so the unwrap transform
   configured here is not needed.

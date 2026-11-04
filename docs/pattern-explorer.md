@@ -13,7 +13,7 @@ profiles select only the services a pattern needs:
 - `connect`: Kafka Connect worker + official ClickHouse Sink plugin
 - `cdc-ch`: ClickHouse pinned at 25.3 for the Altinity lightweight sink; the
   reproduced 26.6 startup failure is documented in the
-  [MySQL CDC compatibility note](../patterns/cdc-mysql-clickhouse/README.md#compatibility)
+  [MySQL CDC compatibility note](../workspace-patterns/cdc-mysql-clickhouse/README.md#compatibility)
 - `mysql` / `postgres`: CDC sources
 - `cdc-mysql` / `cdc-postgres`: Altinity lightweight sink
 - `peerdb`: self-hosted PeerDB catalog, Temporal, API, and workers
