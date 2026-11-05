@@ -2,21 +2,22 @@ manifest_version: 2
 metadata:
   title: 'Server concurrency: wait vs reject'
   description: |-
-    Server `max_concurrent_queries` is the only concurrency limit that can queue
-    a query. With `queue_max_wait_ms = 0` (the default) a query over the limit is
-    rejected at once with `TOO_MANY_SIMULTANEOUS_QUERIES`. With a positive value
-    it waits up to that time for a running query to finish, then is rejected
-    with the same error.
+    The server process-list limit `max_concurrent_queries` can queue a query
+    for up to `queue_max_wait_ms`. A free slot admits the query; expiry of the
+    wait budget rejects it with `TOO_MANY_SIMULTANEOUS_QUERIES`.
+    The default wait budget of zero rejects an excess query immediately.
 
     `max_concurrent_select_queries`, `max_concurrent_insert_queries`,
     `max_concurrent_queries_for_user`, and `max_concurrent_queries_for_all_users`
-    reject at once and ignore `queue_max_wait_ms`.
+    reject immediately at their own checks. A query can already have waited
+    at the preceding server-wide check.
 
-    Server `max_waiting_queries` does not apply here: it limits queries waiting
-    for tables to load at startup.
+    Server `max_waiting_queries` bounds the table-loading queue at startup.
+    Workload query slots provide a separate admission queue before the
+    process-list checks.
   graph: |-
     admission:
-      client:readers(note=**Load**\n- 6 concurrent SELECTs\n- queue_max_wait_ms = 0 and 5000) -[max_concurrent_queries = 2]-> mergetree:events
+      client:readers(note=Client processes\nSubmit concurrent SELECT queries) -[max_concurrent_queries]-> mergetree:events
   mode: reference
   status: wip
   topology: single
@@ -29,7 +30,7 @@ metadata:
       url: https://github.com/ClickHouse/ClickHouse/blob/master/src/Interpreters/ProcessList.cpp
   tradeoffs:
     benefits:
-      - A positive `queue_max_wait_ms` absorbs short bursts without client retries.
+      - A positive `queue_max_wait_ms` queues excess queries during short bursts.
     limitations:
-      - The queue is server-wide and has no per-user or per-workload share; use workload query slots for that.
-      - Queued queries hold their connections while they wait.
+      - The server-wide queue shares admission capacity across users. Workload query slots provide workload-specific scheduling.
+      - Queued queries keep their client connections open.

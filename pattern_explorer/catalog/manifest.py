@@ -597,6 +597,8 @@ class GuideMechanism(BaseModel):
     facets: dict[str, list[str]]
     errors: list[str] = Field(default_factory=list)
     settings: list[str] = Field(default_factory=list)
+    setting_groups: dict[str, list[str]] = Field(default_factory=dict)
+    observe: str = ""  # where to look for evidence; not a claim of runtime validation
     since: str = ""
     note: str = ""
     pattern: str = ""
@@ -663,6 +665,8 @@ class Guide(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    versions: list[str] = Field(default_factory=list)
+    note: str = ""
     stages: list[GuideStage] = Field(default_factory=list)
     placements: list[GuidePlacement] = Field(default_factory=list)
     entries: list[GuideEntry]
@@ -671,16 +675,27 @@ class Guide(BaseModel):
 
     @model_validator(mode="after")
     def _validate(self):
+        for version in self.versions:
+            if not re.fullmatch(r"\d+(\.\d+)*", version):
+                raise ValueError(f"invalid guide version {version!r}")
         ids = [item.id for item in self.mechanisms]
         if len(ids) != len(set(ids)):
             raise ValueError("guide mechanism ids must be unique")
         facets = {facet for item in self.mechanisms for facet in item.facets} | {"errors"}
+        facet_options: dict[str, set[str]] = {}
         for entry in self.entries:
             for step in entry.steps:
                 if step.facet not in facets:
                     raise ValueError(f"guide step facet {step.facet!r} is not used by any mechanism")
+                if step.options:
+                    facet_options.setdefault(step.facet, set()).update(step.options)
         stage_keys = {stage.key for stage in self.stages}
         for item in self.mechanisms:
+            if item.since and not re.fullmatch(r"\d+(\.\d+)*", item.since):
+                raise ValueError(f"invalid guide mechanism version {item.since!r}")
+            for facet, values in item.facets.items():
+                if facet in facet_options and set(values) - facet_options[facet]:
+                    raise ValueError(f"guide mechanism {item.id!r} has unknown {facet} value(s)")
             unknown_stages = set(item.stage) - stage_keys
             if unknown_stages:
                 raise ValueError(f"guide mechanism {item.id!r} has unknown stage(s) {sorted(unknown_stages)}")

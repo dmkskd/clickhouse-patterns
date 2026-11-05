@@ -7,6 +7,25 @@ window.PE.guide = (() => {
   const { esc, displayTitle } = window.PE.util;
   const $ = (id) => document.getElementById(id);
 
+  // Guide prose supports code identifiers; all text remains HTML-escaped.
+  function inlineText(value) {
+    return value.split(/(`[^`]+`)/g).map((part) => part.startsWith("`") && part.endsWith("`")
+      ? `<code class="guide-inline-code">${esc(part.slice(1, -1))}</code>` : esc(part)).join("");
+  }
+
+  function forVersion(guide, version) {
+    const parts = (value) => value.split(".").map(Number);
+    const supported = (since) => {
+      if (!version || !since) return true;
+      const a = parts(since), b = parts(version);
+      for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) < (b[i] || 0);
+      }
+      return true;
+    };
+    return { ...guide, mechanisms: guide.mechanisms.filter((item) => supported(item.since)) };
+  }
+
   function create(deps) {
     // deps: patterns, openPattern(slug)
     const { patterns } = deps;
@@ -14,8 +33,9 @@ window.PE.guide = (() => {
     // list of mechanism records by facet. Each step is a row of answers; an
     // answer with no mechanism is disabled, unless a gap explains what to use
     // instead. The state is per group, so leaving and coming back keeps it.
-    const BEHAVIOR_ORDER = ["wait", "reject", "throttle", "downscale", "spill", "break", "kill"];
+    const BEHAVIOR_ORDER = ["wait", "pause", "defer", "reject", "throttle", "downscale", "spill", "break", "omit-groups", "warn", "kill"];
     const guideState = new Map();
+    let rendered = null;
 
     function guideValues(mechanism, facet) {
       return facet === "errors" ? mechanism.errors || [] : (mechanism.facets || {})[facet] || [];
@@ -30,27 +50,39 @@ window.PE.guide = (() => {
         Object.entries(gap.when).every(([facet, value]) => picks[facet] === value));
     }
 
-    function guideMechanismCard(mechanism, scopeLabels, stages, selection) {
+    function guideMechanismCard(mechanism, scopeLabels, stages, facetLabels) {
       const pattern = mechanism.pattern && patterns.find((item) => item.slug === mechanism.pattern);
       const behaviors = guideTags(guideBehaviors(mechanism));
       const scopes = guideValues(mechanism, "scope").map((value) => esc(scopeLabels[value] || value)).join(", ");
-      const errors = (mechanism.errors || []).map((code) => `<code>${esc(code)}</code>`).join(" ");
-      const settings = (mechanism.settings || []).map((name) => `<code>${esc(name)}</code>`).join(" ");
-      const selected = selection && (selection.id === mechanism.id || (mechanism.stage || []).includes(selection.stage));
+      const codes = (names) => names.map((name) => `<code>${esc(name).replaceAll("_", "_<wbr>")}</code>`).join("");
+      const field = (label, value, identifiers = false, kind = "") => `<div class="guide-field${identifiers ? " guide-field-identifiers" : ""}${kind ? ` guide-field-${kind}` : ""}">` +
+        `<dt>${esc(label)}</dt><dd>${value}</dd></div>`;
+      const errors = codes(mechanism.errors || []);
+      const settings = codes(mechanism.settings || []);
+      const settingGroups = Object.entries(mechanism.setting_groups || {}).map(([label, names]) =>
+        field(label, codes(names), true)).join("");
+      const facetText = (facet) => guideValues(mechanism, facet)
+        .map((value) => esc(facetLabels[facet]?.[value] || value)).join(", ");
+      const configurations = guideValues(mechanism, "configuration").map((value) =>
+        `<li data-configuration="${esc(value)}">${esc(facetLabels.configuration?.[value] || value)}</li>`).join("");
       const stageTags = stages.filter((stage) => (mechanism.stage || []).includes(stage.key)).map((stage) =>
-        `<span class="guide-stage-tag${selection?.stage === stage.key ? " selected" : ""}" title="Query stage: ${esc(stage.label)}">${esc(stage.label)}</span>`).join("");
+        `<span class="guide-stage-tag" title="Query stage: ${esc(stage.label)}">${esc(stage.label)}</span>`).join("");
       const action = pattern
         ? `<button type="button" class="guide-run" data-slug="${esc(pattern.slug)}" title="${esc(displayTitle(pattern))}">Open pattern</button>`
-        : `<span class="guide-no-pattern">No pattern yet</span>`;
-      return `<article class="guide-mechanism${selected ? " selected" : ""}" id="guide-m-${esc(mechanism.id)}">` +
+        : `<span class="guide-no-pattern">Reference guidance</span>`;
+      return `<article class="guide-mechanism" id="guide-m-${esc(mechanism.id)}">` +
         (stageTags ? `<div class="guide-stage-tags">${stageTags}</div>` : "") +
         `<header><h4>${esc(mechanism.title)}</h4><div class="guide-behaviors">${behaviors}</div></header>` +
         `<dl>` +
-        `<dt>Scope</dt><dd>${scopes}${mechanism.since ? ` <span class="guide-since">since ${esc(mechanism.since)}</span>` : ""}</dd>` +
-        (errors ? `<dt>Error</dt><dd>${errors}</dd>` : "") +
-        (settings ? `<dt>Settings</dt><dd class="guide-settings">${settings}</dd>` : "") +
+        field("Scope", `${scopes}${mechanism.since ? ` <span class="guide-since">since ${esc(mechanism.since)}</span>` : ""}`) +
+        (configurations ? field("Configuration", `<ul class="guide-configurations">${configurations}</ul>`, false, "configuration") : "") +
+        (errors ? field("Error", errors, true, "error") : "") +
+        (settings ? field("Settings", settings, true) : "") +
+        settingGroups +
         `</dl>` +
-        (mechanism.note ? `<p>${esc(mechanism.note)}</p>` : "") +
+        (mechanism.note ? `<p>${inlineText(mechanism.note)}</p>` : "") +
+        (mechanism.observe ? `<details class="guide-evidence"><summary>How to observe</summary>` +
+          `<p>${inlineText(mechanism.observe)}</p><p>Affected activity: ${facetText("activity")}</p></details>` : "") +
         `<footer>${action}${mechanism.docs ? `<a href="${esc(mechanism.docs)}" target="_blank" rel="noopener noreferrer">Docs</a>` : ""}</footer>` +
         `</article>`;
     }
@@ -63,9 +95,11 @@ window.PE.guide = (() => {
     // What a limit does to a query, in words, colored by outcome: the query
     // fails, is delayed, or completes with a degraded result.
     const BEHAVIOR_TAGS = {
-      wait: ["waits", "delayed"], reject: ["rejects", "fails"], throttle: ["slows down", "delayed"],
+      wait: ["queues before execution", "delayed"], pause: ["pauses during execution", "delayed"],
+      defer: ["defers background work", "delayed"], reject: ["rejects", "fails"], throttle: ["throttles", "delayed"],
       downscale: ["fewer threads", "delayed"], spill: ["spills to disk", "degraded"],
       break: ["partial result", "degraded"], kill: ["stops the query", "fails"],
+      "omit-groups": ["excludes new groups", "degraded"], warn: ["logs a warning", "degraded"],
     };
     const guideTags = (values) => values.map((value) => {
       const [label, tone] = BEHAVIOR_TAGS[value] || [value, ""];
@@ -135,8 +169,7 @@ window.PE.guide = (() => {
         }).join("");
         return `<tr><th scope="row">${esc(rowLabel)}</th>${cells}</tr>`;
       }).join("");
-      return `<p class="guide-caption">Rows: what to limit. Columns: where the limit is set. Each cell lists what the ` +
-        `limits there can do; click a cell to answer the first two questions.</p>` +
+      return `<p class="guide-caption">Rows show resources; columns show accounting scopes. Select a cell to filter the mechanisms.</p>` +
         `<div class="guide-visual"><table class="guide-matrix"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`;
     }
 
@@ -146,13 +179,13 @@ window.PE.guide = (() => {
     const GUIDE_TOPOLOGIES = {
       cluster: [
         { key: "a", label: "Node A", sub: "Receives the query (initiator), stores shard 1",
-          places: ["initiator", "every-node", "table-node"] },
+          places: ["initiator", "every-node", "table-node", "buffer-node"] },
         { key: "b", label: "Node B", sub: "Stores shard 2, runs the secondary query",
           places: ["every-node", "table-node"] },
       ],
       single: [
         { key: "s", label: "ClickHouse server", sub: "Receives, plans, and runs the query",
-          places: ["initiator", "every-node", "table-node"] },
+          places: ["initiator", "every-node", "table-node", "buffer-node"] },
       ],
     };
 
@@ -208,14 +241,17 @@ window.PE.guide = (() => {
     function render(info) {
       const slot = $("catalog-group-guide");
       if (!slot) return;
-      const guide = info?.guide;
-      if (!guide) { slot.hidden = true; slot.replaceChildren(); return; }
+      const sourceGuide = info?.guide;
+      if (!sourceGuide) { slot.hidden = true; slot.replaceChildren(); rendered = null; return; }
       slot.hidden = false;
-      const fresh = (entry) => ({ entry, picks: {}, skipped: [], focus: "", spot: null, showAll: false, map: false, mapView: "cluster", topology: "cluster" });
-      if (!guideState.has(info.key)) guideState.set(info.key, fresh(guide.entries[0].key));
+      const fresh = (entry, version = sourceGuide.versions?.[0] || "") => ({ entry, version, picks: {}, skipped: [], focus: "", spot: null, showAll: false, map: false, mapView: "cluster", topology: "cluster" });
+      if (!guideState.has(info.key)) guideState.set(info.key, fresh(sourceGuide.entries[0].key));
       const state = guideState.get(info.key);
+      const guide = forVersion(sourceGuide, state.version);
       const entry = guide.entries.find((item) => item.key === state.entry) || guide.entries[0];
       const scopeLabels = entry.steps.find((step) => step.facet === "scope")?.options || {};
+      const facetLabels = Object.fromEntries(guide.entries.flatMap((item) => item.steps)
+        .filter((step) => step.options && Object.keys(step.options).length).map((step) => [step.facet, step.options]));
       const byId = Object.fromEntries(guide.mechanisms.map((item) => [item.id, item]));
 
       const optionsFor = (step) => {
@@ -294,22 +330,33 @@ window.PE.guide = (() => {
         `<button type="button" role="tab" class="guide-tab${item.key === entry.key ? " active" : ""}" ` +
         `aria-selected="${item.key === entry.key}" data-entry="${esc(item.key)}">${esc(item.label)}</button>`).join("");
 
-      slot.innerHTML =
+      const markup =
         `<section class="guide-section guide-questions" aria-labelledby="guide-questions-title">` +
-        `<h3 id="guide-questions-title" class="guide-section-title">1. Diagnose / Enforce</h3>` +
+        `<h3 id="guide-questions-title" class="guide-section-title">Diagnose / Enforce</h3>` +
+        ((sourceGuide.versions || []).length ? `<label class="guide-version">Feature baseline ` +
+          `<select class="guide-version-select">${sourceGuide.versions.map((version) =>
+            `<option value="${esc(version)}"${state.version === version ? " selected" : ""}>${esc(version)}</option>`).join("")}` +
+          `<option value=""${state.version === "" ? " selected" : ""}>All documented versions</option></select></label>` : "") +
+        (guide.note ? `<details class="guide-evidence"><summary>Coverage</summary><p>${esc(guide.note)}</p></details>` : "") +
         `<div class="guide-tabs" role="tablist">${tabs}</div>` +
         `<p class="guide-prompt">${esc(entry.prompt)}</p>` +
         (trail.length ? `<div class="guide-trail">${trail.join('<span class="guide-trail-sep">›</span>')}` +
           `<button type="button" class="guide-reset">Start over</button></div>` : "") +
         question + `</section>` +
         (entry.view ? `<section class="guide-section guide-map" aria-labelledby="guide-map-title">` +
-          `<h3 id="guide-map-title" class="guide-section-title">2. Query execution map</h3>` +
+          `<h3 id="guide-map-title" class="guide-section-title">Query execution map</h3>` +
           `<button type="button" class="guide-map-toggle" aria-expanded="${state.map}">` +
           `${state.map ? "Hide map" : "Show map of all limits"}</button>${visual}</section>` : "") +
         `<section id="guide-results" class="guide-section guide-results${spot || focus ? " selected" : ""}" aria-labelledby="guide-results-title">` +
-        `<h3 id="guide-results-title" class="guide-section-title">3. Limits</h3>${summary}` +
-        (ready ? `<div class="guide-mechanisms">${shown.map((item) => guideMechanismCard(item, scopeLabels, guide.stages, spot || focus ? { stage: spot?.stage.key, id: focus } : null)).join("")}</div>` : "") +
+        `<h3 id="guide-results-title" class="guide-section-title">Limits</h3>${summary}` +
+        (ready ? `<div class="guide-mechanisms">${shown.map((item) => guideMechanismCard(item, scopeLabels, guide.stages, facetLabels)).join("")}</div>` : "") +
         `</section>`;
+
+      // Session polling also renders the catalog. Preserve native disclosure
+      // state and keyboard focus when the guide content has not changed.
+      if (rendered?.slot === slot && rendered.key === info.key && rendered.markup === markup) return;
+      slot.innerHTML = markup;
+      rendered = { slot, key: info.key, markup };
 
       const rerender = () => render(info);
       const revealSelection = () => {
@@ -325,9 +372,13 @@ window.PE.guide = (() => {
         });
       };
       slot.querySelectorAll(".guide-tab").forEach((btn) => btn.addEventListener("click", () => {
-        guideState.set(info.key, fresh(btn.dataset.entry));
+        guideState.set(info.key, fresh(btn.dataset.entry, state.version));
         rerender();
       }));
+      slot.querySelector(".guide-version-select")?.addEventListener("change", (event) => {
+        guideState.set(info.key, { ...fresh(entry.key, event.currentTarget.value), map: state.map, mapView: state.mapView, topology: state.topology });
+        rerender();
+      });
       slot.querySelectorAll(".guide-chip").forEach((btn) => btn.addEventListener("click", () => {
         state.picks[btn.dataset.facet] = btn.dataset.value;
         state.focus = ""; state.spot = null; state.showAll = false;
@@ -347,7 +398,7 @@ window.PE.guide = (() => {
         rerender();
       }));
       slot.querySelector(".guide-reset")?.addEventListener("click", () => {
-        guideState.set(info.key, { ...fresh(entry.key), map: state.map, mapView: state.mapView, topology: state.topology });
+        guideState.set(info.key, { ...fresh(entry.key, state.version), map: state.map, mapView: state.mapView, topology: state.topology });
         rerender();
       });
       slot.querySelector(".guide-show-all")?.addEventListener("click", () => { state.showAll = true; rerender(); });
@@ -385,5 +436,5 @@ window.PE.guide = (() => {
     return { render };
   }
 
-  return { create };
+  return { create, forVersion };
 })();

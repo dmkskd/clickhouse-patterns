@@ -3,16 +3,15 @@ label: Limits
 description: Configure resource limits and diagnose query failures in ClickHouse
 icon: gauge
 order: 8
-notice: '**Experimental guide.** We are experimenting with the visual presentation. Coverage and examples are under development.'
+notice: 'Reference guide. Runtime examples are under development.'
 intro: |-
-  ClickHouse limits connections, concurrent queries, memory, CPU, IO and
-  cumulative resource usage. Limits apply at the server, user, query, quota,
-  workload or table level. Each setting determines the action when its limit
-  is reached.
+  ClickHouse controls connections, query admission, CPU, memory, IO, query
+  complexity and write backpressure. Quotas account for usage over an interval.
+  Each mechanism defines an accounting scope, configuration and action.
 
-  - **Diagnose:** start from what happened to a query and its error code.
-  - **Enforce:** start from what to limit, for whom, and what should happen
-    at the limit.
+  Diagnose filters by observed behavior and error code. Enforce filters by
+  resource, accounting scope and action. Admission queues, execution pauses
+  and deferred background work are shown separately.
 
 related:
   - group: kafka-to-clickhouse

@@ -90,7 +90,7 @@ duplicated for MySQL because the decision it documents is identical.
 Move to [postgres-refreshable-pull](../postgres-refreshable-pull/) when the read
 load grows heavy, or when the source rows should sit in a MergeTree so they
 can be indexed, compressed, and joined cheaply. Move to
-[cdc-mysql-clickhouse](../cdc-mysql-clickhouse/) or
+[cdc-postgres-altinity](../../patterns/database-to-clickhouse/cdc-postgres-altinity/) or
 [cdc-postgres-peerdb](../cdc-postgres-peerdb/) when the table is too large to
 re-read on a schedule, or when sub-minute freshness is required.
 
