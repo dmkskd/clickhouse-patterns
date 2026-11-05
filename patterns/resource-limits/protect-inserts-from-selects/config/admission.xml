@@ -1,0 +1,10 @@
+<clickhouse>
+    <max_concurrent_queries>32</max_concurrent_queries>
+    <max_concurrent_select_queries>0</max_concurrent_select_queries>
+    <max_concurrent_insert_queries>0</max_concurrent_insert_queries>
+    <query_log>
+        <database>system</database>
+        <table>query_log</table>
+        <flush_interval_milliseconds>1000</flush_interval_milliseconds>
+    </query_log>
+</clickhouse>

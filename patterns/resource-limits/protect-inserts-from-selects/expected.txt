@@ -1,0 +1,4 @@
+# item	value
+seed	1/42
+traffic_reader	local_directory
+traffic_writer	local_directory

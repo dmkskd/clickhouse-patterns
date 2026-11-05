@@ -351,16 +351,27 @@ button, input { font: inherit; }
 .experiment-table caption .copy-table:hover { color: var(--text); }
 .experiment-results { margin-top: 12px; color: var(--dim); font-size: 11px; overflow-x: auto; }
 .experiment-table { border-collapse: collapse; color: var(--text); font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
-.experiment-table th { padding: 4px 12px 4px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-weight: 600; text-align: left; white-space: nowrap; }
-.experiment-table td { padding: 3px 12px 3px 0; white-space: nowrap; }
+.experiment-table th { padding: 3px 8px 3px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-weight: 600; text-align: left; white-space: nowrap; }
+.experiment-table td { padding: 2px 8px 2px 0; white-space: nowrap; }
 .experiment-table thead .group-row th { padding-bottom: 2px; border-bottom: 0; color: var(--text); font: 600 10.5px system-ui, sans-serif; letter-spacing: .04em; text-align: center; }
 .experiment-table thead .group-row th:not(:empty) { border-bottom: 1px solid var(--line); }
-.experiment-table .group-start { padding-left: 14px; border-left: 1px solid var(--line); }
+.experiment-table .group-start { padding-left: 10px; border-left: 1px solid var(--line); }
 .experiment-table th.sortable { cursor: pointer; user-select: none; }
 .experiment-table th.sortable:hover { color: var(--text); }
 .experiment-table th[aria-sort="ascending"]::after { content: " ▲"; font-size: 9px; }
 .experiment-table th[aria-sort="descending"]::after { content: " ▼"; font-size: 9px; }
 .experiment-table th:not(:first-child), .experiment-table td:not(:first-child) { text-align: right; }
+.request-gantt { min-width: 300px; padding: 2px 0; font: 10px/1.2 system-ui, sans-serif; }
+.request-gantt-row { display: grid; grid-template-columns: 46px 320px; gap: 6px; align-items: center; margin: 2px 0; text-align: left; }
+.request-gantt-row > span { color: var(--muted); }
+.request-gantt-track { position: relative; border-left: 1px solid var(--line); background: repeating-linear-gradient(to right, transparent 0, transparent calc(25% - 1px), var(--line) calc(25% - 1px), var(--line) 25%); }
+.request-gantt-bar { position: absolute; min-width: 3px; height: 6px; border-radius: 1px; }
+.request-gantt-bar.completed { background: var(--green); }
+.request-gantt-bar.rejected { background: var(--amber); }
+.request-gantt-bar.failed { background: #dc5967; }
+.request-gantt-bar.not_sent { background: var(--muted); }
+.request-gantt-axis { color: var(--muted); text-align: right; }
+.request-gantt-legend { margin: 8px 0; color: var(--muted); font: 12px/1.5 system-ui, sans-serif; }
 .pattern-detail > .session-bar:has(> .experiments-panel:not([hidden])) { width: auto; max-width: 1500px; margin-right: max(0px, calc((100% - 1500px) / 2)); }
 
   radial-gradient(circle at 80% 22%, #293a6a55 0, transparent 34%),

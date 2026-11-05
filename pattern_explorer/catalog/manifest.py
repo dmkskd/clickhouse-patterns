@@ -220,7 +220,8 @@ class Experiment(BaseModel):
     The script prints progress lines and one final `RESULT {json}` line. The
     JSON maps result names to numbers or text; an optional `stages` list of
     {label, ms, extra} draws the per-run timeline (`extra` marks a segment that
-    is shown but not summed into `timeline_total`).
+    is shown but not summed into `timeline_total`). Optional `requests` with
+    role, start_ms, end_ms and outcome draw the client request Gantt column.
     """
 
     model_config = ConfigDict(extra="forbid")

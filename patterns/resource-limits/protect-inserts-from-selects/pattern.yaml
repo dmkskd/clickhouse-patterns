@@ -1,0 +1,210 @@
+manifest_version: 2
+metadata:
+  title: Protecting inserts from SELECT load
+  description: 'Limits concurrent SELECT requests for a reader user while a separate writer user inserts
+    batches into the same ClickHouse server. Excess reader requests fail with TOO_MANY_SIMULTANEOUS_QUERIES.
+    The experiment compares write throughput, write latency and read rejections under steady or burst
+    read traffic.
+
+
+    Reader admission limits provide workload isolation on one server. CPU, memory and storage remain shared.
+    ClickHouse Cloud warehouses provide compute-compute separation with separate compute services sharing
+    the same data.'
+  mode: runnable
+  status: wip
+  topology: single
+  order: 2
+  tags:
+  - admission
+  - max_concurrent_queries_for_user
+  - ingestion
+  - workload-isolation
+  graph: |-
+    reads:
+      client:readers(label=traffic_reader,note=Reader clients\nCPU-bound SELECT queries over numbers())
+        -[SELECT · per-user admission]-> clickhouse:server(label=ClickHouse server,note=**Reader admission**\nmax_concurrent_queries_for_user = read_slots\nDefault: 2 concurrent queries for traffic_reader; 0 disables this limit.\nExcess reader requests fail immediately with TOO_MANY_SIMULTANEOUS_QUERIES (202).\n**Writer admission**\ntraffic_writer has separate per-user accounting.\nServer limit: max_concurrent_queries = 32.\n**Execution**\nAdmitted reads hash numbers; INSERTs write demo.events.\nCPU, memory and storage are shared.)
+    writes:
+      client:writers(label=traffic_writer,note=Writer clients\nSynchronous INSERT batches into demo.events)
+        -[INSERT · separate user]-> clickhouse:server -[INSERT batches]-> mergetree:events(label=demo.events)
+  references:
+  - label: ClickHouse concurrency controls
+    url: https://clickhouse.com/resources/engineering/high-concurrency-sizing-user-analytics
+  - label: Per-user concurrency limit
+    url: https://clickhouse.com/docs/reference/settings/session-settings/max-concurrent#max_concurrent_queries_for_user
+  - label: Compute-compute separation in ClickHouse Cloud
+    url: https://clickhouse.com/docs/cloud/reference/warehouses
+  tradeoffs:
+    benefits:
+    - Reader concurrency has a separate admission limit from writer concurrency.
+    - The same traffic parameters can be compared with the reader limit disabled or enabled.
+    limitations:
+    - Accepted reads and INSERTs compete for CPU, memory and IO on the same server.
+    - "Reader admission limits protect one user\u2019s concurrency. Successful INSERTs also depend on\
+      \ server capacity, disk space and table backpressure."
+    - The generator reports requests it could not dispatch separately from ClickHouse rejections.
+spec:
+  profiles:
+  - single
+  driver_node: ch
+  requires:
+    clickhouse_min: '26.9'
+  services:
+    clickhouse:
+      config:
+      - node: ch
+        file: config/admission.xml
+  steps:
+    schema: schema.sql
+    load: load.sql
+    ready_when:
+    - query: SELECT count() FROM demo.events WHERE run_id = toUUID('00000000-0000-0000-0000-000000000000')
+      value: 1
+    verify:
+      sql: verify.sql
+      expected: expected.txt
+  experiments:
+  - name: protect-writes
+    title: Read admission and write throughput
+    description: "Runs SELECT and INSERT traffic concurrently. read_slots=0 disables the reader concurrency\
+      \ limit; positive values reject excess reader requests. burst submits each second\u2019s read requests\
+      \ together. Compare runs with the same traffic and different read_slots. Every request is attempted\
+      \ once."
+    script: experiments/protect_writes.py
+    parameters:
+    - name: read_slots
+      label: Reader concurrency limit
+      short: limit
+      group: SELECT limit
+      default: 2
+      choices:
+      - 0
+      - 1
+      - 2
+      - 4
+    - name: read_clients
+      label: Concurrent reader clients
+      short: clients
+      group: SELECT workload
+      default: 8
+      choices:
+      - 4
+      - 8
+      - 16
+    - name: read_rate
+      label: Read requests per second
+      short: req/s
+      group: SELECT workload
+      default: 8
+      choices:
+      - 4
+      - 8
+      - 16
+    - name: read_shape
+      label: Read arrival pattern
+      short: arrivals
+      group: SELECT workload
+      default: burst
+      choices:
+      - steady
+      - burst
+    - name: read_rows
+      label: Numbers hashed per SELECT
+      short: rows/query
+      group: SELECT workload
+      default: 50000000
+      choices:
+      - 1000000
+      - 10000000
+      - 50000000
+    - name: write_rate
+      label: INSERT requests per second
+      short: req/s
+      group: INSERT workload
+      default: 5
+      choices:
+      - 2
+      - 5
+      - 10
+      - 20
+    - name: batch_rows
+      label: Rows per INSERT
+      short: rows/insert
+      group: INSERT workload
+      default: 1000
+      choices:
+      - 100
+      - 1000
+      - 10000
+    - name: duration
+      label: Traffic duration (s)
+      short: duration
+      group: Run
+      default: 5
+      choices:
+      - 5
+      - 10
+      - 20
+    results:
+    - name: write_completed
+      label: completed
+      group: INSERT results
+      description: Acknowledged INSERT requests.
+    - name: write_rejected
+      label: rejected
+      group: INSERT results
+      description: INSERT requests rejected with concurrency error 202.
+    - name: write_failed
+      label: failed
+      group: INSERT results
+      description: Other INSERT failures, including transport failures.
+    - name: write_not_sent
+      label: not sent
+      group: INSERT results
+      description: Scheduled INSERTs skipped because both writer clients were busy.
+    - name: write_p95_ms
+      label: p95 ms
+      group: INSERT results
+      description: 95th percentile client elapsed time of successful INSERTs.
+    - name: write_rows_per_second
+      label: rows/s
+      group: INSERT results
+      description: Stored rows divided by the measured run duration, including request drain.
+    - name: expected_rows
+      label: expected rows
+      group: INSERT results
+      description: Acknowledged INSERT requests multiplied by rows per INSERT.
+    - name: stored_rows
+      label: stored rows
+      group: INSERT results
+      description: Rows verified in demo.events for this run ID.
+    - name: read_completed
+      label: completed
+      group: SELECT results
+      description: Completed SELECT requests.
+    - name: read_rejected
+      label: rejected
+      group: SELECT results
+      description: SELECT requests rejected with concurrency error 202.
+    - name: read_failed
+      label: failed
+      group: SELECT results
+      description: Other SELECT failures, including execution timeouts.
+    - name: read_not_sent
+      label: not sent
+      group: SELECT results
+      description: Scheduled reads skipped because all reader clients were busy.
+    - name: read_p95_ms
+      label: p95 ms
+      group: SELECT results
+      description: 95th percentile client elapsed time of successful SELECTs.
+    - name: peak_reads
+      label: peak active
+      group: SELECT results
+      description: Maximum reader queries observed in 100 ms process-list samples.
+    groups:
+    - Run
+    - SELECT limit
+    - SELECT workload
+    - SELECT results
+    - INSERT workload
+    - INSERT results

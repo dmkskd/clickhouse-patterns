@@ -12,6 +12,59 @@ window.PE.experiments = (() => {
   const ICON_REMOVE = icon('<path d="M4 4l8 8M12 4l-8 8"/>');
   const ICON_COPY = icon('<rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/>');
 
+  function requestLanes(requests, role) {
+    const ends = [];
+    return (requests || []).filter((request) => request.role === role &&
+      Number.isFinite(request.start_ms) && Number.isFinite(request.end_ms) &&
+      request.start_ms >= 0 && request.end_ms >= request.start_ms)
+      .slice().sort((a, b) => a.start_ms - b.start_ms).map((request) => {
+        let lane = ends.findIndex((end) => end <= request.start_ms);
+        if (lane < 0) lane = ends.length;
+        ends[lane] = Math.max(request.end_ms, request.start_ms + 1);
+        return { ...request, lane };
+      });
+  }
+
+  function requestTimeline(run, scale) {
+    const chart = document.createElement("div");
+    chart.className = "request-gantt";
+    chart.title = "Client request durations from dispatch to response, including network and server time.";
+    for (const [role, label] of [["read", "SELECT"], ["write", "INSERT"]]) {
+      const row = document.createElement("div");
+      row.className = "request-gantt-row";
+      const name = document.createElement("span");
+      name.textContent = label;
+      const track = document.createElement("div");
+      track.className = "request-gantt-track";
+      const requests = requestLanes(run.results.requests, role);
+      const lanes = Math.max(1, ...requests.map((request) => request.lane + 1));
+      track.style.height = `${Math.max(10, lanes * 8)}px`;
+      requests.forEach((request) => {
+        const bar = document.createElement("span");
+        const outcome = ["completed", "rejected", "failed", "not_sent"].includes(request.outcome) ? request.outcome : "failed";
+        bar.className = `request-gantt-bar ${outcome}`;
+        bar.style.left = `${Math.min(100, request.start_ms / scale * 100)}%`;
+        bar.style.width = `${Math.max(0, Math.min(request.end_ms, scale) - request.start_ms) / scale * 100}%`;
+        bar.style.top = `${request.lane * 8}px`;
+        const evidence = request.server;
+        bar.title = `${label} ${request.index}: ${outcome}\n` +
+          `Client: ${request.start_ms.toFixed(1)}–${request.end_ms.toFixed(1)} ms\n` +
+          `Elapsed: ${(request.end_ms - request.start_ms).toFixed(1)} ms\n` +
+          (request.query_id ? `query_id: ${request.query_id}\n` : "") +
+          (request.error_code ? `Error code: ${request.error_code}\n` : "") +
+          (evidence ? `query_log: ${evidence.event}; ${evidence.duration_ms} ms; ${evidence.memory_bytes} bytes` : "query_log: no matching entry");
+        track.append(bar);
+      });
+      row.append(name, track);
+      chart.append(row);
+    }
+    const axis = document.createElement("div");
+    axis.className = "request-gantt-axis";
+    axis.textContent = `0 → ${(scale / 1000).toFixed(1)} s`;
+    chart.append(axis);
+    return chart;
+  }
+
   function create(deps) {
     // deps: command(path, payload), confirmAction(message, label),
     //       showToast(message, kind), openLogs(), rerender()
@@ -358,6 +411,11 @@ window.PE.experiments = (() => {
             key: "timeline", label: "where time goes", group: "Timeline",
             value: (run) => runTimeline(run).reduce((sum, segment) => sum + segment.ms, 0),
           }] : []),
+          ...(runs.some((run) => run.results.requests?.length) ? [{
+            key: "request_timeline", label: "Request timeline", group: "Timeline",
+            title: "Client request intervals. Green: completed; amber: rejected; red: failed; grey: not sent.",
+            value: (run) => run.results.duration_ms,
+          }] : []),
         ];
         const declaredOrder = experiment.groups || [];
         const groupOrder = [...new Set(["Run", ...declaredOrder, ...columns.map((column) => column.group)])]
@@ -382,6 +440,8 @@ window.PE.experiments = (() => {
         });
         const timelines = runs.map(runTimeline);
         const longest = Math.max(1, ...timelines.map((segments) => segments.reduce((sum, segment) => sum + segment.ms, 0)));
+        const requestScale = Math.max(1, ...runs.map((run) => Number(run.results.duration_ms) || 0),
+          ...runs.flatMap((run) => (run.results.requests || []).map((request) => Number(request.end_ms) || 0)));
 
         const table = document.createElement("table");
         table.className = "experiment-table";
@@ -417,6 +477,7 @@ window.PE.experiments = (() => {
             const cell = row.insertCell();
             if (index > 0 && columns[index - 1].group !== column.group) cell.className = "group-start";
             if (column.key === "timeline") cell.append(timelineBar(timelines[runIndex], longest, experiment.timeline_total || "Total"));
+            else if (column.key === "request_timeline") cell.append(requestTimeline(run, requestScale));
             else cell.textContent = column.text ? column.text(run) : (column.value(run) ?? "");
           });
         });
@@ -433,6 +494,9 @@ window.PE.experiments = (() => {
         copy.addEventListener("click", () => copyTable(experiment, columns, runs));
         caption.append(copy);
         const stageLegend = timelineLegend(timelines.find((segments) => segments.length) || []);
+        const requestLegend = document.createElement("p");
+        requestLegend.className = "request-gantt-legend";
+        requestLegend.textContent = "Requests: green completed; amber rejected; red failed; grey not sent. Intervals include network and server execution.";
         const legend = document.createElement("dl");
         legend.className = "experiment-legend";
         resultNames.filter((name) => declared.get(name)?.description).forEach((name) => {
@@ -443,7 +507,9 @@ window.PE.experiments = (() => {
           definition.textContent = declared.get(name).description;
           legend.append(term, definition);
         });
-        target.replaceChildren(table, ...(stageLegend ? [stageLegend] : []), ...(legend.childElementCount ? [legend] : []));
+        target.replaceChildren(table, ...(stageLegend ? [stageLegend] : []),
+          ...(runs.some((run) => run.results.requests?.length) ? [requestLegend] : []),
+          ...(legend.childElementCount ? [legend] : []));
       });
     }
 
@@ -550,5 +616,5 @@ window.PE.experiments = (() => {
     return { render };
   }
 
-  return { create };
+  return { create, requestLanes, requestTimeline };
 })();

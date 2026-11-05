@@ -206,7 +206,8 @@ def run_experiment(
         "results": result,
     }
     _record(run)
-    report("EXPERIMENT " + ", ".join(f"{key}={value}" for key, value in result.items() if key != "stages"))
+    report("EXPERIMENT " + ", ".join(f"{key}={value}" for key, value in result.items()
+                                      if not isinstance(value, (list, dict))))
     return run
 
 
