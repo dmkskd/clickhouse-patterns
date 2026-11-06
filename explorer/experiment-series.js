@@ -118,7 +118,7 @@ window.PE = window.PE || {};
     function pause() { clearInterval(timer); timer = null; play.textContent = "Play"; }
     function update() {
       const ms = Number(slider.value); time.textContent = `${number(ms / 1000)} s`;
-      
+
       charts.forEach(({graphic, snapshot}) => {
         graphic.select(ms);
         updateSnapshot(snapshot,ms);
