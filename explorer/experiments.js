@@ -170,8 +170,12 @@ window.PE.experiments = (() => {
             }
             input.name = parameter.name;
             label.append(name, input);
-            if (parameter.config) {
-              label.title = `Set in ${parameter.config.file}. A new value restarts the session before the run.`;
+            const help = [parameter.description, parameter.config &&
+              `Set in ${parameter.config.file}. A new value restarts the session before the run.`]
+              .filter(Boolean).join(" ");
+            if (help) {
+              label.title = help;
+              input.setAttribute("aria-description", help);
             }
             row.append(label);
           });

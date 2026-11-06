@@ -181,6 +181,7 @@ class ExperimentParameter(BaseModel):
 
     name: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     label: str = ""
+    description: str = ""  # optional help for the form control
     short: str = ""      # results-table column header; falls back to name
     group: str = ""      # results-table header group (pipeline stage), e.g. "Postgres"
     default: int | float | str

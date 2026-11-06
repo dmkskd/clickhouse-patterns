@@ -35,6 +35,14 @@ def test_text_default_needs_choices():
         ExperimentParameter(name="mode", default="kill")
 
 
+def test_parameter_help_reaches_the_browser():
+    experiment = _browser_pattern(load_pattern("protect-inserts-from-selects"))["experiments"][1]
+    parameters = {parameter["name"]: parameter for parameter in experiment["parameters"]}
+    assert "8 MiB" in parameters["read_reserve_mib"]["description"]
+    assert "waiting_queries" not in parameters
+    assert "read_clients" not in parameters
+
+
 def test_view_declarations_reach_the_browser_and_reject_unknown_renderers():
     experiment = _browser_pattern(load_pattern("protect-inserts-from-selects"))["experiments"][0]
     resource_view, view = experiment["views"]

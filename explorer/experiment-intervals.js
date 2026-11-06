@@ -96,11 +96,28 @@ window.PE = window.PE || {};
       row.append(name, track);
       chart.append(row);
     }
-    const axis = document.createElement("div");
-    axis.className = "request-gantt-axis";
-    axis.textContent = `0 → ${(scale / 1000).toFixed(1)} s`;
-    chart.append(axis);
     return chart;
+  }
+
+  function requestLegend(requests, expanded = false) {
+    const legend = document.createElement("div");
+    legend.className = "request-gantt-legend";
+    const keys = document.createElement("div");
+    keys.className = "resource-history-legend-keys";
+    const outcomes = [["completed", "Completed"], ["rejected", "Rejected"], ["failed", "Failed"]];
+    if (requests.some((request) => request.outcome === "not_sent")) outcomes.push(["not_sent", "Not sent"]);
+    outcomes.forEach(([kind, label]) => {
+      const key = document.createElement("span");
+      key.className = `resource-history-key ${kind}`;
+      key.textContent = label;
+      keys.append(key);
+    });
+    const hint = document.createElement("p");
+    hint.textContent = expanded
+      ? "Hover for request details. Zoom and scroll to explore shorter intervals."
+      : "Request durations include network and server time.";
+    legend.append(keys, hint);
+    return legend;
   }
 
   function requestLayout(requests, view) {
@@ -201,8 +218,8 @@ window.PE = window.PE || {};
         const outcome = ["completed", "rejected", "failed", "not_sent"].includes(request.outcome) ? request.outcome : "failed";
         const bar = make("rect", {x:bounds.left + request.start_ms / scale * bounds.width,
           y:placement ? bounds.top+bounds.height-(placement.bottom+placement.size)/extent*bounds.height : !accepted ? band.top+band.height-(request.lane+1)*bandPitch : bounds.top+bounds.height-(request.lane+1)*pitch,
-          // Keep brief admitted requests visible in the full-run overview.
-          width:Math.max(accepted ? 6 : 3, (request.end_ms - request.start_ms) / scale * bounds.width),
+          // Give brief requests a readable footprint in the full-run overview.
+          width:Math.max(14, (request.end_ms - request.start_ms) / scale * bounds.width),
           height:placement ? Math.max(1,placement.size/extent*bounds.height-1) : !accepted ? Math.max(.5,bandPitch-1) : Math.max(2,pitch-2),rx:1,tabindex:0,role:"button",
           "data-admission":accepted ? "admitted" : "outside-stack",
           class:`resource-request-box ${outcome}`,
@@ -272,8 +289,7 @@ window.PE = window.PE || {};
     }
     chart.prepend(ruler);
     viewport.append(chart);
-    const note = document.createElement("p");
-    note.textContent = "Green: completed; amber: rejected; red: failed; grey: not sent. Hover a request for details. Zoom and scroll horizontally to inspect shorter intervals.";
+    const note = requestLegend(requests, true);
     dialog.append(header, viewport, note);
     function resize(next) {
       tooltip.hide();
@@ -326,13 +342,11 @@ window.PE = window.PE || {};
         Number.isFinite(request.end_ms) ? Math.max(end, request.end_ms) : end,
         Number(run.results.duration_ms) || 0);
       const scale = runs.reduce((longest, run) => Math.max(longest, duration(run)), 1);
-      const legend = document.createElement("p");
-      legend.className = "request-gantt-legend";
-      legend.textContent = "Requests: green completed; amber rejected; red failed; grey not sent. Intervals include network and server execution.";
+      const legend = requestLegend(runs.flatMap(requests));
       return {
         column: {
           label: view.label || "Request timeline",
-          title: "Client intervals. Green: completed; amber: rejected; red: failed; grey: not sent.",
+          title: "Request durations from dispatch to response, including network and server time.",
           value: duration,
           render: (run) => timelinePreview(requests(run), scale, view, run),
           exportColumns: [{label: `${view.label || "Request timeline"} duration (ms)`, value: duration}],

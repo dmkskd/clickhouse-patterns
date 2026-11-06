@@ -15,6 +15,8 @@ class MemoryAdmission:
         self.created = []
         self.resource_created = False
         self.rows = []
+        # Queue every scheduled read so queue length is not a second rejection policy.
+        self.queue_capacity = args.read_rate * args.duration
 
     def setup(self):
         # Resource creation enables scheduling server-wide. Refuse a pre-existing
@@ -27,7 +29,7 @@ class MemoryAdmission:
         self.resource_created = True
         for name, parent, settings in [
             (self.root, '', f'max_memory = {(self.args.read_memory_mib + 64) * MIB if self.args.read_memory_mib else 0}'),
-            (self.reader, self.root, f'max_memory = {self.args.read_memory_mib * MIB}, max_waiting_queries = {self.args.waiting_queries}'),
+            (self.reader, self.root, f'max_memory = {self.args.read_memory_mib * MIB}, max_waiting_queries = {self.queue_capacity}'),
             (self.writer, self.root, f'max_memory = {64 * MIB}'),
         ]:
             self.admin.command(f'CREATE WORKLOAD {name}' + (f' IN {parent}' if parent else '') + f' SETTINGS {settings}')
@@ -58,7 +60,7 @@ class MemoryAdmission:
         """Normalize scheduler observations for the generic time-series view."""
         series = []
         for role, workload, budget, queue_limit in [
-            ('reader', self.reader, self.args.read_memory_mib, self.args.waiting_queries),
+            ('reader', self.reader, self.args.read_memory_mib, None),
             ('writer', self.writer, 64, None),
         ]:
             for field, label, unit, divisor, limit in [
@@ -78,7 +80,7 @@ class MemoryAdmission:
                         code = request.get('error_code')
                         reason = {
                             1020: f'Memory reservation was not admitted within the {self.args.admission_wait_ms} ms wait limit.',
-                            745: f'The pending-reservation queue was full (limit {self.args.waiting_queries}).',
+                            745: f'The pending-reservation queue was full (limit {self.queue_capacity}).',
                             202: 'A concurrent-query admission limit was reached.',
                         }.get(code, request.get('error_name') or 'Admission rejected the request.')
                         details = [['Reason', reason], ['Error', request.get('error_name') or str(code)],
@@ -105,7 +107,7 @@ class MemoryAdmission:
                 'reader_budget_mib': self.args.read_memory_mib, 'reservation_mix': self.args.reservation_mix,
                 'large_reservation_mib': self.args.read_reserve_mib, 'small_reservation_mib': 8,
                 'writer_reservation_mib': 16, 'writer_budget_mib': 64,
-                'max_waiting_queries': self.args.waiting_queries,
+                'max_waiting_queries': self.queue_capacity,
                 'workload_admission_timeout_ms': self.args.admission_wait_ms,
                 'scheduler': self.rows}
 

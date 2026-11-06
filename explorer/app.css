@@ -395,8 +395,9 @@ button, input { font: inherit; }
 .request-tip dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; text-align: right; overflow-wrap: anywhere; }
 .request-tip-timing dd { font-weight: 600; }
 .request-tip dl.request-tip-details { padding-top: 9px; border-top: 1px solid var(--line); grid-template-columns: 110px minmax(0, 1fr); }
-.request-gantt-axis { color: var(--muted); text-align: right; }
 .request-gantt-legend { margin: 8px 0; color: var(--muted); font: 12px/1.5 system-ui, sans-serif; }
+.request-gantt-legend p { margin: 6px 0 0; }
+.request-timeline-dialog > .request-gantt-legend { margin: 0; padding: 0 18px 16px; }
 .request-timeline-preview { display: block; padding: 1px 4px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--text); cursor: zoom-in; text-align: right; }
 .request-timeline-preview:hover, .request-timeline-preview:focus-visible { border-color: var(--line); background: var(--panel); }
 .request-timeline-dialog { width: min(94vw, 1600px); max-width: 94vw; max-height: 88vh; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); }
@@ -410,14 +411,12 @@ button, input { font: inherit; }
 .request-timeline-dialog .request-gantt { font-size: 12px; }
 .request-timeline-dialog .request-gantt-row { grid-template-columns: 60px minmax(0, 1fr); gap: 10px; margin: 12px 0; }
 .request-timeline-dialog .request-gantt-bar { min-width: 5px; height: 9px; }
-.request-timeline-dialog > p { padding: 0 18px 12px; color: var(--muted); font: 12px/1.5 system-ui, sans-serif; }
 .request-timeline-ruler { position: relative; height: 20px; margin-left: 70px; color: var(--muted); font: 11px system-ui, sans-serif; }
 .request-timeline-ruler > span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 .request-timeline-ruler > span:first-child { transform: none; }
 .request-timeline-ruler > span:last-child { transform: translateX(-100%); }
 .resource-history-preview { display: block; width: 180px; padding: 2px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--text); cursor: zoom-in; text-align: right; }
 .resource-history-preview:hover, .resource-history-preview:focus-visible { border-color: var(--line); background: var(--panel); }
-.resource-history-preview > span { font: 10px system-ui, sans-serif; color: var(--muted); }
 .resource-series-plot { display: block; width: 100%; height: auto; overflow: visible; }
 .resource-series-plot text { fill: var(--muted); font: 11px system-ui, sans-serif; }
 .resource-series-grid { stroke: var(--line); stroke-width: 1; }

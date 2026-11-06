@@ -231,14 +231,12 @@ window.PE = window.PE || {};
         render(run) {
           const series = data(run);
           if (!series.length) { const empty = document.createElement("span"); empty.textContent = "Not recorded"; return empty; }
-          const first = series[0], peak = Math.max(...first.points.map((point) => point.value));
+          const first = series[0];
           const preview = document.createElement("button"); preview.type = "button";
           preview.className = "resource-history-preview";
           preview.setAttribute("aria-haspopup", "dialog");
           preview.setAttribute("aria-label", `Expand ${view.label || "resource usage"}`);
-          const caption = document.createElement("span");
-          caption.textContent = `Peak ${number(peak)}${first.limit != null ? ` / ${number(first.limit)}` : ""} ${first.unit}`;
-          preview.append(window.PE.seriesPlot.create({series:first,duration,compact:true}).chart, caption);
+          preview.append(window.PE.seriesPlot.create({series:first,duration,compact:true}).chart);
           preview.addEventListener("click", () => openHistory(preview, series, runDuration(run), view.label || "Resource usage", view.intervals, intervals(run)));
           return preview;
         },

@@ -44,7 +44,7 @@ const column=prepared.columns[0];
 assert.equal(column.value(run),64);
 const preview=column.render(run);
 assert.equal(preview.attrs['aria-haspopup'],'dialog');
-assert.equal(preview.children[1].textContent,'Peak 64 / 64 MiB');
+assert.equal(preview.children.length,1);
 assert(desc(preview.children[0]).some(n=>n.attrs.class==='resource-series-limit'));
 const line=desc(preview.children[0]).find(n=>n.attrs.class==='resource-series-line');
 assert(line.attrs.d.includes('H')); // gauge steps, no fabricated smooth curve

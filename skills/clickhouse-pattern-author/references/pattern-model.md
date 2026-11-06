@@ -252,6 +252,8 @@ Parameters:
 
 - `name` (snake case), `label` (the form field), `short` (the table column) and
   `group` (the table header group).
+- Optional `description` supplies hover help and an accessible description for
+  the form control.
 - `default` is a number or text. A number accepts any value at or above `min`;
   set `min` explicitly, because there is no implicit lower bound. Text needs
   `choices`, rendered as a dropdown, so a free-form string never reaches a

@@ -30,6 +30,31 @@ def schedule(rate, duration, shape):
     return [i // rate if shape == 'burst' else i / rate for i in range(rate * duration)]
 
 
+def generator_capacity(rate, duration):
+    """Allow every scheduled request to be in flight until its deadline."""
+    return rate * duration
+
+
+def dispatch_requests(role, rate, duration, shape, start, stop, pool, executor, execute):
+    """Submit scheduled arrivals or fail explicitly when dispatch is impossible."""
+    pending = []
+    for index, offset in enumerate(schedule(rate, duration, shape)):
+        if stop.wait(max(0, start + offset - time.monotonic())):
+            break
+        try:
+            client = pool.get_nowait()
+        except queue.Empty as exc:
+            raise RuntimeError(f'{role} generator capacity exhausted at request {index + 1}') from exc
+        try:
+            pending.append(executor.submit(execute, role, index, client))
+        except BaseException:
+            pool.put(client)
+            raise
+    for future in pending:
+        future.result()
+    stop.wait(max(0, start + duration - time.monotonic()))
+
+
 def reader_settings_sql(create_user, slots=None):
     """Preserve the full settings clause when changing one admission setting."""
     match = re.search(r'\bSETTINGS\s+(.+)$', create_user, re.DOTALL)
@@ -53,9 +78,7 @@ def main(policy_kind='fixed'):
         parser.add_argument('--read-memory-mib', type=int, choices=[0, 32, 64, 128, 256], default=64)
         parser.add_argument('--read-reserve-mib', type=int, choices=[16, 32, 64], default=32)
         parser.add_argument('--reservation-mix', choices=['uniform', 'mixed'], default='mixed')
-        parser.add_argument('--waiting-queries', type=int, choices=[1, 4, 16], default=16)
         parser.add_argument('--admission-wait-ms', type=int, choices=[5, 20, 100, 500], default=20)
-    parser.add_argument('--read-clients', type=int, choices=[4, 8, 16], default=8)
     parser.add_argument('--read-rate', type=int, choices=[4, 8, 16], default=8)
     parser.add_argument('--read-shape', choices=['steady', 'burst'], default='burst')
     parser.add_argument('--read-rows', type=int, choices=[1000000, 10000000, 50000000], default=50000000)
@@ -69,6 +92,10 @@ def main(policy_kind='fixed'):
     records, samples = [], []
     record_lock = threading.Lock()
     pools = {}
+    capacities = {
+        'read': generator_capacity(args.read_rate, args.duration),
+        'write': generator_capacity(args.write_rate, args.duration),
+    }
     clients = []
     start = None
     policy_applied = False
@@ -84,30 +111,9 @@ def main(policy_kind='fixed'):
     def apply_slots(slots):
         admin.command(reader_settings_sql(before, slots))
 
-    def generate(role, rate, shape, executor):
-        pending = []
-        # Only ready clients receive work. Missed dispatches are reported
-        # separately from server rejection, never queued invisibly in Python.
-        for index, offset in enumerate(schedule(rate, args.duration, shape)):
-            if stop.wait(max(0, start + offset - time.monotonic())):
-                break
-            if pools[role].empty():
-                now = round((time.monotonic() - start) * 1000, 2)
-                with record_lock:
-                    records.append({'role': role, 'index': index, 'start_ms': now,
-                                    'end_ms': now, 'outcome': 'not_sent'})
-                continue
-            # Reserve before submission; otherwise a burst can enqueue more
-            # requests than ready clients before workers take their clients.
-            client = pools[role].get_nowait()
-            pending.append(executor.submit(execute_request, role, index, client))
-        for future in pending:
-            future.result()
-        stop.wait(max(0, start + args.duration - time.monotonic()))
-
-    def produce(*args):
+    def produce(role, rate, shape, executor):
         try:
-            generate(*args)
+            dispatch_requests(role, rate, args.duration, shape, start, stop, pools[role], executor, execute_request)
         except Exception as exc:
             generator_errors.append(exc)
             stop.set()
@@ -151,7 +157,7 @@ def main(policy_kind='fixed'):
             from memory_admission import MemoryAdmission
             memory_policy = MemoryAdmission(admin, run_id, args)
             memory_policy.setup()
-        for role, count in [('read', args.read_clients), ('write', 2)]:
+        for role, count in capacities.items():
             pools[role] = queue.Queue()
             for _ in range(count):
                 client = clickhouse_connect.get_client(host='localhost', port=8123,
@@ -166,7 +172,7 @@ def main(policy_kind='fixed'):
         if int(reader_settings['max_concurrent_queries_for_user']) != args.read_slots:
             raise RuntimeError('reader concurrency setting differs from requested policy')
         start = time.monotonic()
-        with ThreadPoolExecutor(max_workers=args.read_clients) as reads, ThreadPoolExecutor(max_workers=2) as writes:
+        with ThreadPoolExecutor(max_workers=capacities['read']) as reads, ThreadPoolExecutor(max_workers=capacities['write']) as writes:
             generators = [threading.Thread(target=produce, args=('read', args.read_rate, args.read_shape, reads)),
                           threading.Thread(target=produce, args=('write', args.write_rate, 'steady', writes))]
             for generator in generators:
@@ -193,7 +199,7 @@ def main(policy_kind='fixed'):
                 for generator in generators:
                     generator.join()
         if generator_errors:
-            raise RuntimeError('traffic generator failed') from generator_errors[0]
+            raise RuntimeError(f'traffic generator failed: {generator_errors[0]}') from generator_errors[0]
         elapsed = time.monotonic() - start
         admin.command('SYSTEM FLUSH LOGS')
         log_rows = admin.query("SELECT query_id, toString(type), exception_code, query_duration_ms, memory_usage, ProfileEvents "
@@ -222,7 +228,7 @@ def main(policy_kind='fixed'):
         for role in ['read', 'write']:
             subset = [r for r in records if r['role'] == role]
             counts = Counter(r['outcome'] for r in subset)
-            for outcome in ['completed', 'rejected', 'failed', 'not_sent']:
+            for outcome in ['completed', 'rejected', 'failed']:
                 result[f'{role}_{outcome}'] = counts[outcome]
             result[f'{role}_p95_ms'] = percentile([r['end_ms'] - r['start_ms'] for r in subset if r['outcome'] == 'completed'], .95)
         result['write_rows_per_second'] = round(stored_rows / elapsed, 1)
@@ -236,7 +242,7 @@ def main(policy_kind='fixed'):
         result['requests'] = sorted(records, key=lambda r: r['start_ms'])
         for role in ['write', 'read']:
             print(f"{role}: completed={result[role + '_completed']} rejected={result[role + '_rejected']} "
-                  f"failed={result[role + '_failed']} not_sent={result[role + '_not_sent']} p95_ms={result[role + '_p95_ms']}")
+                  f"failed={result[role + '_failed']} p95_ms={result[role + '_p95_ms']}")
         print(f"stored_rows={stored_rows} expected_rows={result['expected_rows']} logs={len(evidence)} peak_reads={result['peak_reads']}")
         if stop.is_set():
             raise RuntimeError('experiment stopped; active requests cancelled')

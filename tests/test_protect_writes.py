@@ -38,7 +38,7 @@ def memory_policy(admin, **overrides):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     values = dict(read_memory_mib=64, read_reserve_mib=32, reservation_mix='mixed',
-                  waiting_queries=1, admission_wait_ms=20)
+                  read_rate=8, duration=5, admission_wait_ms=20)
     values.update(overrides)
     return module.MemoryAdmission(admin, 'test-run', SimpleNamespace(**values))
 
@@ -65,6 +65,7 @@ def test_memory_policy_uses_byte_reservations_and_samples_the_leaf_queue():
     history = policy.history([{'ms': 10, 'memory_ms': 12, 'memory': sample}])
     assert len(history) == 4
     assert history[0]['limit'] == 64
+    assert history[1]['limit'] is None  # pending count is observed, not a rejection threshold
     assert history[0]['points'] == [{'ms': 12, 'value': 48}]
     assert history[2]['points'] == [{'ms': 12, 'value': 16}]
     assert policy.history([{'ms': 10, 'memory': {}}])[0]['points'] == []
@@ -111,6 +112,7 @@ def test_memory_policy_preserves_existing_scheduler_and_cleans_partial_setup():
     policy = memory_policy(admin)
     with pytest.raises(RuntimeError, match='injected setup failure'):
         policy.setup()
+    assert 'max_waiting_queries = 40' in admin.commands[-1]  # all 8/s × 5s scheduled reads fit
     policy.close()
     assert admin.commands[-2:] == ['DROP WORKLOAD protect_testrun', 'DROP RESOURCE protect_testrun_memory']
 
@@ -135,3 +137,72 @@ def test_fixed_concurrency_history_keeps_reader_limit_writer_samples_and_errors(
     assert dict(history[0]['events'][0]['details'])['Reader query limit'] == '2'
     assert [request['admission_units'] for request in requests] == [1, 1]
     assert module.concurrency_history(samples, [], 0)[0]['limit'] is None
+
+
+def test_generator_sends_a_full_burst_while_earlier_requests_are_busy():
+    from concurrent.futures import ThreadPoolExecutor
+    import queue
+    import threading
+
+    module = script()
+    capacity = module.generator_capacity(16, 1)
+    assert capacity == 16
+    pool = queue.Queue()
+    for _ in range(capacity):
+        pool.put(object())
+    started, release, stop = threading.Event(), threading.Event(), threading.Event()
+    lock = threading.Lock()
+    seen, errors = [], []
+
+    def execute(role, index, client):
+        with lock:
+            seen.append((role, index))
+            if len(seen) == 16:
+                started.set()
+        try:
+            assert release.wait(3)
+        finally:
+            pool.put(client)
+
+    with ThreadPoolExecutor(max_workers=capacity) as executor:
+        def dispatch():
+            try:
+                module.dispatch_requests('read', 16, 1, 'burst', 0, stop, pool, executor, execute)
+            except BaseException as exc:
+                errors.append(exc)
+
+        worker = threading.Thread(target=dispatch)
+        worker.start()
+        try:
+            assert started.wait(3), 'The complete burst must reach workers before any request finishes'
+        finally:
+            release.set()
+            worker.join(3)
+        assert not worker.is_alive()
+    assert not errors
+    assert sorted(seen) == [('read', index) for index in range(16)]
+    assert pool.qsize() == capacity
+
+
+def test_generator_fails_instead_of_dropping_a_scheduled_request():
+    import queue
+    from types import SimpleNamespace
+    import threading
+    import pytest
+
+    module = script()
+    pool = queue.Queue()
+    client = object()
+    pool.put(client)
+    executor = SimpleNamespace(submit=lambda *_args: SimpleNamespace(result=lambda: None))
+    with pytest.raises(RuntimeError, match='read generator capacity exhausted at request 2'):
+        module.dispatch_requests('read', 2, 1, 'burst', 0, threading.Event(), pool, executor, lambda *_: None)
+
+    class BrokenExecutor:
+        def submit(self, *_args):
+            raise RuntimeError('cannot create worker')
+
+    pool.put(client)
+    with pytest.raises(RuntimeError, match='cannot create worker'):
+        module.dispatch_requests('read', 1, 1, 'burst', 0, threading.Event(), pool, BrokenExecutor(), lambda *_: None)
+    assert pool.get_nowait() is client

@@ -42,7 +42,7 @@ assert.equal(preview.children.length, 1);
 assert.equal(column.label, 'Task intervals');
 assert.equal(column.value(run), 20);
 assert.equal(column.exportColumns[0].value(run), 20);
-assert.equal(chart.children.length, 3);
+assert.equal(chart.children.length, 2);
 assert.equal(chart.children[0].children[0].textContent, 'Workers');
 const track = chart.children[0].children[1];
 assert.equal(track.children.length, 4); // invalid interval excluded
