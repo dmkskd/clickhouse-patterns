@@ -1,15 +1,31 @@
 manifest_version: 2
 metadata:
   title: Protecting inserts from SELECT load
-  description: 'Limits concurrent SELECT requests for a reader user while a separate writer user inserts
-    batches into the same ClickHouse server. Excess reader requests fail with TOO_MANY_SIMULTANEOUS_QUERIES.
-    The experiment compares write throughput, write latency and read rejections under steady or burst
-    read traffic.
+  description: |-
+    Protects INSERT traffic from competing SELECT queries using per-user
+    concurrency limits or workload memory admission on one ClickHouse server.
 
+    ### Fixed concurrency
 
-    Reader admission limits provide workload isolation on one server. CPU, memory and storage remain shared.
-    ClickHouse Cloud warehouses provide compute-compute separation with separate compute services sharing
-    the same data.'
+    - SELECT queries run as `traffic_reader`.
+    - INSERT batches run as `traffic_writer`.
+    - `ALTER USER` in `schema.sql` configures `max_concurrent_queries_for_user` for `traffic_reader`. The experiment varies this limit with `read_slots`.
+    - The limit counts all concurrent queries from `traffic_reader`. Excess requests fail with `TOO_MANY_SIMULTANEOUS_QUERIES`.
+    - `traffic_writer` has separate per-user accounting. Both users share the server-wide `max_concurrent_queries = 32` limit configured in XML.
+
+    ### Workload memory admission
+
+    - A `MEMORY RESERVATION` resource schedules separate reader and writer `WORKLOAD`s created for each run.
+    - SELECT requests declare memory reservations with `reserve_memory`. Mixed traffic alternates small and large reservations.
+    - The reader workload's `max_memory` budget determines which reservations can be admitted. Pending requests wait up to `workload_admission_timeout_ms`.
+    - A full `max_waiting_queries` queue returns `SERVER_OVERLOADED`. An expired admission wait returns `MEMORY_RESERVATION_ACQUISITION_TIMEOUT`.
+    - INSERTs use a separate writer workload. The per-user query-count limit is disabled during this experiment and restored afterward.
+
+    The experiments compare write throughput, write latency and read rejections
+    under steady or burst SELECT traffic. Per-user admission limits provide
+    workload isolation on one server, with shared CPU, memory and storage.
+    ClickHouse Cloud warehouses provide compute-compute separation with separate
+    compute services sharing the same data.
   mode: runnable
   status: wip
   topology: single
@@ -22,7 +38,7 @@ metadata:
   graph: |-
     reads:
       client:readers(label=traffic_reader,note=Reader clients\nCPU-bound SELECT queries over numbers())
-        -[SELECT · per-user admission]-> clickhouse:server(label=ClickHouse server,note=**Reader admission**\nmax_concurrent_queries_for_user = read_slots\nDefault: 2 concurrent queries for traffic_reader; 0 disables this limit.\nExcess reader requests fail immediately with TOO_MANY_SIMULTANEOUS_QUERIES (202).\n**Writer admission**\ntraffic_writer has separate per-user accounting.\nServer limit: max_concurrent_queries = 32.\n**Execution**\nAdmitted reads hash numbers; INSERTs write demo.events.\nCPU, memory and storage are shared.)
+        -[SELECT · admission policy]-> clickhouse:server(label=ClickHouse server,note=**Fixed concurrency**\ntraffic_reader uses max_concurrent_queries_for_user = read_slots.\nExcess requests fail with TOO_MANY_SIMULTANEOUS_QUERIES.\n**Workload memory admission**\nThe reader WORKLOAD limits total reserved memory with max_memory.\nSELECTs declare reserve_memory and wait for available memory.\nA full queue returns SERVER_OVERLOADED; an expired wait returns MEMORY_RESERVATION_ACQUISITION_TIMEOUT.\n**Writer admission**\ntraffic_writer has separate per-user accounting and a separate WORKLOAD in the memory experiment.\nServer limit: max_concurrent_queries = 32.\nCPU, memory and storage remain shared.)
     writes:
       client:writers(label=traffic_writer,note=Writer clients\nSynchronous INSERT batches into demo.events)
         -[INSERT · separate user]-> clickhouse:server -[INSERT batches]-> mergetree:events(label=demo.events)
@@ -33,15 +49,17 @@ metadata:
     url: https://clickhouse.com/docs/reference/settings/session-settings/max-concurrent#max_concurrent_queries_for_user
   - label: Compute-compute separation in ClickHouse Cloud
     url: https://clickhouse.com/docs/cloud/reference/warehouses
+  - label: Workload memory reservations
+    url: https://clickhouse.com/docs/operations/workload-scheduling#memory-reservations
   tradeoffs:
     benefits:
-    - Reader concurrency has a separate admission limit from writer concurrency.
-    - The same traffic parameters can be compared with the reader limit disabled or enabled.
+    - Read concurrency or reserved memory can be bounded independently of INSERT admission on one server.
+    - Workload memory admission can queue reads during short periods of contention and admit them as reservation capacity becomes available.
     limitations:
     - Accepted reads and INSERTs compete for CPU, memory and IO on the same server.
-    - "Reader admission limits protect one user\u2019s concurrency. Successful INSERTs also depend on\
-      \ server capacity, disk space and table backpressure."
-    - The generator reports requests it could not dispatch separately from ClickHouse rejections.
+    - Reader limits can increase SELECT admission latency or reject SELECT requests.
+    - Per-user isolation depends on applications using separate reader and writer credentials.
+    - Memory admission requires workload assignment and explicit per-query memory reservations.
 spec:
   profiles:
   - single
@@ -64,15 +82,51 @@ spec:
       expected: expected.txt
   experiments:
   - name: protect-writes
-    title: Read admission and write throughput
-    description: "Runs SELECT and INSERT traffic concurrently. read_slots=0 disables the reader concurrency\
-      \ limit; positive values reject excess reader requests. burst submits each second\u2019s read requests\
-      \ together. Compare runs with the same traffic and different read_slots. Every request is attempted\
-      \ once."
+    title: Fixed concurrency and write throughput
+    description: |-
+      Runs SELECT and INSERT traffic concurrently to compare write throughput,
+      write latency and SELECT rejections. Each request is attempted once.
+
+      `read_slots` sets the reader user's concurrency limit. A value of 0 disables
+      the limit. Compare runs with the same traffic and different limits.
+      The `burst` arrival pattern submits each second's SELECT requests together.
     script: experiments/protect_writes.py
+    views:
+    - type: time-series
+      source: resource_history
+      label: Query admission
+      intervals:
+        source: requests
+        group_field: role
+        id_field: query_id
+        size_field: admission_units
+        size_unit: queries
+        size_label: Query counts
+        admitted_field: server.event
+        admitted_values: [QueryFinish, ExceptionWhileProcessing]
+        lanes:
+          read: SELECT
+          write: INSERT
+        details:
+          query_id: query_id
+          Error: error_name
+          query_log event: server.event
+          Server duration (ms): server.duration_ms
+    - type: intervals
+      source: requests
+      label: Request timeline
+      lanes:
+        read: SELECT
+        write: INSERT
+      details:
+        query_id: query_id
+        Error code: error_code
+        query_log event: server.event
+        Server duration (ms): server.duration_ms
+        Server memory (bytes): server.memory_bytes
     parameters:
     - name: read_slots
-      label: Reader concurrency limit
+      label: Reader query limit
       short: limit
       group: SELECT limit
       default: 2
@@ -82,7 +136,7 @@ spec:
       - 2
       - 4
     - name: read_clients
-      label: Concurrent reader clients
+      label: Reader clients
       short: clients
       group: SELECT workload
       default: 8
@@ -91,7 +145,7 @@ spec:
       - 8
       - 16
     - name: read_rate
-      label: Read requests per second
+      label: SELECT requests/s
       short: req/s
       group: SELECT workload
       default: 8
@@ -100,7 +154,7 @@ spec:
       - 8
       - 16
     - name: read_shape
-      label: Read arrival pattern
+      label: SELECT arrivals
       short: arrivals
       group: SELECT workload
       default: burst
@@ -108,7 +162,7 @@ spec:
       - steady
       - burst
     - name: read_rows
-      label: Numbers hashed per SELECT
+      label: Hashed numbers/SELECT
       short: rows/query
       group: SELECT workload
       default: 50000000
@@ -117,7 +171,7 @@ spec:
       - 10000000
       - 50000000
     - name: write_rate
-      label: INSERT requests per second
+      label: INSERT requests/s
       short: req/s
       group: INSERT workload
       default: 5
@@ -136,7 +190,7 @@ spec:
       - 1000
       - 10000
     - name: duration
-      label: Traffic duration (s)
+      label: Duration (s)
       short: duration
       group: Run
       default: 5
@@ -200,10 +254,250 @@ spec:
     - name: peak_reads
       label: peak active
       group: SELECT results
-      description: Maximum reader queries observed in 100 ms process-list samples.
+      description: Maximum reader queries observed in 20 ms process-list samples.
     groups:
     - Run
     - SELECT limit
+    - SELECT workload
+    - SELECT results
+    - INSERT workload
+    - INSERT results
+  - name: protect-writes-memory
+    title: Workload memory admission and write throughput
+    description: |-
+      Assigns SELECTs and INSERTs to separate `WORKLOAD`s using a
+      `MEMORY RESERVATION` resource. The reader workload's budget controls admission.
+
+      `read_memory_mib` sets the reader budget. A value of 0 disables that budget.
+      Mixed traffic alternates 8 MiB reservations and the `read_reserve_mib` value.
+      Reads wait for capacity and fail when the queue is full or `admission_wait_ms` expires.
+
+      The per-user query-count limit is disabled during this run. Memory reservations
+      are declared by the client. Actual query memory is recorded separately.
+    script: experiments/protect_memory.py
+    views:
+    - type: time-series
+      source: resource_history
+      label: Workload activity
+      intervals:
+        source: requests
+        label: SELECT and INSERT requests
+        group_field: workload
+        id_field: query_id
+        size_field: reservation_mib
+        size_unit: MiB
+        size_label: Requested reservations
+        admitted_field: server.event
+        admitted_values: [QueryFinish, ExceptionWhileProcessing]
+        lanes:
+          read: SELECT
+          write: INSERT
+        details:
+          query_id: query_id
+          Error code: error_code
+          query_log event: server.event
+          Server duration (ms): server.duration_ms
+          Server memory (bytes): server.memory_bytes
+          Error: error_name
+          Reservation (MiB): reservation_mib
+          Workload: workload
+    - type: intervals
+      source: requests
+      label: Request timeline
+      lanes:
+        read: SELECT
+        write: INSERT
+      details:
+        query_id: query_id
+        Error code: error_code
+        query_log event: server.event
+        Server duration (ms): server.duration_ms
+        Server memory (bytes): server.memory_bytes
+        Error: error_name
+        Reservation (MiB): reservation_mib
+        Workload: workload
+    parameters:
+    - name: read_memory_mib
+      label: Reader budget (MiB)
+      short: budget MiB
+      group: Memory policy
+      default: 64
+      choices:
+      - 0
+      - 32
+      - 64
+      - 128
+      - 256
+    - name: read_reserve_mib
+      label: SELECT reserve (MiB)
+      short: reserve MiB
+      group: Memory policy
+      default: 32
+      choices:
+      - 16
+      - 32
+      - 64
+    - name: reservation_mix
+      label: Reservation mix
+      short: mix
+      group: Memory policy
+      default: mixed
+      choices:
+      - uniform
+      - mixed
+    - name: waiting_queries
+      label: Pending reads
+      short: queue
+      group: Memory policy
+      default: 16
+      choices:
+      - 1
+      - 4
+      - 16
+    - name: admission_wait_ms
+      label: Admission wait (ms)
+      short: wait ms
+      group: Memory policy
+      default: 20
+      choices:
+      - 5
+      - 20
+      - 100
+      - 500
+    - name: read_clients
+      label: Reader clients
+      short: clients
+      group: SELECT workload
+      default: 8
+      choices:
+      - 4
+      - 8
+      - 16
+    - name: read_rate
+      label: SELECT requests/s
+      short: req/s
+      group: SELECT workload
+      default: 8
+      choices:
+      - 4
+      - 8
+      - 16
+    - name: read_shape
+      label: SELECT arrivals
+      short: arrivals
+      group: SELECT workload
+      default: burst
+      choices:
+      - steady
+      - burst
+    - name: read_rows
+      label: Hashed numbers/SELECT
+      short: rows/query
+      group: SELECT workload
+      default: 50000000
+      choices:
+      - 1000000
+      - 10000000
+      - 50000000
+    - name: write_rate
+      label: INSERT requests/s
+      short: req/s
+      group: INSERT workload
+      default: 5
+      choices:
+      - 2
+      - 5
+      - 10
+      - 20
+    - name: batch_rows
+      label: Rows per INSERT
+      short: rows/insert
+      group: INSERT workload
+      default: 1000
+      choices:
+      - 100
+      - 1000
+      - 10000
+    - name: duration
+      label: Duration (s)
+      short: duration
+      group: Run
+      default: 5
+      choices:
+      - 5
+      - 10
+      - 20
+    results:
+    - name: write_completed
+      label: completed
+      group: INSERT results
+      description: Acknowledged INSERT requests.
+    - name: write_rejected
+      label: rejected
+      group: INSERT results
+      description: Requests rejected during admission with concurrency, workload overload or memory-reservation
+        timeout errors.
+    - name: write_failed
+      label: failed
+      group: INSERT results
+      description: Other INSERT failures, including transport failures.
+    - name: write_not_sent
+      label: not sent
+      group: INSERT results
+      description: Scheduled INSERTs skipped because both writer clients were busy.
+    - name: write_p95_ms
+      label: p95 ms
+      group: INSERT results
+      description: 95th percentile client elapsed time of successful INSERTs.
+    - name: write_rows_per_second
+      label: rows/s
+      group: INSERT results
+      description: Stored rows divided by the measured run duration, including request drain.
+    - name: expected_rows
+      label: expected rows
+      group: INSERT results
+      description: Acknowledged INSERT requests multiplied by rows per INSERT.
+    - name: stored_rows
+      label: stored rows
+      group: INSERT results
+      description: Rows verified in demo.events for this run ID.
+    - name: read_completed
+      label: completed
+      group: SELECT results
+      description: Completed SELECT requests.
+    - name: read_rejected
+      label: rejected
+      group: SELECT results
+      description: Requests rejected during admission with concurrency, workload overload or memory-reservation
+        timeout errors.
+    - name: read_failed
+      label: failed
+      group: SELECT results
+      description: Other SELECT failures, including execution timeouts.
+    - name: read_not_sent
+      label: not sent
+      group: SELECT results
+      description: Scheduled reads skipped because all reader clients were busy.
+    - name: read_p95_ms
+      label: p95 ms
+      group: SELECT results
+      description: 95th percentile client elapsed time of successful SELECTs.
+    - name: peak_reads
+      label: peak active
+      group: SELECT results
+      description: Maximum reader queries observed in 20 ms process-list samples.
+    - name: peak_reserved_mib
+      label: reserved MiB
+      group: SELECT results
+      description: Sampled maximum memory reserved by the reader workload. This includes reservation floors,
+        not only actual query allocation.
+    - name: peak_pending
+      label: pending
+      group: SELECT results
+      description: Sampled maximum reader memory reservations waiting for admission.
+    groups:
+    - Run
+    - Memory policy
     - SELECT workload
     - SELECT results
     - INSERT workload

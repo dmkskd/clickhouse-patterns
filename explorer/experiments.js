@@ -12,59 +12,6 @@ window.PE.experiments = (() => {
   const ICON_REMOVE = icon('<path d="M4 4l8 8M12 4l-8 8"/>');
   const ICON_COPY = icon('<rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/>');
 
-  function requestLanes(requests, role) {
-    const ends = [];
-    return (requests || []).filter((request) => request.role === role &&
-      Number.isFinite(request.start_ms) && Number.isFinite(request.end_ms) &&
-      request.start_ms >= 0 && request.end_ms >= request.start_ms)
-      .slice().sort((a, b) => a.start_ms - b.start_ms).map((request) => {
-        let lane = ends.findIndex((end) => end <= request.start_ms);
-        if (lane < 0) lane = ends.length;
-        ends[lane] = Math.max(request.end_ms, request.start_ms + 1);
-        return { ...request, lane };
-      });
-  }
-
-  function requestTimeline(run, scale) {
-    const chart = document.createElement("div");
-    chart.className = "request-gantt";
-    chart.title = "Client request durations from dispatch to response, including network and server time.";
-    for (const [role, label] of [["read", "SELECT"], ["write", "INSERT"]]) {
-      const row = document.createElement("div");
-      row.className = "request-gantt-row";
-      const name = document.createElement("span");
-      name.textContent = label;
-      const track = document.createElement("div");
-      track.className = "request-gantt-track";
-      const requests = requestLanes(run.results.requests, role);
-      const lanes = Math.max(1, ...requests.map((request) => request.lane + 1));
-      track.style.height = `${Math.max(10, lanes * 8)}px`;
-      requests.forEach((request) => {
-        const bar = document.createElement("span");
-        const outcome = ["completed", "rejected", "failed", "not_sent"].includes(request.outcome) ? request.outcome : "failed";
-        bar.className = `request-gantt-bar ${outcome}`;
-        bar.style.left = `${Math.min(100, request.start_ms / scale * 100)}%`;
-        bar.style.width = `${Math.max(0, Math.min(request.end_ms, scale) - request.start_ms) / scale * 100}%`;
-        bar.style.top = `${request.lane * 8}px`;
-        const evidence = request.server;
-        bar.title = `${label} ${request.index}: ${outcome}\n` +
-          `Client: ${request.start_ms.toFixed(1)}–${request.end_ms.toFixed(1)} ms\n` +
-          `Elapsed: ${(request.end_ms - request.start_ms).toFixed(1)} ms\n` +
-          (request.query_id ? `query_id: ${request.query_id}\n` : "") +
-          (request.error_code ? `Error code: ${request.error_code}\n` : "") +
-          (evidence ? `query_log: ${evidence.event}; ${evidence.duration_ms} ms; ${evidence.memory_bytes} bytes` : "query_log: no matching entry");
-        track.append(bar);
-      });
-      row.append(name, track);
-      chart.append(row);
-    }
-    const axis = document.createElement("div");
-    axis.className = "request-gantt-axis";
-    axis.textContent = `0 → ${(scale / 1000).toFixed(1)} s`;
-    chart.append(axis);
-    return chart;
-  }
-
   function create(deps) {
     // deps: command(path, payload), confirmAction(message, label),
     //       showToast(message, kind), openLogs(), rerender()
@@ -80,6 +27,7 @@ window.PE.experiments = (() => {
     let experimentsSeen = null;     // last finished operation or finished run whose runs were fetched
     let experimentRuns = [];
     let appliedValues = null;       // experiment config values the running session uses; null until fetched
+    let selectedExperiment = null;
     const sortState = {};           // experiment name -> { column, direction }
 
     function setVisible(id, visible) {
@@ -134,14 +82,51 @@ window.PE.experiments = (() => {
     }
 
     function renderExperimentForms(pattern) {
-      $("experiments-body").replaceChildren(...pattern.experiments.map((experiment) => {
+      try { selectedExperiment = sessionStorage.getItem(`experiment-tab:${pattern.slug}`); } catch (_error) { selectedExperiment = null; }
+      if (!pattern.experiments.some((experiment) => experiment.name === selectedExperiment)) selectedExperiment = pattern.experiments[0]?.name;
+      const tabs = document.createElement("div");
+      tabs.className = "experiment-tabs";
+      tabs.setAttribute("role", "tablist");
+      tabs.setAttribute("aria-label", "Experiments");
+      tabs.hidden = pattern.experiments.length < 2;
+      pattern.experiments.forEach((experiment) => {
+        const tab = document.createElement("button");
+        tab.type = "button";
+        tab.id = `experiment-tab-${experiment.name}`;
+        tab.dataset.experiment = experiment.name;
+        tab.setAttribute("role", "tab");
+        tab.setAttribute("aria-controls", `experiment-panel-${experiment.name}`);
+        tab.textContent = experiment.title;
+        tab.addEventListener("click", () => selectExperiment(experiment.name));
+        tab.addEventListener("keydown", (event) => {
+          const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
+          if (!keys.includes(event.key)) return;
+          event.preventDefault();
+          const candidates = [...tabs.children].filter((button) => !button.disabled);
+          const current = candidates.indexOf(tab);
+          const next = event.key === "Home" ? 0 : event.key === "End" ? candidates.length - 1
+            : (current + (event.key === "ArrowRight" ? 1 : -1) + candidates.length) % candidates.length;
+          selectExperiment(candidates[next].dataset.experiment);
+          candidates[next].focus();
+        });
+        tabs.append(tab);
+      });
+      $("experiments-body").replaceChildren(tabs, ...pattern.experiments.map((experiment) => {
         const section = document.createElement("section");
         section.className = "experiment";
+        section.id = `experiment-panel-${experiment.name}`;
+        section.setAttribute("role", "tabpanel");
+        section.setAttribute("aria-labelledby", `experiment-tab-${experiment.name}`);
         section.dataset.experiment = experiment.name;
         const title = document.createElement("h4");
         title.textContent = experiment.title;
-        const description = document.createElement("p");
-        description.textContent = experiment.description;
+        const description = document.createElement("div");
+        description.className = "experiment-description";
+        (experiment.description || "").split(/\n\s*\n/).filter((text) => text.trim()).forEach((text) => {
+          const paragraph = document.createElement("p");
+          paragraph.innerHTML = window.PE.util.formatDescInline(text);
+          description.append(paragraph);
+        });
         const form = document.createElement("form");
         form.className = "experiment-form";
         // One row per run; Run submits them in order. Typed rows survive a page reload.
@@ -247,7 +232,22 @@ window.PE.experiments = (() => {
         section.append(title, description, form, results);
         return section;
       }));
+      selectExperiment(selectedExperiment);
       renderExperimentResults();
+    }
+
+    function selectExperiment(name) {
+      selectedExperiment = name;
+      document.querySelectorAll("#experiments-body .experiment-tabs button").forEach((tab) => {
+        const selected = tab.dataset.experiment === name;
+        tab.setAttribute("aria-selected", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+      });
+      document.querySelectorAll("#experiments-body .experiment").forEach((section) => {
+        section.hidden = section.dataset.experiment !== name;
+      });
+      try { sessionStorage.setItem(`experiment-tab:${experimentsPattern.slug}`, name); } catch (_error) { /* storage blocked */ }
+      window.PE.experimentViews.reset();
     }
 
     async function resetExperiments(pattern) {
@@ -264,95 +264,6 @@ window.PE.experiments = (() => {
       } catch (_error) { /* storage blocked */ }
       experimentRuns = [];
       renderExperimentForms(pattern);
-    }
-
-    // Timeline: the run's per-row stages (averages, so they add up to the
-    // average latency).
-    // Segments in the order the script reports them; each takes the next
-    // palette slot, so neighbours are always a validated pair. `extra`
-    // segments are drawn but not summed.
-    function runTimeline(run) {
-      return (run.results.stages || []).map((stage, index) => ({
-        label: stage.label, ms: Math.max(0, Number(stage.ms) || 0), index, extra: Boolean(stage.extra),
-      }));
-    }
-
-    function timelineBar(segments, longest, totalLabel) {
-      const bar = document.createElement("div");
-      bar.className = "timeline-bar";
-      if (!segments.length) return bar;
-      bar.addEventListener("mouseenter", () => showTimelineTip(bar, segments, totalLabel));
-      bar.addEventListener("mouseleave", hideTimelineTip);
-      segments.forEach((segment) => {
-        const piece = document.createElement("span");
-        piece.className = `timeline-stage stage-${segment.index}`;
-        piece.style.width = `${(segment.ms / longest) * 100}%`;
-        bar.append(piece);
-      });
-      return bar;
-    }
-
-    // One shared tooltip for every bar: each stage with its colour, time and
-    // share of the row latency, then the total.
-    let timelineTip = null;
-    function showTimelineTip(bar, segments, totalLabel) {
-      if (!timelineTip) {
-        timelineTip = document.createElement("div");
-        timelineTip.className = "timeline-tip";
-        timelineTip.setAttribute("role", "tooltip");
-        document.body.append(timelineTip);
-      }
-      // Shares are of the whole bar, extra segments included.
-      const total = segments.filter((segment) => !segment.extra)
-        .reduce((sum, segment) => sum + segment.ms, 0);
-      const whole = segments.reduce((sum, segment) => sum + segment.ms, 0);
-      const tipRow = (swatchClass, text, ms, share, extraClass = "") => {
-        const row = document.createElement("div");
-        row.className = `timeline-tip-row ${extraClass}`.trim();
-        const swatch = document.createElement("i");
-        if (swatchClass) swatch.className = swatchClass;
-        const label = document.createElement("span");
-        label.textContent = text;
-        const value = document.createElement("b");
-        value.textContent = `${ms.toFixed(1)} ms`;
-        const percent = document.createElement("small");
-        percent.textContent = share == null ? "" : `${Math.round(share * 100)}%`;
-        row.append(swatch, label, value, percent);
-        return row;
-      };
-      const rows = segments.map((segment) =>
-        tipRow(`timeline-stage stage-${segment.index}`, segment.label, segment.ms, whole ? segment.ms / whole : null));
-      const extras = segments.filter((segment) => segment.extra);
-      const totals = [tipRow("", totalLabel, total, null, "total")];
-      if (extras.length) {
-        totals.push(tipRow("", `Including ${extras.map((segment) => segment.label).join(", ")}`, whole, 1, "total-sub"));
-      }
-      timelineTip.replaceChildren(...rows, ...totals);
-      const box = bar.getBoundingClientRect();
-      timelineTip.hidden = false;
-      const width = timelineTip.offsetWidth;
-      const left = Math.max(8, Math.min(window.innerWidth - width - 8, box.right - width));
-      const below = box.bottom + 8 + timelineTip.offsetHeight < window.innerHeight;
-      timelineTip.style.left = `${left}px`;
-      timelineTip.style.top = `${below ? box.bottom + 8 : box.top - timelineTip.offsetHeight - 8}px`;
-    }
-
-    function hideTimelineTip() {
-      if (timelineTip) timelineTip.hidden = true;
-    }
-
-    function timelineLegend(segments) {
-      if (!segments.length) return null;
-      const legend = document.createElement("div");
-      legend.className = "timeline-legend";
-      segments.forEach((segment) => {
-        const item = document.createElement("span");
-        const swatch = document.createElement("i");
-        swatch.className = `timeline-stage stage-${segment.index}`;
-        item.append(swatch, segment.label);
-        legend.append(item);
-      });
-      return legend;
     }
 
     // A choice is a plain value or {value, label}; show the label when there is one.
@@ -377,7 +288,7 @@ window.PE.experiments = (() => {
     }
 
     function renderExperimentResults() {
-      hideTimelineTip();  // a rebuilt table removes the hovered bar without a mouseleave
+      window.PE.experimentViews.reset();
       renderAppliedValues();
       document.querySelectorAll("#experiments-body .experiment").forEach((section) => {
         const experiment = experimentsPattern?.experiments.find((item) => item.name === section.dataset.experiment);
@@ -392,7 +303,8 @@ window.PE.experiments = (() => {
         const declared = new Map((experiment.results || []).map((result) => [result.name, result]));
         // Declared results only: runs saved before a manifest change can hold
         // keys the experiment no longer reports.
-        const resultNames = [...declared.keys()].filter((name) => name !== "stages");
+        const resultNames = [...declared.keys()];
+        const views = window.PE.experimentViews.prepare(experiment, runs);
         const columns = [
           { key: "time", label: "time", group: "Run", value: (run) => new Date(run.started_at).getTime(),
             text: (run) => new Date(run.started_at).toLocaleTimeString() },
@@ -406,16 +318,7 @@ window.PE.experiments = (() => {
             key: name, label: declared.get(name)?.label || name, title: declared.get(name)?.description,
             group: declared.get(name)?.group || "Results", value: (run) => run.results[name],
           })),
-          // Only when some run reports stages.
-          ...(runs.some((run) => run.results.stages?.length) ? [{
-            key: "timeline", label: "where time goes", group: "Timeline",
-            value: (run) => runTimeline(run).reduce((sum, segment) => sum + segment.ms, 0),
-          }] : []),
-          ...(runs.some((run) => run.results.requests?.length) ? [{
-            key: "request_timeline", label: "Request timeline", group: "Timeline",
-            title: "Client request intervals. Green: completed; amber: rejected; red: failed; grey: not sent.",
-            value: (run) => run.results.duration_ms,
-          }] : []),
+          ...views.columns,
         ];
         const declaredOrder = experiment.groups || [];
         const groupOrder = [...new Set(["Run", ...declaredOrder, ...columns.map((column) => column.group)])]
@@ -438,11 +341,6 @@ window.PE.experiments = (() => {
           const numeric = typeof x === "number" && typeof y === "number";
           return sort.direction * (numeric ? x - y : collator.compare(String(x), String(y)));
         });
-        const timelines = runs.map(runTimeline);
-        const longest = Math.max(1, ...timelines.map((segments) => segments.reduce((sum, segment) => sum + segment.ms, 0)));
-        const requestScale = Math.max(1, ...runs.map((run) => Number(run.results.duration_ms) || 0),
-          ...runs.flatMap((run) => (run.results.requests || []).map((request) => Number(request.end_ms) || 0)));
-
         const table = document.createElement("table");
         table.className = "experiment-table";
         const thead = table.createTHead();
@@ -471,13 +369,12 @@ window.PE.experiments = (() => {
           head.append(cell);
         });
         const body = table.createTBody();
-        runs.forEach((run, runIndex) => {
+        runs.forEach((run) => {
           const row = body.insertRow();
           columns.forEach((column, index) => {
             const cell = row.insertCell();
             if (index > 0 && columns[index - 1].group !== column.group) cell.className = "group-start";
-            if (column.key === "timeline") cell.append(timelineBar(timelines[runIndex], longest, experiment.timeline_total || "Total"));
-            else if (column.key === "request_timeline") cell.append(requestTimeline(run, requestScale));
+            if (column.render) cell.append(column.render(run));
             else cell.textContent = column.text ? column.text(run) : (column.value(run) ?? "");
           });
         });
@@ -493,10 +390,6 @@ window.PE.experiments = (() => {
         copy.setAttribute("aria-label", "Copy table");
         copy.addEventListener("click", () => copyTable(experiment, columns, runs));
         caption.append(copy);
-        const stageLegend = timelineLegend(timelines.find((segments) => segments.length) || []);
-        const requestLegend = document.createElement("p");
-        requestLegend.className = "request-gantt-legend";
-        requestLegend.textContent = "Requests: green completed; amber rejected; red failed; grey not sent. Intervals include network and server execution.";
         const legend = document.createElement("dl");
         legend.className = "experiment-legend";
         resultNames.filter((name) => declared.get(name)?.description).forEach((name) => {
@@ -507,31 +400,20 @@ window.PE.experiments = (() => {
           definition.textContent = declared.get(name).description;
           legend.append(term, definition);
         });
-        target.replaceChildren(table, ...(stageLegend ? [stageLegend] : []),
-          ...(runs.some((run) => run.results.requests?.length) ? [requestLegend] : []),
+        target.replaceChildren(table, ...views.legends,
           ...(legend.childElementCount ? [legend] : []));
       });
     }
 
-    // Copies the runs in the table's order, as HTML (pastes as a table into
-    // docs and spreadsheets) and tab-separated text. The timeline becomes one
-    // column per stage, in ms.
+    // Renderers supply scalar export columns for their structured data.
     async function copyTable(experiment, columns, runs) {
-      const stageLabels = [...new Set(runs.flatMap((run) => runTimeline(run).map((segment) => segment.label)))];
       const plain = new Set(["Run", "Settings", "Workload"]);
-      const header = [
-        ...columns.filter((column) => column.key !== "timeline")
-          .map((column) => plain.has(column.group) ? column.title || column.label : `${column.group} ${column.label}`),
-        ...stageLabels.map((label) => `${label} (ms)`),
-      ];
-      const rows = runs.map((run) => {
-        const stages = new Map(runTimeline(run).map((segment) => [segment.label, segment.ms.toFixed(1)]));
-        return [
-          ...columns.filter((column) => column.key !== "timeline")
-            .map((column) => String(column.text ? column.text(run) : (column.value(run) ?? ""))),
-          ...stageLabels.map((label) => stages.get(label) ?? ""),
-        ];
-      });
+      const exported = columns.flatMap((column) => column.exportColumns || [{
+        label: plain.has(column.group) ? column.title || column.label : `${column.group} ${column.label}`,
+        value: (run) => column.text ? column.text(run) : column.value(run),
+      }]);
+      const header = exported.map((column) => column.label);
+      const rows = runs.map((run) => exported.map((column) => String(column.value(run) ?? "")));
       const text = [header, ...rows].map((cells) => cells.join("\t")).join("\n");
       const escape = (value) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;");
       const html = `<table><thead><tr>${header.map((cell) => `<th>${escape(cell)}</th>`).join("")}</tr></thead><tbody>${
@@ -569,10 +451,16 @@ window.PE.experiments = (() => {
         loadExperimentRuns(selected.slug);
       }
       // While this experiment runs, Run gives way to Stop; Reset waits.
+      if (experimenting && selected.experiments.some((item) => item.name === operation.experiment)
+          && selectedExperiment !== operation.experiment) selectExperiment(operation.experiment);
+      document.querySelectorAll("#experiments-body .experiment-tabs button").forEach((tab) => {
+        tab.disabled = experimenting && tab.dataset.experiment !== operation.experiment;
+      });
       $("restore-config").disabled = busy;
       document.querySelectorAll("#experiments-body .experiment-form").forEach((form) => {
-        form.querySelector("button[type=submit]").hidden = experimenting;
-        form.querySelector("button.stop").hidden = !experimenting;
+        const running = experimenting && form.parentElement.dataset.experiment === operation.experiment;
+        form.querySelector("button[type=submit]").hidden = running;
+        form.querySelector("button.stop").hidden = !running;
         form.querySelector("button.secondary").disabled = busy;
         form.querySelector("button[type=submit]").disabled = busy;
         form.querySelectorAll("button.row-action").forEach((button) => { button.disabled = busy; });
@@ -616,5 +504,5 @@ window.PE.experiments = (() => {
     return { render };
   }
 
-  return { create, requestLanes, requestTimeline };
+  return { create };
 })();

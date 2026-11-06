@@ -214,14 +214,44 @@ class ExperimentResult(BaseModel):
     description: str = ""
 
 
+class ExperimentIntervalOverlay(BaseModel):
+    """Request intervals correlated with a sampled resource history."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    label: str = "Requests"
+    group_field: str = ""
+    id_field: str = ""
+    size_field: str = ""
+    size_unit: str = ""
+    size_label: str = "Requested size"
+    admitted_field: str = ""
+    admitted_values: list[str] = Field(default_factory=list)
+    lanes: dict[str, str] = Field(default_factory=dict)
+    details: dict[str, str] = Field(default_factory=dict)
+
+
+class ExperimentView(BaseModel):
+    """A built-in visualization of one structured result field."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["stages", "intervals", "time-series"]
+    source: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    label: str = ""
+    # Interval lane identifiers and tooltip label -> record field paths.
+    lanes: dict[str, str] = Field(default_factory=dict)
+    details: dict[str, str] = Field(default_factory=dict)
+    intervals: ExperimentIntervalOverlay | None = None
+
+
 class Experiment(BaseModel):
     """An on-demand workload run against the active session.
 
     The script prints progress lines and one final `RESULT {json}` line. The
-    JSON maps result names to numbers or text; an optional `stages` list of
-    {label, ms, extra} draws the per-run timeline (`extra` marks a segment that
-    is shown but not summed into `timeline_total`). Optional `requests` with
-    role, start_ms, end_ms and outcome draw the client request Gantt column.
+    JSON contains scalar metrics and structured evidence. `views` declares
+    how the browser presents structured fields; the runner stores them unchanged.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -236,6 +266,8 @@ class Experiment(BaseModel):
     groups: list[str] = Field(default_factory=list)
     # Timeline tooltip label for the sum of the stages a script reports.
     timeline_total: str = "Total"
+    # None preserves the legacy stage view; [] explicitly disables views.
+    views: list[ExperimentView] | None = None
 
 
 def _version_key(text: str) -> tuple[int, ...]:

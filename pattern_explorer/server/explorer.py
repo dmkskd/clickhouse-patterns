@@ -55,6 +55,9 @@ from .resource_readers import RESOURCE_READERS, ReaderContext
 # generated). tests/test_site.py checks this against index.html.
 _BROWSER_SOURCES = (
     "index.html", "app.css", "util.js", "diagram.js", "topology.js",
+    "chart-tooltip.js", "experiment-views.js", "experiment-stages.js", "experiment-intervals.js",
+    "experiment-series-plot.js",
+    "experiment-series.js",
     "experiments.js", "session.js", "catalog-data.js", "guide.js",
     "catalog-view.js", "pattern-page.js", "architecture.js", "app.js",
 )

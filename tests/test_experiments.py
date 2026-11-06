@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from pattern_explorer.catalog.manifest import (
     Experiment,
     ExperimentParameter,
+    ExperimentView,
     discover_patterns,
     discover_workspace_patterns,
     load_pattern,
@@ -32,6 +33,24 @@ def _experiment(*parameters: dict) -> Experiment:
 def test_text_default_needs_choices():
     with pytest.raises(ValidationError, match="needs `choices`"):
         ExperimentParameter(name="mode", default="kill")
+
+
+def test_view_declarations_reach_the_browser_and_reject_unknown_renderers():
+    experiment = _browser_pattern(load_pattern("protect-inserts-from-selects"))["experiments"][0]
+    resource_view, view = experiment["views"]
+    assert resource_view["type"] == "time-series"
+    assert resource_view["intervals"]["group_field"] == "role"
+    assert resource_view["intervals"]["admitted_field"] == "server.event"
+    assert view["type"] == "intervals"
+    assert view["source"] == "requests"
+    assert view["lanes"] == {"read": "SELECT", "write": "INSERT"}
+    assert view["details"]["query_log event"] == "server.event"
+    with pytest.raises(ValidationError):
+        ExperimentView(type="custom-script.js", source="requests")
+    with pytest.raises(ValidationError):
+        ExperimentView(type="intervals", source="../file")
+    assert _experiment().views is None
+    assert Experiment(name="probe", title="Probe", script="run.py", views=[]).views == []
 
 
 def test_default_must_be_a_choice_and_respect_min():

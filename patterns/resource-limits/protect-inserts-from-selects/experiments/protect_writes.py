@@ -30,9 +30,31 @@ def schedule(rate, duration, shape):
     return [i // rate if shape == 'burst' else i / rate for i in range(rate * duration)]
 
 
-def main():
+def reader_settings_sql(create_user, slots=None):
+    """Preserve the full settings clause when changing one admission setting."""
+    match = re.search(r'\bSETTINGS\s+(.+)$', create_user, re.DOTALL)
+    if not match:
+        raise RuntimeError('traffic_reader has no explicit settings to preserve')
+    settings = match[1]
+    if slots is not None:
+        settings, count = re.subn(r'\bmax_concurrent_queries_for_user\s*=\s*\d+',
+            f'max_concurrent_queries_for_user = {int(slots)}', settings, count=1)
+        if count != 1:
+            raise RuntimeError('traffic_reader has no explicit query-count limit')
+    return 'ALTER USER traffic_reader SETTINGS ' + settings
+
+
+def main(policy_kind='fixed'):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--read-slots', type=int, choices=[0, 1, 2, 4], default=2)
+    if policy_kind == 'fixed':
+        parser.add_argument('--read-slots', type=int, choices=[0, 1, 2, 4], default=2)
+    else:
+        parser.set_defaults(read_slots=0)
+        parser.add_argument('--read-memory-mib', type=int, choices=[0, 32, 64, 128, 256], default=64)
+        parser.add_argument('--read-reserve-mib', type=int, choices=[16, 32, 64], default=32)
+        parser.add_argument('--reservation-mix', choices=['uniform', 'mixed'], default='mixed')
+        parser.add_argument('--waiting-queries', type=int, choices=[1, 4, 16], default=16)
+        parser.add_argument('--admission-wait-ms', type=int, choices=[5, 20, 100, 500], default=20)
     parser.add_argument('--read-clients', type=int, choices=[4, 8, 16], default=8)
     parser.add_argument('--read-rate', type=int, choices=[4, 8, 16], default=8)
     parser.add_argument('--read-shape', choices=['steady', 'burst'], default='burst')
@@ -50,6 +72,7 @@ def main():
     clients = []
     start = None
     policy_applied = False
+    memory_policy = None
     generator_errors = []
 
     def cancel(_signum=None, _frame=None):
@@ -59,7 +82,7 @@ def main():
     signal.signal(signal.SIGINT, cancel)
 
     def apply_slots(slots):
-        admin.command(f'ALTER USER traffic_reader SETTINGS max_concurrent_queries_for_user = {int(slots)} CONST')
+        admin.command(reader_settings_sql(before, slots))
 
     def generate(role, rate, shape, executor):
         pending = []
@@ -93,17 +116,25 @@ def main():
         query_id = f'protect-{run_id}-{role}-{index}'
         record = {'query_id': query_id, 'role': role, 'index': index,
                   'start_ms': round((time.monotonic() - start) * 1000, 2)}
+        settings = {'query_id': query_id}
+        if memory_policy:
+            settings.update(memory_policy.request_settings(role, index))
+            record['reservation_mib'] = settings['reserve_memory'] // (1024 * 1024)
+            record['workload'] = settings['workload']
         try:
             if role == 'read':
-                client.query(f'SELECT sum(cityHash64(number)) FROM numbers({args.read_rows})', settings={'query_id': query_id})
+                client.query(f'SELECT sum(cityHash64(number)) FROM numbers({args.read_rows})', settings=settings)
             else:
                 client.command('INSERT INTO demo.events SELECT '
-                    f"toUUID('{run_id}'), {index}, number, number FROM numbers({args.batch_rows})", settings={'query_id': query_id})
+                    f"toUUID('{run_id}'), {index}, number, number FROM numbers({args.batch_rows})", settings=settings)
             record['outcome'] = 'completed'
         except Exception as exc:
             match = re.search(r'Code:\s*(\d+)', str(exc))
             code = int(match[1]) if match else None
-            record.update(outcome='rejected' if code == 202 else 'failed', error_code=code, error=str(exc)[:500])
+            record.update(outcome='rejected' if code in (202, 745, 1020) else 'failed', error_code=code, error=str(exc)[:500])
+            record['error_name'] = {202: 'TOO_MANY_SIMULTANEOUS_QUERIES', 745: 'SERVER_OVERLOADED',
+                                    1020: 'MEMORY_RESERVATION_ACQUISITION_TIMEOUT',
+                                    777: 'MEMORY_RESERVATION_KILLED', 778: 'MEMORY_RESERVATION_FAILED'}.get(code, '')
         finally:
             record['end_ms'] = round((time.monotonic() - start) * 1000, 2)
             with record_lock:
@@ -112,10 +143,14 @@ def main():
 
     try:
         before = admin.query("SHOW CREATE USER traffic_reader").result_rows[0][0]
-        previous_slots = int(re.search(r'max_concurrent_queries_for_user\s*=\s*(\d+)', before)[1])
+        restore_reader = reader_settings_sql(before)
         effective_version = admin.query('SELECT version()').result_rows[0][0]
         apply_slots(args.read_slots)
         policy_applied = True
+        if policy_kind == 'memory':
+            from memory_admission import MemoryAdmission
+            memory_policy = MemoryAdmission(admin, run_id, args)
+            memory_policy.setup()
         for role, count in [('read', args.read_clients), ('write', 2)]:
             pools[role] = queue.Queue()
             for _ in range(count):
@@ -144,8 +179,12 @@ def main():
                     rows = admin.query('SELECT user, count() FROM system.processes '
                         'WHERE startsWith(query_id, {prefix:String}) GROUP BY user',
                         parameters={'prefix': f'protect-{run_id}-'}).result_rows
-                    samples.append({'ms': round((time.monotonic() - start) * 1000, 2), 'active': dict(rows)})
-                    time.sleep(.1)
+                    sample = {'ms': round((time.monotonic() - start) * 1000, 2), 'active': dict(rows)}
+                    if memory_policy:
+                        sample['memory'] = memory_policy.sample()
+                        sample['memory_ms'] = round((time.monotonic() - start) * 1000, 2)
+                    samples.append(sample)
+                    time.sleep(.02)
             finally:
                 if any(generator.is_alive() for generator in generators):
                     stop.set()
@@ -169,6 +208,17 @@ def main():
                   'log_matches': len(evidence), 'samples': samples,
                   'policy': {'reader': 'traffic_reader', 'writer': 'traffic_writer',
                              'reader_settings': reader_settings, 'server_slots': 32}}
+        if memory_policy:
+            memory_policy.sample()
+            result['policy'].update(memory_policy.summary())
+            result['resource_history'] = memory_policy.history(samples, records)
+            result['peak_reserved_mib'] = round(max((s.get('memory', {}).get('reserved_bytes', 0) for s in samples), default=0) / (1024 * 1024), 2)
+            result['peak_pending'] = max((s.get('memory', {}).get('pending', 0) for s in samples), default=0)
+            result['read_overloaded'] = sum(r.get('error_code') == 745 for r in records if r['role'] == 'read')
+            result['read_admission_timeout'] = sum(r.get('error_code') == 1020 for r in records if r['role'] == 'read')
+        else:
+            from concurrency_history import concurrency_history
+            result['resource_history'] = concurrency_history(samples, records, args.read_slots)
         for role in ['read', 'write']:
             subset = [r for r in records if r['role'] == role]
             counts = Counter(r['outcome'] for r in subset)
@@ -197,9 +247,15 @@ def main():
         stop.set()
         for client in clients:
             client.close()
-        if policy_applied:
-            apply_slots(previous_slots)
-        admin.close()
+        try:
+            if memory_policy:
+                memory_policy.close()
+        finally:
+            try:
+                if policy_applied:
+                    admin.command(restore_reader)
+            finally:
+                admin.close()
 
 
 if __name__ == '__main__':

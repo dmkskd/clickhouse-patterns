@@ -51,18 +51,28 @@ each run separately. Compare INSERT completions, failures, rows per second and
 p95 client latency alongside SELECT rejections. Successful writes also depend
 on server capacity, disk space and MergeTree backpressure.
 
-The final Gantt column plots client request intervals on a common time axis,
+The **Query admission** column opens the fixed-concurrency chart. The blue line
+shows active requests sampled from `system.processes`, with the configured
+reader concurrency limit drawn as a horizontal line. Green requests stack from
+zero and amber rejected requests stack above them. The shared readout reports
+sampled query counts and requests overlapping the replay cursor. Reader and
+writer users have separate views.
+
+The **Request timeline** column plots client request intervals on a common time axis,
 with SELECT and INSERT lanes and outcome colors. Hovering a request shows its
 query ID, elapsed time, error code and matching `system.query_log` entry.
 These intervals include network and server execution. Admission and execution
 phases are combined in the client measurement.
+
+Clicking the preview opens a larger timeline with zoom controls and horizontal
+scrolling. The Fit control restores the full comparison interval.
 
 ## Evidence
 
 - Client query IDs identify every dispatched request and its outcome.
 - `system.query_log` supplies final events, errors, memory usage and
   `ProfileEvents`. Results report the count of matched requests.
-- `system.processes` is sampled every 100 ms. The peak active-reader count is
+- `system.processes` is sampled every 20 ms. The peak active-reader count is
   a sampled maximum and can miss short requests.
 - The experiment checks `demo.events` rows against acknowledged INSERT batches.
   A mismatch fails the experiment.
@@ -72,3 +82,77 @@ phases are combined in the client measurement.
 Stopping the experiment stops dispatch, cancels matching query IDs and drains
 workers. Each query also has a five-second server execution limit and a finite
 client timeout. A normal pattern stop removes its lab data; saved results remain.
+
+## Workload memory admission
+
+The `protect-writes-memory` experiment uses the same generator and table, with
+a different admission policy. It creates a `MEMORY RESERVATION` resource and
+separate reader and writer `WORKLOAD`s for each run. The existing per-user
+query-count limit is disabled during this run and restored afterward.
+
+| Parameter | Effect |
+|---|---|
+| `read_memory_mib` | Reader workload's total memory-reservation budget; 0 disables the budget |
+| `read_reserve_mib` | Memory reservation per SELECT, or the large reservation in mixed traffic |
+| `reservation_mix` | `uniform` uses one size; `mixed` alternates 8 MiB and `read_reserve_mib` |
+| `waiting_queries` | Maximum pending reader reservations |
+| `admission_wait_ms` | Maximum wait for workload admission |
+
+For example, an 8 MiB reservation and a 32 MiB reservation consume different
+amounts of a 64 MiB reader budget. Admission follows the available reserved
+memory. The query-count limit used by the fixed experiment treats both queries
+as one request. The CPU-bound SELECT remains the same in both experiments;
+reservation sizes represent declared memory requirements. Actual query memory
+is recorded separately in `system.query_log`.
+
+Insufficient memory queues the request. A full queue returns
+`SERVER_OVERLOADED`; a wait exceeding `workload_admission_timeout_ms` returns
+`MEMORY_RESERVATION_ACQUISITION_TIMEOUT`. The experiment records both error
+names in the request timeline. A memory reservation can grow above its initial
+size as actual allocations increase; growth can also evict a running query.
+Eviction and other execution failures are counted as failed requests.
+
+INSERTs reserve 16 MiB each in a writer workload with a 64 MiB budget. A shared
+parent budget covers the reader budget plus the writer budget. The existing
+32-query server limit and the per-query memory limits also apply.
+
+```sh
+just experiment protect-writes-memory read_memory_mib=0 / read_memory_mib=64
+```
+
+The experiment samples reader reserved memory and pending allocations from
+`system.scheduler` every 20 ms, as well as admitted requests from
+`system.processes`. Sampled peaks can miss shorter states. The scheduler's
+admission and rejection counters are saved with each run. Workloads and the
+resource are removed after traffic drains, including on interruption. Existing
+lab data and saved results are retained. This experiment requires a lab with
+no pre-existing RESOURCE or WORKLOAD objects and leaves those objects untouched
+if it finds them.
+
+The **Workload activity** column opens a graph for the named reader or writer
+workload. Reserved memory uses the left axis and pending reservations use the
+right axis. Completed requests stack upward from zero on the MiB axis. Their
+block heights represent declared reservation sizes. Execution failures confirmed
+by `ExceptionWhileProcessing` remain in this stack and are coloured red.
+Rejected demand stacks directly above the admitted requests on the same MiB
+axis. Unsent attempts and
+failures without execution evidence also remain outside the admitted stack.
+
+Hovering a request shows its requested reservation, sampled reserved memory and
+headroom, and any recorded rejection reason. Blocks use client request intervals.
+Resource values come from scheduler samples. The separate **Request timeline**
+column retains the SELECT and INSERT view.
+
+Selecting a rejected request shows its declared reservation, error reason and
+nearest earlier scheduler observation. A shared readout above the plot reports reserved memory and pending reservations
+at the replay cursor, with their limits and sample times. A reservation can fail to fit even when some of the
+budget is free. Samples can differ from the state at the admission decision
+or earlier during the wait. The 20 ms sampling target includes additional
+query time. Reserved memory represents declared reservations, separately from
+actual RAM usage.
+
+Memory reservation scheduling is experimental in ClickHouse. Its behavior is
+documented in [workload memory reservations](https://clickhouse.com/docs/operations/workload-scheduling#memory-reservations).
+CPU workload limits offer another policy, with throttling and thread allocation
+as their primary effects. These two experiments compare query-count rejection
+and memory admission rather than treating CPU throttling as rejection.
