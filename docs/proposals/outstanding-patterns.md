@@ -464,13 +464,13 @@ References.
 
 Status. **Implemented** in
 [cdc-postgres-peerdb](../../patterns/database-to-clickhouse/cdc-postgres-peerdb/). Related:
-[cdc-mysql-clickhouse](../../patterns/database-to-clickhouse/cdc-mysql-clickhouse/) implements
+[cdc-postgres-altinity](../../patterns/database-to-clickhouse/cdc-postgres-altinity/) implements
 the same Postgres mutations with the Altinity/Debezium sink for comparison.
 
 Background. PeerDB is an open-source, Postgres-focused CDC engine acquired by
 ClickHouse; it powers ClickPipes for Postgres. It is an alternative to the
 Altinity/Debezium sink in
-[cdc-mysql-clickhouse](../../patterns/database-to-clickhouse/cdc-mysql-clickhouse/), with a
+[cdc-postgres-altinity](../../patterns/database-to-clickhouse/cdc-postgres-altinity/), with a
 different snapshot and replication implementation.
 
 Demonstrates. Self-hosted PeerDB replicating the same Postgres source into
