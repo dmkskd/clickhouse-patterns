@@ -73,15 +73,22 @@ def main(policy_kind='fixed'):
     parser = argparse.ArgumentParser()
     if policy_kind == 'fixed':
         parser.add_argument('--read-slots', type=int, choices=[0, 1, 2, 4], default=2)
-    else:
+    elif policy_kind == 'memory':
         parser.set_defaults(read_slots=0)
         parser.add_argument('--read-memory-mib', type=int, choices=[0, 32, 64, 128, 256], default=64)
         parser.add_argument('--read-reserve-mib', type=int, choices=[16, 32, 64], default=32)
         parser.add_argument('--reservation-mix', choices=['uniform', 'mixed'], default='mixed')
         parser.add_argument('--admission-wait-ms', type=int, choices=[5, 20, 100, 500], default=20)
+    elif policy_kind == 'memory-usage':
+        parser.set_defaults(read_slots=0)
+        parser.add_argument('--read-memory-mib', type=int, choices=[0, 16, 32, 64, 128, 256], default=64)
+    else:
+        raise ValueError(f'unknown policy: {policy_kind}')
     parser.add_argument('--read-rate', type=int, choices=[4, 8, 16], default=8)
     parser.add_argument('--read-shape', choices=['steady', 'burst'], default='burst')
-    parser.add_argument('--read-rows', type=int, choices=[1000000, 10000000, 50000000], default=50000000)
+    parser.add_argument('--read-rows', type=int,
+        choices=[100000, 500000, 1000000, 2000000] if policy_kind == 'memory-usage' else [1000000, 10000000, 50000000],
+        default=1000000 if policy_kind == 'memory-usage' else 50000000)
     parser.add_argument('--write-rate', type=int, choices=[2, 5, 10, 20], default=5)
     parser.add_argument('--batch-rows', type=int, choices=[100, 1000, 10000], default=1000)
     parser.add_argument('--duration', type=int, choices=[5, 10, 20], default=5)
@@ -125,11 +132,11 @@ def main(policy_kind='fixed'):
         settings = {'query_id': query_id}
         if memory_policy:
             settings.update(memory_policy.request_settings(role, index))
-            record['reservation_mib'] = settings['reserve_memory'] // (1024 * 1024)
-            record['workload'] = settings['workload']
+            record.update(memory_policy.request_metadata(role, settings))
         try:
             if role == 'read':
-                client.query(f'SELECT sum(cityHash64(number)) FROM numbers({args.read_rows})', settings=settings)
+                query = memory_policy.read_query() if memory_policy else f'SELECT sum(cityHash64(number)) FROM numbers({args.read_rows})'
+                client.query(query, settings=settings)
             else:
                 client.command('INSERT INTO demo.events SELECT '
                     f"toUUID('{run_id}'), {index}, number, number FROM numbers({args.batch_rows})", settings=settings)
@@ -140,6 +147,7 @@ def main(policy_kind='fixed'):
             record.update(outcome='rejected' if code in (202, 745, 1020) else 'failed', error_code=code, error=str(exc)[:500])
             record['error_name'] = {202: 'TOO_MANY_SIMULTANEOUS_QUERIES', 745: 'SERVER_OVERLOADED',
                                     1020: 'MEMORY_RESERVATION_ACQUISITION_TIMEOUT',
+                                    776: 'RESOURCE_LIMIT_EXCEEDED',
                                     777: 'MEMORY_RESERVATION_KILLED', 778: 'MEMORY_RESERVATION_FAILED'}.get(code, '')
         finally:
             record['end_ms'] = round((time.monotonic() - start) * 1000, 2)
@@ -156,6 +164,10 @@ def main(policy_kind='fixed'):
         if policy_kind == 'memory':
             from memory_admission import MemoryAdmission
             memory_policy = MemoryAdmission(admin, run_id, args)
+            memory_policy.setup()
+        elif policy_kind == 'memory-usage':
+            from memory_usage import MemoryUsage
+            memory_policy = MemoryUsage(admin, run_id, args)
             memory_policy.setup()
         for role, count in capacities.items():
             pools[role] = queue.Queue()
@@ -214,6 +226,9 @@ def main(policy_kind='fixed'):
                   'log_matches': len(evidence), 'samples': samples,
                   'policy': {'reader': 'traffic_reader', 'writer': 'traffic_writer',
                              'reader_settings': reader_settings, 'server_slots': 32}}
+        for record in records:
+            if record.get('query_id') in evidence:
+                record['server'] = evidence[record['query_id']]
         if memory_policy:
             memory_policy.sample()
             result['policy'].update(memory_policy.summary())
@@ -222,6 +237,7 @@ def main(policy_kind='fixed'):
             result['peak_pending'] = max((s.get('memory', {}).get('pending', 0) for s in samples), default=0)
             result['read_overloaded'] = sum(r.get('error_code') == 745 for r in records if r['role'] == 'read')
             result['read_admission_timeout'] = sum(r.get('error_code') == 1020 for r in records if r['role'] == 'read')
+            result['read_resource_limited'] = sum(r.get('error_code') in (776, 777, 778) for r in records if r['role'] == 'read')
         else:
             from concurrency_history import concurrency_history
             result['resource_history'] = concurrency_history(samples, records, args.read_slots)
@@ -231,14 +247,13 @@ def main(policy_kind='fixed'):
             for outcome in ['completed', 'rejected', 'failed']:
                 result[f'{role}_{outcome}'] = counts[outcome]
             result[f'{role}_p95_ms'] = percentile([r['end_ms'] - r['start_ms'] for r in subset if r['outcome'] == 'completed'], .95)
+        if policy_kind == 'memory-usage':
+            result['read_other_errors'] = result['read_failed'] + result['read_rejected'] - result['read_resource_limited']
         result['write_rows_per_second'] = round(stored_rows / elapsed, 1)
         result['peak_reads'] = max((s['active'].get('traffic_reader', 0) for s in samples), default=0)
         result['expected_rows'] = result['write_completed'] * args.batch_rows
         result['row_check'] = 'matched' if stored_rows == result['expected_rows'] else 'mismatch'
         result['error_codes'] = dict(Counter(str(r['error_code']) for r in records if r.get('error_code')))
-        for record in records:
-            if record.get('query_id') in evidence:
-                record['server'] = evidence[record['query_id']]
         result['requests'] = sorted(records, key=lambda r: r['start_ms'])
         for role in ['write', 'read']:
             print(f"{role}: completed={result[role + '_completed']} rejected={result[role + '_rejected']} "

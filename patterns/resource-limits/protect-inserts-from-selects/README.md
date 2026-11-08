@@ -1,9 +1,9 @@
 # Protecting inserts from SELECT load
 
 SELECTs and INSERTs run on the same ClickHouse server under separate users.
-Two experiments compare reader admission policies: a fixed per-user concurrency
-limit and reservation-based admission under separate reader and writer workloads.
-Both measure INSERT throughput and latency alongside SELECT rejections.
+The experiments compare a fixed per-user concurrency limit, reservation-based
+admission and server enforcement of tracked workload memory. Each measures INSERT
+throughput and latency alongside SELECT outcomes.
 
 CPU, memory and storage remain shared. [ClickHouse Cloud warehouses](https://clickhouse.com/docs/cloud/reference/warehouses)
 provide compute-compute separation with separate compute services sharing data.
@@ -94,9 +94,9 @@ budget. Controlled reservation sizes make the admission decisions easier to
 illustrate. Server-configured defaults and setting constraints can govern the
 reservation values clients supply.
 
-A separate experiment could demonstrate safeguards based on actual memory
-consumption. The queries that fail would depend on timing, concurrency and
-runtime allocations.
+The [server memory enforcement experiment](#server-memory-enforcement) applies
+the workload budget to tracked query memory. Its outcomes depend on timing,
+concurrency and runtime allocations.
 
 | Parameter | Effect |
 |---|---|
@@ -164,3 +164,45 @@ Memory reservation scheduling is experimental in ClickHouse. Its behavior is
 documented in [workload memory reservations](https://clickhouse.com/docs/operations/workload-scheduling#memory-reservations).
 CPU workload limits control thread allocation and throttling and could be
 explored in a separate experiment.
+
+
+## Server memory enforcement
+
+The `protect-writes-memory-usage` experiment enforces the reader workload's
+`max_memory` against tracked query memory. Server-side user settings assign
+`traffic_reader` and `traffic_writer` to separate workloads and fix
+`reserve_memory = 0 CONST`. Clients submit ordinary queries, and ClickHouse
+accounts for memory as their allocations grow.
+
+Each SELECT computes `uniqExact(cityHash64(number))` over generated numbers.
+The exact distinct set consumes memory during execution. The reader workload's
+memory limit can terminate SELECTs with `RESOURCE_LIMIT_EXCEEDED`,
+`MEMORY_RESERVATION_KILLED` or `MEMORY_RESERVATION_FAILED`. Results count these as
+**memory limited**, with other errors reported separately. The number and identity
+of terminated queries depend on query timing and allocation growth.
+
+| Parameter | Effect |
+|---|---|
+| `read_memory_mib` | Reader workload's tracked-memory limit in MiB. A value of 0 disables this limit. |
+| `read_rows` | Generated values added to each SELECT's exact distinct set. Larger sets consume more memory. |
+
+Traffic rate, arrival timing, INSERT batch size and duration use the same controls
+as the other experiments. Compare identical traffic with the reader workload
+limit disabled and enabled:
+
+```sh
+just experiment protect-writes-memory-usage read_memory_mib=0 / read_memory_mib=64
+```
+
+The **Memory usage** chart shows scheduler-accounted memory on the left axis and
+sampled active queries on the right. Red events identify memory-limit failures.
+Selecting an event shows its server error, query ID and query-log memory value.
+The **Request timeline** shows SELECT and INSERT durations and outcomes.
+Scheduler samples can miss short memory peaks.
+
+The writer workload has a 64 MiB limit. The reader's per-user concurrency limit
+is disabled for the run, and its per-query memory cap is set to 512 MiB, above
+the largest reader workload limit offered by this experiment. The server-wide
+32-query limit and five-second query execution limit remain active. After requests
+drain, the experiment restores both users' settings and removes its workloads
+and resource.

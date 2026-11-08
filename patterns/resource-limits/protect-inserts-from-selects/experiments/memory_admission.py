@@ -43,6 +43,13 @@ class MemoryAdmission:
                 'reserve_memory': reservation * MIB,
                 'workload_admission_timeout_ms': self.args.admission_wait_ms}
 
+    def request_metadata(self, role, settings):
+        return {'reservation_mib': settings['reserve_memory'] // MIB,
+                'workload': self.reader if role == 'read' else self.writer}
+
+    def read_query(self):
+        return f'SELECT sum(cityHash64(number)) FROM numbers({self.args.read_rows})'
+
     def sample(self):
         columns = ['path', 'type', 'allocated', 'allocations', 'pending', 'admits', 'rejects', 'victims']
         rows = self.admin.query('SELECT ' + ', '.join(columns) + ' FROM system.scheduler WHERE resource = {resource:String}',

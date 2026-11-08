@@ -426,6 +426,7 @@ button, input { font: inherit; }
 .resource-series-cursor { stroke: var(--muted); stroke-width: 1; }
 .resource-series-dot { fill: var(--blue); }
 .resource-series-event { fill: var(--amber); cursor: pointer; }
+.resource-series-event.failed { fill: #dc5967; }
 .resource-series-event:focus-visible { outline: 1px solid var(--amber); }
 .resource-series-event text { fill: var(--muted); font-size: 10px; }
 .resource-event-tip { width: 390px; max-width: calc(100vw - 24px); min-width: 0; box-sizing: border-box; }

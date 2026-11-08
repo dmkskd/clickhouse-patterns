@@ -158,6 +158,19 @@ const panels=document.body.children.at(-1).children[2].children;
 assert.equal(panels.length,2);
 assert.equal(panels[1].children[0].textContent,'Third metric');
 assert(panels[1].children[1].children[0].children[1].textContent.includes('units'));
+// Metric-only views identify execution failures without implying request stacks.
+document.body.children.at(-1).close();
+const failedRun=JSON.parse(JSON.stringify(run));
+failedRun.results.gauges[0].events[0].kind='failed';
+failedRun.results.gauges[0].events[0].label='Memory limit failure';
+window.PE.experimentViews.prepare({views:[{type:'time-series',source:'gauges'}]},[failedRun]).columns[0].render(failedRun).events.click();
+const failureDialog=document.body.children.at(-1);
+const failureMarker=desc(failureDialog).find(node=>node.attrs.class==='resource-series-event failed');
+assert(failureMarker);
+assert(failureMarker.attrs['aria-label'].includes('event'));
+const keys=failureDialog.children[4].children[0].children;
+assert(keys.some(key=>key.textContent==='Execution failed'));
+assert(!keys.some(key=>key.textContent==='Completed'));
 
 """
     result = subprocess.run(['node', '-e', code], cwd=ROOT, text=True, capture_output=True)

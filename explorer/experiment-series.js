@@ -129,8 +129,11 @@ window.PE = window.PE || {};
       inspectors.clear(); window.PE.seriesPlot.hideTooltip(); intervalGraphic?.hideTooltip();
       const items = series.filter((item) => item.group === select.value);
       const keys = document.createElement("div"); keys.className="resource-history-legend-keys";
-      const legendItems = [["completed","Completed"],["rejected","Rejected"],["failed","Execution failed"],
-        ["primary",items[0].label]];
+      const legendItems = overlay
+        ? [["completed","Completed"],["rejected","Rejected"],["failed","Execution failed"]]
+        : [...new Set(items.flatMap((item) => item.events.map((event) => event.kind)))].map((kind) =>
+          [kind, kind === "failed" ? "Execution failed" : "Rejected"]);
+      legendItems.push(["primary",items[0].label]);
       const secondary = items[1];
       if (secondary) legendItems.push(["secondary",secondary.label]);
       legendItems.forEach(([kind,label]) => {

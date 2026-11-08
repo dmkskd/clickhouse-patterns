@@ -76,13 +76,13 @@ window.PE = window.PE || {};
       const buckets = [];
       series.events.forEach((event) => {
         const last = buckets.at(-1);
-        if (last && x(event.ms) - x(last[0].ms) < 12) last.push(event);
+        if (last && last[0].kind === event.kind && x(event.ms) - x(last[0].ms) < 12) last.push(event);
         else buckets.push([event]);
       });
       buckets.forEach((events) => {
         const first = events[0];
-        const marker = svg("g", {class:"resource-series-event",role:"button",tabindex:0,
-          "aria-label":`${events.length} rejection${events.length > 1 ? "s" : ""} at ${number(first.ms/1000)} s. ${first.label}`});
+        const marker = svg("g", {class:`resource-series-event${first.kind === "failed" ? " failed" : ""}`,role:"button",tabindex:0,
+          "aria-label":`${events.length} event${events.length > 1 ? "s" : ""} at ${number(first.ms/1000)} s. ${first.label}`});
         marker.append(svg("rect",{x:x(first.ms)-7,y:34,width:24,height:18,fill:"transparent"}),
           svg("circle",{cx:x(first.ms),cy:43,r:4}),
           svg("text",{x:x(first.ms)+7,y:47},String(events.length)));
